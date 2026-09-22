@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "barracuda-status"
+version = "0.1.0"
+description = "Linux tray monitor and automatic audio routing for Razer Barracuda X"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = ["PyQt6>=6.4"]
+classifiers = [
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Sound/Audio",
+]
+
+[project.scripts]
+barracuda-status = "barracuda_status.app:main"
+
+[tool.setuptools.packages.find]
+include = ["barracuda_status*"]
+
+[tool.setuptools.package-data]
+barracuda_status = ["assets/*.svg"]

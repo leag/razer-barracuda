@@ -1,0 +1,29 @@
+# Local proprietary resources, research binaries and virtual machines
+/private/
+/.vm/
+/.assets-official/
+/log/
+*.exe
+*.dll
+*.ico
+*.qcow2
+*.vhd*
+*.iso
+# Python and build artifacts
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+# Local settings
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+*.log
