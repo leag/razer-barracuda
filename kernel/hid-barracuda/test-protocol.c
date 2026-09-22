@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 #include <assert.h>
 #include <stdio.h>
-#include "barracuda-protocol.h"
+#include "barracuda-state.h"
 
 struct results {
 	unsigned int count;
@@ -27,6 +27,42 @@ static void chunk(struct barracuda_stream *s, struct results *r,
 	report[2] = n;
 	memcpy(report + 3, data, n);
 	barracuda_feed(s, report, sizeof(report), collect, r);
+}
+
+static void test_reconnect(void)
+{
+	struct barracuda_state s;
+
+	barracuda_state_reset(&s);
+	assert(!barracuda_state_present(&s));
+	barracuda_state_event(&s, BARRACUDA_CAPACITY, 68);
+	assert(!barracuda_state_present(&s));
+	barracuda_state_event(&s, BARRACUDA_LINK, 1);
+	assert(barracuda_state_present(&s) && s.capacity == 68);
+	barracuda_state_event(&s, BARRACUDA_EXTERNAL_POWER, 1);
+	barracuda_state_event(&s, BARRACUDA_LINK, 0);
+	assert(!barracuda_state_present(&s));
+	assert(s.capacity == 68 && s.external_power == BARRACUDA_UNKNOWN);
+	barracuda_state_event(&s, BARRACUDA_CAPACITY, 99);
+	assert(s.capacity == 68);
+	barracuda_state_event(&s, BARRACUDA_LINK, 1);
+	assert(barracuda_state_present(&s) && s.capacity == 68);
+	assert(s.external_power == BARRACUDA_UNKNOWN);
+	/* Suspend preserves the last percentage without confirming connectivity. */
+	barracuda_state_suspend(&s);
+	assert(!barracuda_state_present(&s) && s.capacity == 68);
+	assert(s.external_power == BARRACUDA_UNKNOWN);
+	barracuda_state_event(&s, BARRACUDA_LINK, 1);
+	assert(barracuda_state_present(&s) && s.capacity == 68);
+	barracuda_state_event(&s, BARRACUDA_CAPACITY, 67);
+	assert(s.capacity == 67);
+	/* Missing percentage must not hide a confirmed connected headset. */
+	s.capacity = BARRACUDA_UNKNOWN;
+	assert(barracuda_state_present(&s));
+	barracuda_state_reset(&s);
+	assert(s.capacity == BARRACUDA_UNKNOWN);
+	barracuda_state_event(&s, BARRACUDA_LINK, 1);
+	assert(barracuda_state_present(&s) && s.capacity == BARRACUDA_UNKNOWN);
 }
 
 int main(void)
@@ -129,6 +165,7 @@ int main(void)
 		for (i = 0; i <= sizeof(report); i++)
 			barracuda_feed(&s, report, i, collect, &r);
 	}
+	test_reconnect();
 	puts("Barracuda protocol tests passed");
 	return 0;
 }

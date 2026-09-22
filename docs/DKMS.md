@@ -15,7 +15,7 @@ The Makefile selects LLVM for kernels configured with Clang. From this checkout:
 sudo python3 scripts/install_dkms.py --activate
 ```
 
-This copies only module sources to `/usr/src/hid-barracuda-0.1.1`, builds and
+This copies only module sources to `/usr/src/hid-barracuda-0.1.3`, builds and
 installs for the running kernel, and rebinds only the matching HID interface.
 Without `--activate`, reconnect the dongle to activate the installed driver.
 DKMS rebuilds for subsequent kernels through the distribution's DKMS hooks.
@@ -23,6 +23,9 @@ The installer also installs `99-barracuda-battery.rules`, identifying the
 USB sound card as a headset for UPower/KDE. It does not restart the tray app
 or issue audio commands.
 A changed source tree cannot overwrite an already installed version silently.
+When upgrading an already loaded module, reload it once after installation:
+`sudo modprobe -r hid-barracuda && sudo modprobe hid-barracuda`. This clears
+telemetry until fresh notifications arrive.
 
 ## Readings and limitations
 
@@ -30,11 +33,16 @@ The driver sends only the validated E3 connection query, at most three times,
 two seconds apart. Battery percentage and cable state come from passive,
 validated notifications. No remote diagnostic or firmware commands are sent.
 
-Until both connection and percentage are known, the battery is reported absent
-and capacity is unavailable. A cable connection or battery change may provide
-the first reading; installing the driver does not guarantee an immediate value.
-Telemetry expires after ten minutes without a fresh notification. A silent
-adapter never establishes disconnection. Disconnect and suspend clear readings.
+Battery presence follows the validated wireless link, independently of whether
+a percentage is available. A missing percentage remains unknown. A cable
+connection or battery change may provide the first reading; installing the
+driver does not guarantee an immediate value.
+The percentage is the last observed reading, retained without a time limit until
+a new report replaces it or dongle removal/module reload clears it. It may be
+outdated after a long disconnection; it is not a fresh measurement on reconnect.
+Silence never establishes disconnection or invalidates an observed reading.
+Disconnect and suspend clear cable state; suspend also makes the link unknown,
+while preserving the last percentage. Reconnection alone does not confirm charging.
 Cable-present below 100% is exposed as charging; cable-absent as discharging.
 At 100% with the cable connected, status remains unknown because charge
 termination has not been validated. Missing cable state also means unknown.
@@ -49,8 +57,9 @@ dkms status
 ```
 
 An unknown coarse capacity level keeps UPower discovery available before the
-first precise percentage; the battery remains absent during that interval.
-UPower may present its own placeholder percentage while absent, and may infer
+first precise percentage. KDE exposes unknown charge as -1 rather than hiding
+a confirmed connected headset. UPower may expose a placeholder percentage
+marked as unknown (which consumers must ignore), and may infer
 fully charged from 100% even though the driver does not claim charge termination.
 
 UPower/KDE presentation depends on the desktop version and available readings.
@@ -63,8 +72,8 @@ Disconnect the dongle, then run:
 
 ```bash
 sudo modprobe -r hid-barracuda
-sudo dkms remove hid-barracuda/0.1.1 --all
-sudo rm -r /usr/src/hid-barracuda-0.1.1
+sudo dkms remove hid-barracuda/0.1.3 --all
+sudo rm -r /usr/src/hid-barracuda-0.1.3
 sudo rm /etc/udev/rules.d/99-barracuda-battery.rules
 sudo udevadm control --reload-rules
 ```
@@ -92,3 +101,21 @@ KDE Solid reported `HeadsetBattery`, present, chargePercent 68, and Discharging.
 An earlier build also received 68–69% and charging with the cable attached.
 The USB audio interface retained `snd-usb-audio`; the tray process was not restarted.
 Suspend/resume, full charge, and future kernel versions have not been physically tested.
+
+Version 0.1.2 separates wireless presence from percentage availability. A passive
+power-cycle capture showed valid disconnect/reconnect reports without battery
+notifications. Regression tests cover this sequence, retained capacity, cleared
+cable state, and connected devices with missing percentage. Live KDE Solid
+confirmed presence with unknown percentage after loading the correction.
+After loading 0.1.2, holding the charging cable connected produced a fresh 72%
+notification. KDE Solid then reported chargePercent 72 and Charging. Briefly
+toggling the cable had not produced a percentage report, so cable transitions
+must not be treated as a guaranteed request for battery telemetry.
+A subsequent user power cycle confirmed absent while off, then present with the
+retained 72% after reconnect. KDE Solid also reported 72%. Charging state stayed
+unknown until another cable-state notification, as intended; reconnection alone
+does not prove that the cable or charging state is unchanged.
+
+Version 0.1.3 removes the arbitrary ten-minute expiry and its periodic worker.
+Regression tests cover retained percentage across disconnect and suspend,
+replacement by new telemetry, and clearing on driver state initialization.

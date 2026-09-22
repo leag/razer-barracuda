@@ -9,11 +9,10 @@
 #include <linux/usb.h>
 #include <linux/workqueue.h>
 
-#include "barracuda-protocol.h"
+#include "barracuda-state.h"
 
 #define BARRACUDA_VENDOR 0x1532
 #define BARRACUDA_PRODUCT 0x0552
-#define BARRACUDA_MAX_AGE (10 * 60 * HZ)
 
 struct barracuda {
 	struct hid_device *hdev;
@@ -22,12 +21,7 @@ struct barracuda {
 	spinlock_t lock;
 	struct barracuda_stream stream;
 	struct delayed_work query_work;
-	struct delayed_work expiry_work;
-	int linked;
-	int capacity;
-	int external_power;
-	unsigned long capacity_at;
-	unsigned long power_at;
+	struct barracuda_state state;
 	unsigned long fragment_at;
 	unsigned int attempts;
 	bool stopped;
@@ -50,21 +44,21 @@ static int barracuda_get_property(struct power_supply *psy,
 {
 	struct barracuda *b = power_supply_get_drvdata(psy);
 	unsigned long flags;
-	bool present;
+	bool present, capacity_valid;
 	int ret = 0;
 
 	spin_lock_irqsave(&b->lock, flags);
-	present = b->linked == 1 && b->capacity >= 0 &&
-		  time_before(jiffies, b->capacity_at + BARRACUDA_MAX_AGE);
+	present = barracuda_state_present(&b->state);
+	capacity_valid = present && b->state.capacity >= 0;
 	switch (prop) {
 	case POWER_SUPPLY_PROP_PRESENT:
 		val->intval = present;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
-		if (!present)
+		if (!capacity_valid)
 			ret = -ENODATA;
 		else
-			val->intval = b->capacity;
+			val->intval = b->state.capacity;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
 		/* Keep discovery possible while precise capacity is unavailable. */
@@ -72,12 +66,11 @@ static int barracuda_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_STATUS:
 		val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
-		if (!present || b->external_power < 0 ||
-		    time_after_eq(jiffies, b->power_at + BARRACUDA_MAX_AGE))
+		if (!present || b->state.external_power < 0)
 			break;
-		if (!b->external_power)
+		if (!b->state.external_power)
 			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
-		else if (b->capacity < 100)
+		else if (capacity_valid && b->state.capacity < 100)
 			val->intval = POWER_SUPPLY_STATUS_CHARGING;
 		/* A plugged-in 100% report does not prove charge termination. */
 		break;
@@ -102,24 +95,9 @@ static void barracuda_event(void *context, enum barracuda_event event, int value
 {
 	struct barracuda *b = context;
 
-	if (event == BARRACUDA_LINK) {
-		b->changed |= b->linked != value;
-		b->linked = value;
-		if (!value) {
-			b->capacity = BARRACUDA_UNKNOWN;
-			b->external_power = BARRACUDA_UNKNOWN;
-		}
-	} else if (b->linked != 0) {
-		/* Telemetry alone must never confirm the wireless link. */
-		if (event == BARRACUDA_CAPACITY) {
-			b->capacity = value;
-			b->capacity_at = jiffies;
-		} else {
-			b->external_power = value;
-			b->power_at = jiffies;
-		}
-		b->changed = true;
-	}
+	if (!barracuda_state_event(&b->state, event, value))
+		return;
+	b->changed = true;
 }
 
 static int barracuda_raw_event(struct hid_device *hdev, struct hid_report *report,
@@ -162,7 +140,7 @@ static void barracuda_query(struct work_struct *work)
 	if (!buf)
 		return;
 	spin_lock_irqsave(&b->lock, flags);
-	if (b->stopped || b->linked != BARRACUDA_UNKNOWN || b->attempts >= 3) {
+	if (b->stopped || b->state.linked != BARRACUDA_UNKNOWN || b->attempts >= 3) {
 		spin_unlock_irqrestore(&b->lock, flags);
 		kfree(buf);
 		return;
@@ -177,36 +155,10 @@ static void barracuda_query(struct work_struct *work)
 	kfree(buf);
 	/* Failed writes/timeouts retain unknown state and passive monitoring. */
 	spin_lock_irqsave(&b->lock, flags);
-	if (ret == 64 && !b->stopped && b->linked == BARRACUDA_UNKNOWN &&
+	if (ret == 64 && !b->stopped && b->state.linked == BARRACUDA_UNKNOWN &&
 	    b->attempts < 3)
 		schedule_delayed_work(&b->query_work, 2 * HZ);
 	spin_unlock_irqrestore(&b->lock, flags);
-}
-
-static void barracuda_expire(struct work_struct *work)
-{
-	struct barracuda *b = container_of(to_delayed_work(work),
-					 struct barracuda, expiry_work);
-	unsigned long flags;
-	bool changed = false;
-
-	spin_lock_irqsave(&b->lock, flags);
-	if (!b->stopped) {
-		if (b->capacity >= 0 &&
-		    time_after_eq(jiffies, b->capacity_at + BARRACUDA_MAX_AGE)) {
-			b->capacity = BARRACUDA_UNKNOWN;
-			changed = true;
-		}
-		if (b->external_power >= 0 &&
-		    time_after_eq(jiffies, b->power_at + BARRACUDA_MAX_AGE)) {
-			b->external_power = BARRACUDA_UNKNOWN;
-			changed = true;
-		}
-		schedule_delayed_work(&b->expiry_work, 10 * HZ);
-	}
-	spin_unlock_irqrestore(&b->lock, flags);
-	if (changed)
-		power_supply_changed(b->battery);
 }
 
 static int barracuda_probe(struct hid_device *hdev, const struct hid_device_id *id)
@@ -222,12 +174,9 @@ static int barracuda_probe(struct hid_device *hdev, const struct hid_device_id *
 	if (!b)
 		return -ENOMEM;
 	b->hdev = hdev;
-	b->linked = BARRACUDA_UNKNOWN;
-	b->capacity = BARRACUDA_UNKNOWN;
-	b->external_power = BARRACUDA_UNKNOWN;
+	barracuda_state_reset(&b->state);
 	spin_lock_init(&b->lock);
 	INIT_DELAYED_WORK(&b->query_work, barracuda_query);
-	INIT_DELAYED_WORK(&b->expiry_work, barracuda_expire);
 	hid_set_drvdata(hdev, b);
 	ret = hid_parse(hdev);
 	if (ret)
@@ -253,7 +202,6 @@ static int barracuda_probe(struct hid_device *hdev, const struct hid_device_id *
 		return ret;
 	}
 	schedule_delayed_work(&b->query_work, HZ);
-	schedule_delayed_work(&b->expiry_work, 10 * HZ);
 	return 0;
 }
 
@@ -265,7 +213,6 @@ static void barracuda_stop(struct barracuda *b)
 	b->stopped = true;
 	spin_unlock_irqrestore(&b->lock, flags);
 	cancel_delayed_work_sync(&b->query_work);
-	cancel_delayed_work_sync(&b->expiry_work);
 }
 
 static void barracuda_remove(struct hid_device *hdev)
@@ -285,9 +232,7 @@ static int barracuda_suspend(struct hid_device *hdev, pm_message_t message)
 
 	barracuda_stop(b);
 	spin_lock_irqsave(&b->lock, flags);
-	b->linked = BARRACUDA_UNKNOWN;
-	b->capacity = BARRACUDA_UNKNOWN;
-	b->external_power = BARRACUDA_UNKNOWN;
+	barracuda_state_suspend(&b->state);
 	b->stream.used = 0;
 	spin_unlock_irqrestore(&b->lock, flags);
 	power_supply_changed(b->battery);
@@ -301,14 +246,11 @@ static int barracuda_resume(struct hid_device *hdev)
 
 	spin_lock_irqsave(&b->lock, flags);
 	b->stopped = false;
-	b->linked = BARRACUDA_UNKNOWN;
-	b->capacity = BARRACUDA_UNKNOWN;
-	b->external_power = BARRACUDA_UNKNOWN;
+	barracuda_state_suspend(&b->state);
 	b->stream.used = 0;
 	b->attempts = 0;
 	spin_unlock_irqrestore(&b->lock, flags);
 	schedule_delayed_work(&b->query_work, HZ);
-	schedule_delayed_work(&b->expiry_work, 10 * HZ);
 	return 0;
 }
 #endif
@@ -335,4 +277,4 @@ module_hid_driver(barracuda_driver);
 
 MODULE_LICENSE("Dual MIT/GPL");
 MODULE_DESCRIPTION("Razer Barracuda X (2022) HID battery driver");
-MODULE_VERSION("0.1.1");
+MODULE_VERSION("0.1.3");

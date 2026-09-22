@@ -7,9 +7,9 @@ import shutil
 import subprocess
 
 NAME = 'hid-barracuda'
-VERSION = '0.1.1'
+VERSION = '0.1.3'
 DRIVER = 'barracuda-battery'
-FILES = ('hid-barracuda.c', 'barracuda-protocol.h', 'Makefile', 'dkms.conf')
+FILES = ('hid-barracuda.c', 'barracuda-protocol.h', 'barracuda-state.h', 'Makefile', 'dkms.conf')
 IDENTITY = 'HID_ID=0003:00001532:00000552'
 
 
