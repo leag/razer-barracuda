@@ -16,6 +16,7 @@ is in English. This is an independent project, not an official Razer application
   changes made while the headset is connected.
 - Connection query at startup, then HID notifications; no firmware or pairing commands.
 - Original SVG headset icons included.
+- Optional [DKMS HID driver](docs/DKMS.md) for native battery reporting to UPower/KDE.
 
 ## Requirements
 

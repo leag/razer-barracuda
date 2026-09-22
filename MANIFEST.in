@@ -9,3 +9,6 @@ prune .vm
 prune .assets-official
 prune log
 global-exclude __pycache__ *.py[cod] *.exe *.dll *.ico
+
+recursive-include kernel/hid-barracuda *.c *.h Makefile dkms.conf
+global-exclude *.mod.c

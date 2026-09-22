@@ -1,0 +1,2 @@
+# Identify this composite USB audio device for UPower's battery classification.
+ACTION!="remove", SUBSYSTEM=="sound", KERNEL=="card*", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="0552", ENV{SOUND_FORM_FACTOR}="headset"

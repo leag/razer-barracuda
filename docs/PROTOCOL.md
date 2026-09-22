@@ -96,7 +96,8 @@ The initial 54% agreed with the headset's own battery-voltage table and a remote
 voltage query. Connecting the cable produced `01`; removing it produced `00`.
 Behavior at full charge, startup-state queries and update timing are unvalidated.
 Missing notifications mean unknown/stale telemetry, not 0% or not charging.
-These observations are not yet implemented in the monitor. See
+The optional [DKMS driver](DKMS.md) consumes these notifications for native
+battery reporting; the tray monitor still handles link status and routing. See
 [battery research](FIRMWARE_ANALYSIS.md#battery-voltage-percentage-and-charging-research)
 for query framing, raw values and validation limits.
 
