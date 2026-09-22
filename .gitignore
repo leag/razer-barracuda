@@ -1,4 +1,4 @@
-# Local proprietary resources, research binaries and virtual machines
+# Local artifacts
 /private/
 /.vm/
 /.assets-official/

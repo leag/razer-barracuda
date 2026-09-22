@@ -14,15 +14,15 @@ is in English. This is an independent project, not an official Razer application
   streams on the previous default output.
 - Remembers the previous output across app restarts and respects manual output
   changes made while the headset is connected.
-- Read-only HID monitoring; no firmware or pairing commands.
-- Original generic headset icons included. No proprietary Razer assets required.
+- Connection query at startup, then HID notifications; no firmware or pairing commands.
+- Original SVG headset icons included.
 
 ## Requirements
 
 - Linux, Python 3.10+, uv and a system tray (tested on KDE Plasma).
 - PyQt6 is installed into the project environment by uv.
 - PipeWire with PulseAudio compatibility, or PulseAudio, and `pactl`.
-- Read access to the dongle's HID device.
+- Read/write access to the dongle's HID device (read-only access supports passive monitoring).
 
 On Arch/CachyOS, install the dependencies:
 
@@ -86,10 +86,11 @@ Do not mix install methods unless you manage their paths.
 | Red | Adapter missing or read error |
 | Gray | Waiting for a valid link report |
 
-USB presence alone does not confirm a wireless connection. The dongle can remain
-silent at startup: turn the headset off and on once to obtain the initial state.
-Unknown status never changes the audio output. Restarting the app loses its
-observed HID status until another report arrives.
+USB presence alone does not confirm a wireless connection. On startup and after
+reopening the dongle, the app queries its connection state, with up to three
+attempts two seconds apart. It then listens for notifications. If the query fails,
+status remains unknown until a valid report arrives; unknown status never changes
+the audio output. Read-only permissions retain passive monitoring.
 
 On connection, the app remembers the current default output and selects the
 Barracuda sink by USB vendor/product properties. On disconnection it restores the
@@ -101,6 +102,21 @@ The previous output is stored in `$XDG_STATE_HOME/barracuda-status/audio.json`
 (default: `~/.local/state/barracuda-status/audio.json`). Audio errors appear in the
 tray menu and are retried while the confirmed state remains pending.
 
+## Headset play/pause button
+
+With the headset connected through the USB dongle, briefly press its power/play
+button once to toggle playback in the desktop's active media player. The same
+button handles both play and pause; there are no separate buttons for these actions.
+
+The dongle sends a standard HID media-control event, which Linux and the desktop
+handle. Barracuda Status monitors the wireless link and routes audio; it does not
+implement or intercept playback control. The selected player must support desktop
+media controls.
+
+Single-press play/pause was verified on the physical device. Other press patterns
+were not tested as part of this validation. See the
+[captured button reports](docs/PROTOCOL.md#playpause-button) for technical details.
+
 ## Development
 
 ```bash
@@ -110,13 +126,12 @@ uv run python -m compileall -q barracuda_status scripts
 
 Tests use fake audio commands and Qt's offscreen platform; no connected hardware
 or real audio changes are required. See [CONTRIBUTING.md](CONTRIBUTING.md),
-[protocol observations](docs/PROTOCOL.md), [architecture](docs/ARCHITECTURE.md)
+[protocol observations](docs/PROTOCOL.md),
+[firmware research](docs/FIRMWARE_ANALYSIS.md), [architecture](docs/ARCHITECTURE.md),
 [troubleshooting](docs/TROUBLESHOOTING.md) and
 [publishing instructions](docs/RELEASING.md).
 
-## License and assets
+## License
 
 Project code, documentation and original SVG icons are distributed under the
-[MIT license](LICENSE). Razer trademarks, extracted logos, executables, firmware
-and VM images are not covered by that license and are not part of the public
-package. See [third-party assets](docs/THIRD_PARTY_ASSETS.md).
+[MIT license](LICENSE).

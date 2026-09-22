@@ -16,8 +16,7 @@ workers. Add regression coverage for changed protocol or routing behavior.
 Read [protocol observations](docs/PROTOCOL.md) before modifying the HID parser.
 Do not send unverified commands to the dongle.
 
-Do not commit proprietary assets, firmware, VM images, logs, personal paths,
-credentials or local settings. Keep research artifacts in ignored `private/`.
+Do not commit logs, personal paths, credentials or local settings.
 Check `git diff --cached --check` and `git diff --cached` before committing.
 The MIT license covers contributions to project code, docs and original assets.
 

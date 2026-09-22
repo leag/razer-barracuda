@@ -10,9 +10,10 @@ import argparse
 import select
 import signal
 import sys
+import time
 
 from PyQt6.QtCore import QThread, QTimer, pyqtSignal, Qt
-from PyQt6.QtGui import QAction, QColor, QIcon, QPainter, QPen, QPixmap
+from PyQt6.QtGui import QAction, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 VID_PID = "0003:00001532:00000552"
@@ -22,7 +23,12 @@ UNKNOWN = "unknown"
 
 
 def parse_report(report):
-    """Accept only the observed link-status frame, never media/other reports."""
+    """Accept the validated transition and E3 connection frames only."""
+    if (len(report) >= 15
+            and report[:6] == bytes.fromhex("01 80 0c 50 49 0e")
+            and report[11:14] == bytes.fromhex("02 00 e3")
+            and report[14] in (0, 1)):
+        return bool(report[14])
     if (len(report) > STATUS_OFFSET
             and report[:5] == bytes.fromhex("01 80 0e 50 49")
             and report[11:16] == bytes.fromhex("04 00 20 02 01")
@@ -45,38 +51,6 @@ def find_hidraw():
 def status_icon(emblem):
     name = {"emblem-ok": "connected", "emblem-warning": "disconnected",
             "emblem-error": "missing", "dialog-question": "unknown"}[emblem]
-    for directory in (Path(__file__).resolve().parent.parent / "private/razer", ICON_DIR):
-        official = directory / "razer-official.ico"
-        if not official.is_file():
-            continue
-        base = QIcon(str(official))
-        if base.pixmap(32, 32).isNull():
-            continue
-        icon = QIcon()
-        for size in (16, 22, 24, 32, 48, 64):
-            pixmap = base.pixmap(size, size)
-            painter = QPainter(pixmap)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            painter.scale(pixmap.width() / 32, pixmap.height() / 32)
-            painter.setPen(QPen(QColor("#202020"), 2))
-            painter.setBrush(QColor({"connected": "#35c759", "disconnected": "#f0a000",
-                                    "missing": "#e33b3b", "unknown": "#aab2bd"}[name]))
-            painter.drawEllipse(18, 18, 13, 13)
-            painter.setPen(QPen(QColor("#202020"), 2))
-            if name == "connected":
-                painter.drawLine(21, 24, 24, 27)
-                painter.drawLine(24, 27, 28, 22)
-            elif name == "disconnected":
-                painter.drawLine(21, 25, 28, 25)
-            elif name == "missing":
-                painter.drawLine(22, 22, 27, 27)
-                painter.drawLine(27, 22, 22, 27)
-            else:
-                painter.drawLine(25, 21, 25, 25)
-                painter.drawPoint(25, 28)
-            painter.end()
-            icon.addPixmap(pixmap)
-        return icon
     for directory in (Path(__file__).resolve().parent / "assets", ICON_DIR):
         path = directory / f"barracuda-{name}.svg"
         if not path.is_file():
@@ -100,37 +74,66 @@ class HidReader(QThread):
     status_changed = pyqtSignal(object)
     error = pyqtSignal(str)
 
+    QUERY_INTERVAL = 2.0
+    QUERY_ATTEMPTS = 3
+
+    def open_device(self, device):
+        try:
+            return os.open(device, os.O_RDWR | os.O_NONBLOCK), True
+        except PermissionError:
+            # Preserve passive monitoring when only read permission is available.
+            return os.open(device, os.O_RDONLY | os.O_NONBLOCK), False
+
+    def monitor(self, fd, writable):
+        attempts = 0
+        next_query = 0.0
+        confirmed = False
+        while not self.isInterruptionRequested():
+            if (writable and not confirmed and attempts < self.QUERY_ATTEMPTS
+                    and time.monotonic() >= next_query):
+                attempts += 1
+                packet = bytes([1, 0x80, 6, 0x50, 0x41, 0x0e,
+                                attempts, 1, 0xe3]).ljust(64, b"\0")
+                try:
+                    if os.write(fd, packet) != len(packet):
+                        writable = False
+                except OSError:
+                    # Failed queries are not evidence of a lost wireless link.
+                    writable = False
+                next_query = time.monotonic() + self.QUERY_INTERVAL
+            if not select.select([fd], [], [], 0.25)[0]:
+                continue
+            try:
+                report = os.read(fd, 64)
+            except BlockingIOError:
+                continue
+            if not report:
+                raise OSError(tr("The adapter stopped responding"))
+            linked = parse_report(report)
+            if linked != UNKNOWN:
+                confirmed = True
+                self.status_changed.emit(linked)
+
     def run(self):
         while not self.isInterruptionRequested():
             device = find_hidraw()
             if device is None:
                 self.status_changed.emit(None)
-                self.msleep(2000)
-                continue
-            self.status_changed.emit(UNKNOWN)
-            try:
-                fd = os.open(device, os.O_RDONLY | os.O_NONBLOCK)
+            else:
+                self.status_changed.emit(UNKNOWN)
                 try:
-                    while not self.isInterruptionRequested():
-                        if not select.select([fd], [], [], 0.25)[0]:
-                            continue
-                        try:
-                            report = os.read(fd, 64)
-                        except BlockingIOError:
-                            continue
-                        if not report:
-                            raise OSError(tr("The adapter stopped responding"))
-                        linked = parse_report(report)
-                        if linked != UNKNOWN:
-                            self.status_changed.emit(linked)
-                finally:
-                    os.close(fd)
-            except OSError as exc:
-                self.error.emit(str(exc))
-                for _ in range(8):
-                    if self.isInterruptionRequested():
-                        return
-                    self.msleep(250)
+                    fd, writable = self.open_device(device)
+                    try:
+                        self.monitor(fd, writable)
+                    finally:
+                        os.close(fd)
+                except OSError as exc:
+                    self.status_changed.emit(UNKNOWN)
+                    self.error.emit(str(exc))
+            for _ in range(8):
+                if self.isInterruptionRequested():
+                    return
+                self.msleep(250)
 
 
 
@@ -194,7 +197,7 @@ class Tray(QSystemTrayIcon):
         elif linked == UNKNOWN:
             self.setIcon(status_icon("dialog-question"))
             text = tr("Adapter connected; link unconfirmed")
-            tooltip = tr("Razer Barracuda X: waiting for a report; turn the headset off and on")
+            tooltip = tr("Razer Barracuda X: waiting for a valid connection response")
         elif linked:
             self.setIcon(status_icon("emblem-ok"))
             text, tooltip = tr("Connected"), tr("Razer Barracuda X: headset connected")

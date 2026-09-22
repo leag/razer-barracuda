@@ -44,14 +44,11 @@ class DistributionTests(unittest.TestCase):
                     cwd=ROOT, env=env, text=True)
         self.assertEqual(result.strip(), 'Connected')
 
-    def test_original_icons_without_private_assets(self):
+    def test_packaged_icons(self):
         qt = app.QApplication.instance() or app.QApplication([])
         with patch.object(app, 'ICON_DIR', Path('/nonexistent')):
-            # Hide optional official resources while retaining packaged SVGs.
-            original = Path.is_file
-            with patch.object(Path, 'is_file', lambda path: False if path.suffix == '.ico' else original(path)):
-                for emblem in ('emblem-ok', 'emblem-warning', 'emblem-error', 'dialog-question'):
-                    self.assertFalse(app.status_icon(emblem).pixmap(32, 32).isNull())
+            for emblem in ('emblem-ok', 'emblem-warning', 'emblem-error', 'dialog-question'):
+                self.assertFalse(app.status_icon(emblem).pixmap(32, 32).isNull())
 
     def test_install_in_isolated_home(self):
         with tempfile.TemporaryDirectory(prefix='barracuda test ') as directory:
@@ -68,4 +65,3 @@ class DistributionTests(unittest.TestCase):
             desktop = (home / 'config/autostart/org.razer.BarracudaStatus.desktop').read_text()
             self.assertIn('--language es', desktop)
             self.assertIn(f'Exec="{launcher}"', desktop)
-            self.assertFalse(list((home / 'data').rglob('*.ico')))

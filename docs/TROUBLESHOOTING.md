@@ -2,8 +2,9 @@
 
 ## Unknown status after startup
 
-The dongle does not necessarily emit its current state when the app starts.
-Turn the headset off and on once. Do not treat a silent device or an available
+The app queries the current connection state when it opens the dongle. Allow
+about six seconds for bounded attempts. If it stays unknown, check HID read/write
+permissions. Turning the headset off and on can provide a passive notification. Do not treat a silent device or an available
 USB audio sink as proof of a wireless link. Bluetooth-only use is not monitored.
 
 ## Permission errors
@@ -46,4 +47,4 @@ directory under your XDG data directory, its desktop entry under `applications/`
 the matching entry under your XDG config `autostart/` directory, and
 `icons/hicolor/scalable/apps/barracuda-status.svg` under your XDG data directory.
 Optionally remove the saved state and the system udev rule if no longer needed.
-Keep unrelated files and any local proprietary resources you wish to retain.
+Keep unrelated files.

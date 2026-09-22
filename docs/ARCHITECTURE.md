@@ -8,8 +8,11 @@
 - `scripts/install.py`: installation for the current user without root.
 - `tests/`: hardware-independent unit tests.
 
-The HID worker opens the matching device read-only and uses nonblocking reads with
-`select` timeouts. It validates the observed report format before emitting state.
+The HID worker opens the matching device read/write, falling back to read-only
+on permission errors, and uses nonblocking reads with `select` timeouts. It sends
+only the validated E3 query, at most three times per open, until a valid state is
+received. It validates E3 and transition reports before emitting state; query
+failure never emits disconnected. Reopening resets the query budget.
 Qt updates the tray on its main thread and sends states to a separate audio worker.
 The audio worker serializes routing commands and retries transient failures.
 Subprocess calls have timeouts. Shutdown requests interruption and joins workers.
@@ -21,3 +24,16 @@ Spanish is enabled with `--language es`, independent of the desktop locale.
 The development workstation previously used a transient user unit named
 `barracuda-status.service`. That unit is not part of this distribution. Session
 startup is provided by a desktop autostart entry; avoid running both mechanisms.
+
+## Tray icon design
+
+The four original 32×32 SVGs share the rounded, outlined headset silhouette of
+the unknown-state icon. Connected uses a green check, disconnected an amber minus,
+and missing-adapter a red cross. Unknown uses a gray question mark drawn as paths
+and a circle, with no font dependency. Color and shape both distinguish states.
+
+The check, cross and minus are scaled to 70% around `(16, 21)` to keep them clear
+of the earcups. The question mark retains its original size. Packaged SVGs have
+priority over local SVG files, ensuring
+that installations use the same state designs. The SVGs were visually checked at
+16, 32 and 64 pixels before the final symbol-size adjustment.

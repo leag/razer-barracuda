@@ -1,7 +1,8 @@
 """Explicit English/Spanish UI translations; English is the default."""
 
 LANGUAGE = "en"
-SPANISH = {'The adapter stopped responding': 'El adaptador dejó de responder',
+SPANISH = {'Razer Barracuda X: waiting for a valid connection response': 'Razer Barracuda X: esperando una respuesta válida de conexión',
+ 'The adapter stopped responding': 'El adaptador dejó de responder',
  'Automatic audio switching enabled': 'Cambio automático de salida activado',
  'Could not switch output: {error}': 'No se pudo cambiar la salida: {error}',
  'Razer Barracuda X: waiting for link status': 'Razer Barracuda X: esperando estado de enlace',

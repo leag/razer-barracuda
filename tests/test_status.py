@@ -16,9 +16,57 @@ class StatusTests(unittest.TestCase):
                 report = bytes.fromhex(prefix + ' 04 00 20 02 01') + bytes([value])
                 self.assertIs(status.parse_report(report), bool(value))
         for report in (b'', b'\x02\x00', bytes.fromhex(
-                '01 80 0c 50 49 0e f5 00 00 00 00 02 00 e3 01 00 00'),
+                '01 80 0c 50 49 0e f5 00 00 00 00 02 00 e6 01 00 00'),
                 bytes.fromhex('01 80 0e 50 49 08 f4 89 e6 5b 03 04 00 20 02 01 02')):
             self.assertEqual(status.parse_report(report), status.UNKNOWN)
+
+    def test_e3_frames_and_invalid_variants(self):
+        raw = bytes.fromhex('01 80 0c 50 49 0e e0 00 00 00 00 02 00 e3 00')
+        for value in (0, 1):
+            self.assertIs(status.parse_report(raw[:-1] + bytes([value])), bool(value))
+        for index, value in ((0, 2), (2, 13), (5, 1), (11, 3),
+                             (12, 1), (13, 0xe6), (14, 2)):
+            changed = bytearray(raw)
+            changed[index] = value
+            self.assertEqual(status.parse_report(changed), status.UNKNOWN)
+        for length in range(len(raw)):
+            self.assertEqual(status.parse_report(raw[:length]), status.UNKNOWN)
+
+    def test_query_timeout_is_bounded_and_never_emits_disconnected(self):
+        reader = status.HidReader()
+        with patch.object(reader, 'isInterruptionRequested',
+                          side_effect=[False] * 5 + [True]), patch.object(
+                status.time, 'monotonic', side_effect=range(0, 100, 3)), patch.object(
+                status.select, 'select', return_value=([], [], [])), patch.object(
+                status.os, 'write', return_value=64) as write, patch.object(
+                reader, 'status_changed') as signal:
+            reader.monitor(99, True)
+            self.assertEqual(write.call_count, 3)
+            for call in write.call_args_list:
+                packet = call.args[1]
+                self.assertEqual(len(packet), 64)
+                self.assertEqual(packet[:6], bytes.fromhex('01 80 06 50 41 0e'))
+                self.assertEqual(packet[7:9], bytes.fromhex('01 e3'))
+            signal.emit.assert_not_called()
+
+    def test_success_stops_queries_and_keeps_processing_transitions(self):
+        reader = status.HidReader()
+        reports = [bytes.fromhex('01 80 0c 50 49 0e e0 00 00 00 00 02 00 e3 01'),
+                   bytes.fromhex('01 80 0e 50 49 08 f8 4c 70 69 00 04 00 20 02 01 00')]
+        with patch.object(reader, 'isInterruptionRequested',
+                          side_effect=[False, False, True]), patch.object(
+                status.select, 'select', return_value=([99], [], [])), patch.object(
+                status.os, 'read', side_effect=reports), patch.object(
+                status.os, 'write', return_value=64) as write, patch.object(
+                reader, 'status_changed') as signal:
+            reader.monitor(99, True)
+            write.assert_called_once()
+            self.assertEqual([c.args[0] for c in signal.emit.call_args_list], [True, False])
+
+    def test_read_only_permission_fallback(self):
+        reader = status.HidReader()
+        with patch.object(status.os, 'open', side_effect=[PermissionError(), 99]):
+            self.assertEqual(reader.open_device('/fake'), (99, False))
 
     def test_icons_and_states(self):
         app = status.QApplication.instance() or status.QApplication([])

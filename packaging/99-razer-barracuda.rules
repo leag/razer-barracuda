@@ -1,2 +1,2 @@
-# Allow the logged-in desktop user to read the Barracuda X HID status reports.
+# Allow the logged-in desktop user to query and read the Barracuda X HID connection status.
 KERNEL=="hidraw*", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="0552", GROUP="audio", MODE="0660", TAG+="uaccess"

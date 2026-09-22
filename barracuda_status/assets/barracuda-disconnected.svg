@@ -1,1 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path fill="#f0a000" d="M8 15V9a8 8 0 0 1 16 0v6h3v5h-5v-5h-3v5h-3v-5h-3v5H8v-5H5v-5h3zm3 0h10V9a5 5 0 0 0-10 0v6z"/><path fill="#f0a000" d="M10 23h12v3H10z"/><path stroke="#fff" stroke-width="2" d="M16 8v5"/><circle cx="16" cy="16.5" r="1.2" fill="#fff"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <title>Disconnected</title>
+  <g fill="none" stroke="#f0a000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 21v-7a10 10 0 0 1 20 0v7M6 16v9h4v-9zm16 0v9h4v-9z"/>
+    <g stroke-width="2.5" transform="translate(16 21) scale(0.7) translate(-16 -21)"><path d="M12 21h8"/></g>
+  </g>
+</svg>

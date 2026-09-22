@@ -11,8 +11,7 @@ git push -u origin main
 ```
 
 No remote URL is assumed by this project. Review the tracked files with
-`git ls-files` before pushing. The ignored local `private/`, `.vm/`, environment,
-logs and build outputs must not be added manually.
+`git ls-files` before pushing. Do not add ignored files manually.
 
 ## Build release artifacts
 
@@ -33,7 +32,6 @@ For a ZIP of the tracked source only:
 git archive --format=zip --output=dist/barracuda-status-source.zip HEAD
 ```
 
-Do not archive the entire working directory: it may contain proprietary local
-assets and large VM disks even though Git ignores them. Update both version fields
+Use tracked source for release archives. Update both version fields
 in `pyproject.toml` and `barracuda_status/__init__.py` for a new release, then run
 `uv lock` and commit the updated lockfile.
