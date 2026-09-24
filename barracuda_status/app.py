@@ -6,6 +6,8 @@ import queue
 
 from .audio_router import AudioRouter
 from .i18n import tr, set_language
+from . import pairing
+from .pairing import find_hidraw
 import argparse
 import select
 import signal
@@ -14,9 +16,8 @@ import time
 
 from PyQt6.QtCore import QThread, QTimer, pyqtSignal, Qt
 from PyQt6.QtGui import QAction, QIcon, QPainter, QPixmap
-from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
-VID_PID = "0003:00001532:00000552"
 STATUS_OFFSET = 16  # report ID at 0, status is payload byte 15
 ICON_DIR = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "icons/barracuda-status"
 UNKNOWN = "unknown"
@@ -35,17 +36,6 @@ def parse_report(report):
             and report[STATUS_OFFSET] in (0, 1)):
         return bool(report[STATUS_OFFSET])
     return UNKNOWN
-
-
-def find_hidraw():
-    for path in sorted(Path("/sys/class/hidraw").glob("hidraw*")):
-        try:
-            props = (path / "device" / "uevent").read_text()
-        except OSError:
-            continue
-        if f"HID_ID={VID_PID}" in props:
-            return Path("/dev") / path.name
-    return None
 
 
 def status_icon(emblem):
@@ -137,6 +127,35 @@ class HidReader(QThread):
 
 
 
+class PairWorker(QThread):
+    """Run the pairing sequence off the GUI thread; cancelled on quit."""
+    finished_with = pyqtSignal(bool, str)
+
+    def run(self):
+        messages = []
+        device = find_hidraw()
+        if device is None:
+            self.finished_with.emit(False, tr("Adapter not detected"))
+            return
+        try:
+            transport = pairing.HidrawTransport(device)
+        except PermissionError:
+            self.finished_with.emit(False, tr("HID permission denied"))
+            return
+        except OSError as exc:
+            self.finished_with.emit(False, tr("Pairing failed: {error}", error=exc))
+            return
+        try:
+            session = pairing.PairingSession(transport, log=messages.append,
+                                             cancelled=self.isInterruptionRequested)
+            code = pairing.run(session, scan_only=False, address=None, timeout=60)
+            self.finished_with.emit(code == 0, messages[-1] if messages else "")
+        except (pairing.PairingError, OSError) as exc:
+            self.finished_with.emit(False, tr("Pairing failed: {error}", error=exc))
+        finally:
+            transport.close()
+
+
 class AudioWorker(QThread):
     result = pyqtSignal(str)
 
@@ -180,6 +199,11 @@ class Tray(QSystemTrayIcon):
         self.audio.result.connect(self.audio_action.setText)
         self.audio.start()
         self.menu.addSeparator()
+        self.pair_action = QAction(tr("Pair headset…"), self)
+        self.pair_action.triggered.connect(self.start_pairing)
+        self.menu.addAction(self.pair_action)
+        self.pairer = PairWorker()
+        self.pairer.finished_with.connect(self.pairing_finished)
         quit_action = QAction(tr("Quit"), self)
         quit_action.triggered.connect(QApplication.quit)
         self.menu.addAction(quit_action)
@@ -215,7 +239,29 @@ class Tray(QSystemTrayIcon):
             self.status_action.setText(tr("HID permission denied"))
             self.setToolTip(tr("Install the included udev rule and log in again"))
 
+    def start_pairing(self):
+        if self.pairer.isRunning():
+            return
+        answer = QMessageBox.question(
+            None, tr("Pair headset"),
+            tr("This replaces the dongle's current pairing. Put the headset in pairing "
+               "mode, then press Yes. Scanning lasts up to 60 seconds."))
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self.pair_action.setEnabled(False)
+        self.pair_action.setText(tr("Pairing…"))
+        self.pairer.start()
+
+    def pairing_finished(self, success, message):
+        self.pair_action.setEnabled(True)
+        self.pair_action.setText(tr("Pair headset…"))
+        icon = (QSystemTrayIcon.MessageIcon.Information if success
+                else QSystemTrayIcon.MessageIcon.Warning)
+        self.showMessage(tr("Pair headset"), message, icon)
+
     def close(self):
+        self.pairer.requestInterruption()
+        self.pairer.wait()
         self.audio.requestInterruption()
         self.audio.events.put(UNKNOWN)
         self.audio.wait()

@@ -96,5 +96,53 @@ class StatusTests(unittest.TestCase):
             os.close(read_fd)
             os.close(write_fd)
 
+    def tray(self):
+        self.qt = status.QApplication.instance() or status.QApplication([])
+        with patch.object(status.HidReader, 'start'), patch.object(status.AudioWorker, 'start'):
+            return status.Tray()
+
+    def test_pair_action_requires_confirmation(self):
+        tray = self.tray()
+        with patch.object(status.QMessageBox, 'question',
+                          return_value=status.QMessageBox.StandardButton.No), patch.object(
+                status.PairWorker, 'start') as start:
+            tray.start_pairing()
+            start.assert_not_called()
+        self.assertTrue(tray.pair_action.isEnabled())
+        with patch.object(status.QMessageBox, 'question',
+                          return_value=status.QMessageBox.StandardButton.Yes), patch.object(
+                status.PairWorker, 'start') as start:
+            tray.start_pairing()
+            start.assert_called_once()
+        self.assertFalse(tray.pair_action.isEnabled())
+        with patch.object(tray, 'showMessage') as show:
+            tray.pairing_finished(True, 'done')
+            show.assert_called_once()
+        self.assertTrue(tray.pair_action.isEnabled())
+        self.assertEqual(tray.pair_action.text(), 'Pair headset…')
+        with patch.object(status.PairWorker, 'wait'):
+            tray.close()
+
+    def test_pair_worker_reports_result_and_missing_adapter(self):
+        worker = status.PairWorker()
+        results = []
+        worker.finished_with.connect(lambda ok, message: results.append((ok, message)))
+        with patch.object(status, 'find_hidraw', return_value=None):
+            worker.run()
+        with patch.object(status, 'find_hidraw', return_value='/fake'), patch.object(
+                status.pairing, 'HidrawTransport') as transport, patch.object(
+                status.pairing, 'run', side_effect=lambda session, **_: (
+                    session.log('Paired. Turn the headset off and on to start the link'), 0)[1]):
+            worker.run()
+            transport.return_value.close.assert_called_once()
+        with patch.object(status, 'find_hidraw', return_value='/fake'), patch.object(
+                status.pairing, 'HidrawTransport'), patch.object(
+                status.pairing, 'run', side_effect=status.pairing.PairingError('boom')):
+            worker.run()
+        self.assertEqual(results, [
+            (False, 'Adapter not detected'),
+            (True, 'Paired. Turn the headset off and on to start the link'),
+            (False, 'Pairing failed: boom')])
+
 if __name__ == '__main__':
     unittest.main()

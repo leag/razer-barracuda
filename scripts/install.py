@@ -22,11 +22,13 @@ def main():
     shutil.copytree(root / 'barracuda_status', target / 'barracuda_status',
                     dirs_exist_ok=True, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
     binary.parent.mkdir(parents=True, exist_ok=True)
-    binary.write_text('#!/bin/sh\nexec ' + shlex.quote(sys.executable) + ' -c ' +
-                      shlex.quote('import sys; sys.path.insert(0, ' + repr(str(target)) +
-                                  '); from barracuda_status.app import main; raise SystemExit(main())') +
-                      ' --language ' + shlex.quote(args.language) + ' "$@"\n')
-    binary.chmod(0o755)
+    for launcher, module in ((binary, 'app'), (binary.with_name('barracuda-pair'), 'pairing')):
+        launcher.write_text('#!/bin/sh\nexec ' + shlex.quote(sys.executable) + ' -c ' +
+                            shlex.quote('import sys; sys.path.insert(0, ' + repr(str(target)) +
+                                        f'); from barracuda_status.{module} import main; '
+                                        'raise SystemExit(main())') +
+                            ' --language ' + shlex.quote(args.language) + ' "$@"\n')
+        launcher.chmod(0o755)
     icon = data / 'icons/hicolor/scalable/apps/barracuda-status.svg'
     icon.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(root / 'barracuda_status/assets/barracuda-connected.svg', icon)

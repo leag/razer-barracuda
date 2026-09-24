@@ -14,7 +14,9 @@ is in English. This is an independent project, not an official Razer application
   streams on the previous default output.
 - Remembers the previous output across app restarts and respects manual output
   changes made while the headset is connected.
-- Connection query at startup, then HID notifications; no firmware or pairing commands.
+- Connection query at startup, then HID notifications; the monitor sends no firmware
+  or pairing commands.
+- Separate `barracuda-pair` command to pair a headset with the dongle from Linux.
 - Original SVG headset icons included.
 - Optional [DKMS HID driver](docs/DKMS.md) for native battery reporting to UPower/KDE.
 
@@ -72,6 +74,24 @@ For development without installation:
 uv run barracuda-status                 # English
 uv run barracuda-status --language es   # Español
 ```
+
+## Pairing a headset
+
+`barracuda-pair` replaces the dongle's current pairing, the same way Razer's Windows
+pairing utility does. It replays the sequence captured from that utility (see
+[the protocol notes](docs/PROTOCOL.md#pairing)) and aborts on any unexpected reply.
+
+```bash
+~/.local/bin/barracuda-pair --scan   # list nearby Bluetooth devices only
+~/.local/bin/barracuda-pair          # put the headset in pairing mode, then confirm
+~/.local/bin/barracuda-pair --address AA:BB:CC:DD:EE:FF --yes
+```
+
+The tray menu offers the same action as **Pair headset…**, after a confirmation.
+It needs the same HID write access as the monitor. It pairs with the first
+headset whose name contains "Barracuda" and whose Bluetooth device class matches
+the vendor utility's list, unless `--address` is given. After pairing, turn the headset off
+and on: it keeps blinking blue until then, also with Razer's Windows utility.
 
 Build release archives with `uv build`. To install the built wheel in a separate,
 persistent environment, use `uv tool install dist/barracuda_status-0.1.0-py3-none-any.whl`.

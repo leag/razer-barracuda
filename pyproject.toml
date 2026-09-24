@@ -19,6 +19,7 @@ classifiers = [
 
 [project.scripts]
 barracuda-status = "barracuda_status.app:main"
+barracuda-pair = "barracuda_status.pairing:main"
 
 [tool.setuptools.packages.find]
 include = ["barracuda_status*"]

@@ -11,6 +11,7 @@ user in their conversation language. Read README.md and docs/PROTOCOL.md first.
 
 - barracuda_status/app.py: Qt tray, icons, HID and audio workers.
 - barracuda_status/audio_router.py: pactl routing and saved previous output.
+- barracuda_status/pairing.py: pairing sequence, `barracuda-pair` CLI and hidraw lookup.
 - barracuda_status/i18n.py: explicit UI translations.
 - barracuda_status/assets/: original, distributable SVGs.
 - tests/: hardware-independent unittest suite.
@@ -21,8 +22,12 @@ user in their conversation language. Read README.md and docs/PROTOCOL.md first.
 The monitor may send only the hardware-validated E3 connection query on opening
 USB 1532:0552: `01 80 06 50 41 0e SS 01 e3`, padded to 64 bytes. Limit to three
 attempts two seconds apart, stopping after a valid status. Fall back to passive
-reading if write access is unavailable. Never introduce firmware, pairing or
-other unverified output commands. USB presence does not confirm connectivity.
+reading if write access is unavailable. The HID reader never pairs. Pairing runs
+only on explicit user request, from the `barracuda-pair` command or the tray's
+confirmed "Pair headset…" action, both through barracuda_status/pairing.py, which
+replays the captured vendor sequence documented in docs/PROTOCOL.md. Never
+introduce firmware (OTA write, erase, reboot) or other unverified output commands.
+USB presence does not confirm connectivity.
 Validate transition bytes 0..4 (`01 80 0E 50 49`) and 11..15 (`04 00 20 02 01`)
 before interpreting byte 16 as 00/01. For E3 validate bytes 0..5
 (`01 80 0C 50 49 0E`) and 11..13 (`02 00 E3`), then read byte 14 as 00/01.
