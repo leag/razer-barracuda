@@ -114,6 +114,31 @@ systemctl --user restart wireplumber
 Select the Barracuda once as your output. WirePlumber falls back to another
 output while the headset is off and returns to it when it reconnects.
 
+### When PipeWire handles wireless_status
+
+The DKMS driver (0.2.1+) sets the standard USB `wireless_status` attribute.
+PipeWire's upstream commit `03f894b` ("alsa-udev: Add wireless device status
+monitoring", March 2026, not in the 1.6 series) hides a USB card while its
+dongle reports `disconnected`. With such a PipeWire, WirePlumber falls back
+and returns without the snd-usb-audio quirk or the analog-only rule. The tray
+detects this, from `wireless_status` in PipeWire's ALSA plugin and on the
+dongle, and leaves output switching to PipeWire.
+
+Check whether the installed PipeWire supports it:
+
+```bash
+grep -c wireless_status /usr/lib/spa-0.2/alsa/libspa-alsa.so
+```
+
+Once it does and switching works with the headset off and on, the quirk and
+the rule can be removed:
+
+```bash
+sudo python3 scripts/install_snd_usb_audio_quirk.py --remove
+rm ~/.config/wireplumber/wireplumber.conf.d/51-barracuda-analog-only.conf
+systemctl --user restart wireplumber   # then reboot to load the official snd-usb-audio
+```
+
 ## Pairing a headset
 
 `barracuda-pair` replaces the dongle's current pairing, the same way Razer's Windows

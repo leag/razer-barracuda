@@ -17,6 +17,9 @@ class RoutingTests(unittest.TestCase):
         self.moves = []
         self.cards = []
         self.router.command = Mock(side_effect=self.command)
+        # Never probe the real system's PipeWire plugin or USB devices.
+        self.router.spa_plugins = ()
+        self.router.usb_devices = Path(self.tmp.name) / 'usb'
 
     def command(self, *args):
         if args == ('get-default-sink',):
@@ -111,3 +114,39 @@ class RoutingTests(unittest.TestCase):
         self.router.command = Mock(side_effect=broken)
         self.router.update(True)
         self.assertEqual(self.current, 'headset')
+
+    def make_usb(self, vendor='1532', product='0552'):
+        root = Path(self.tmp.name) / 'usb'
+        device = Path(self.tmp.name) / 'devices' / '1-1'
+        interface = device / '1-1:1.3'
+        interface.mkdir(parents=True)
+        (device / 'idVendor').write_text(vendor + '\n')
+        (device / 'idProduct').write_text(product + '\n')
+        (interface / 'wireless_status').write_text('disconnected\n')
+        root.mkdir()
+        (root / '1-1:1.3').symlink_to(interface)
+        return root
+
+    def test_wireless_status_with_supporting_pipewire_delegates(self):
+        plugin = Path(self.tmp.name) / 'libspa-alsa.so'
+        plugin.write_bytes(b'\0...%s/wireless_status\0...')
+        self.router.spa_plugins = (str(plugin),)
+        self.router.usb_devices = self.make_usb()
+        self.router.update(True)
+        self.assertEqual(self.router.mode, 'pipewire')
+        self.assertEqual(self.current, 'speakers')
+
+    def test_wireless_status_needs_both_pipewire_and_dongle_support(self):
+        old_plugin = Path(self.tmp.name) / 'old-libspa-alsa.so'
+        old_plugin.write_bytes(b'\0no such feature\0')
+        self.router.spa_plugins = (str(old_plugin),)
+        self.router.usb_devices = self.make_usb()
+        self.router.update(True)
+        self.assertEqual(self.router.mode, 'pactl')
+        self.assertEqual(self.current, 'headset')
+
+    def test_wireless_status_of_other_devices_is_ignored(self):
+        from barracuda_status import audio_router
+        self.assertFalse(audio_router.dongle_wireless_status(self.make_usb('046d', 'c52b')))
+        self.assertFalse(audio_router.dongle_wireless_status(Path(self.tmp.name) / 'missing'))
+        self.assertFalse(audio_router.pipewire_wireless_support(('/nonexistent',)))

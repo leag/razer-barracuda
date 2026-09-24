@@ -5,6 +5,41 @@ from pathlib import Path
 
 from .i18n import tr
 
+# PipeWire's ALSA plugin hides a USB card whose dongle reports
+# wireless_status "disconnected" (alsa-udev, upstream commit 03f894b).
+SPA_ALSA_PLUGINS = ('/usr/lib/spa-0.2/alsa/libspa-alsa.so',
+                    '/usr/lib64/spa-0.2/alsa/libspa-alsa.so',
+                    '/usr/lib/x86_64-linux-gnu/spa-0.2/alsa/libspa-alsa.so')
+USB_DEVICES = Path('/sys/bus/usb/devices')
+
+
+def pipewire_wireless_support(paths=SPA_ALSA_PLUGINS):
+    """True when the installed PipeWire ALSA plugin handles wireless_status."""
+    for path in paths:
+        try:
+            if b'wireless_status' in Path(path).read_bytes():
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def dongle_wireless_status(usb_devices=USB_DEVICES):
+    """True when a 1532:0552 interface exposes wireless_status (hid-barracuda >= 0.2.1)."""
+    try:
+        interfaces = list(Path(usb_devices).glob('*/wireless_status'))
+    except OSError:
+        return False
+    for status in interfaces:
+        device = status.resolve().parent.parent
+        try:
+            if ((device / 'idVendor').read_text().strip() == '1532'
+                    and (device / 'idProduct').read_text().strip() == '0552'):
+                return True
+        except OSError:
+            continue
+    return False
+
 
 class AudioRouter:
     def __init__(self, state_file):
@@ -12,8 +47,12 @@ class AudioRouter:
         self.previous = None
         self.headset = None
         self.last = 'unknown'
-        # 'pipewire' when jack detection lets PipeWire switch outputs itself.
+        # 'pipewire' when jack detection or wireless_status lets PipeWire
+        # switch outputs itself.
         self.mode = 'pactl'
+        self.spa_plugins = SPA_ALSA_PLUGINS
+        self.usb_devices = USB_DEVICES
+        self._pipewire_wireless = None
         try:
             saved = json.loads(self.state_file.read_text())
             self.previous = saved.get('previous')
@@ -44,6 +83,13 @@ class AudioRouter:
                            for port in card.get('ports', {}).values())
         return False
 
+    def wireless_managed(self):
+        """True when PipeWire hides the card via the dongle's wireless_status."""
+        if self._pipewire_wireless is None:
+            # Only a PipeWire upgrade changes this; a tray restart re-checks it.
+            self._pipewire_wireless = pipewire_wireless_support(self.spa_plugins)
+        return self._pipewire_wireless and dongle_wireless_status(self.usb_devices)
+
     def save(self):
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.state_file.with_suffix('.tmp')
@@ -56,7 +102,7 @@ class AudioRouter:
         connected = linked is True
         if connected == self.last:
             return
-        self.mode = 'pipewire' if self.jack_managed() else 'pactl'
+        self.mode = 'pipewire' if self.jack_managed() or self.wireless_managed() else 'pactl'
         if self.mode == 'pipewire':
             self.last = connected
             return
