@@ -50,4 +50,13 @@ static inline bool barracuda_state_event(struct barracuda_state *s,
 	return true;
 }
 
+/*
+ * A cable report that changes a known state; the first value after a link,
+ * including the driver's own GET reply, does not count.
+ */
+static inline bool barracuda_cable_changed(int previous, int value)
+{
+	return previous >= 0 && previous != value;
+}
+
 #endif

@@ -15,7 +15,7 @@ The Makefile selects LLVM for kernels configured with Clang. From this checkout:
 sudo python3 scripts/install_dkms.py --activate
 ```
 
-This copies only module sources to `/usr/src/hid-barracuda-0.1.5`, builds and
+This copies only module sources to `/usr/src/hid-barracuda-0.1.7`, builds and
 installs for the running kernel, and rebinds only the matching HID interface.
 Without `--activate`, reconnect the dongle to activate the installed driver.
 DKMS rebuilds for subsequent kernels through the distribution's DKMS hooks.
@@ -33,16 +33,23 @@ The driver sends the validated E3 connection query, at most three times,
 two seconds apart. Battery percentage and cable state come from passive,
 validated notifications. Firmware commands are never sent.
 
-On each confirmed link (dongle plug-in, headset power-on, resume), the driver
-asks the headset for its battery percentage and cable state, so both are known
-without waiting for a change. The dongle answers these family-8 GETs only on the
+On each confirmed link (dongle plug-in, headset power-on, resume), when the
+cable state changes, and every `poll_interval` seconds while linked, the driver
+asks the headset for its battery percentage, cable state and voltage. Both are
+then known without waiting for a change. `poll_interval` defaults to 360 s, like
+`bq27xxx_battery`, with a 30 s minimum; 0 disables periodic refreshes:
+`echo 600 | sudo tee /sys/module/hid_barracuda/parameters/poll_interval`.
+UPower does not show `voltage_now` for this peripheral; read it from
+`/sys/class/power_supply/barracuda-*/uevent`. The dongle answers these family-8 GETs only on the
 temporary remote diagnostic route, validated on 2026-09-24 (frame layout from
 [razer-barracuda-2.4-linux](https://github.com/TarikTopalovic/razer-barracuda-2.4-linux);
 see [battery and cable queries](PROTOCOL.md#battery-and-cable-queries)):
 - E6 must show the existing headset transport (bit `0x08`), and E0 must read `00`.
 - It sends `E1 01` and verifies E0 `01`.
 - It sends GET `0x21` (battery) and GET `0x2a` (cable): `PA 08 SEQ 03 PARAM 00 00`.
-- It always restores `E1 00` and verifies E0 `00`, retrying once.
+- It reads the voltage with family-6 `0x31`, exposed as `voltage_now`.
+- It always restores `E1 00` and verifies E0 `00`, retrying once. If that fails,
+  periodic refreshes stop until the next link.
 
 Replies are `PARAM 01 01 VALUE` and are decoded like the headset's own
 `PARAM 02 01 VALUE` reports. The GET returned 100% on a fully charged headset,
@@ -95,8 +102,8 @@ Disconnect the dongle, then run:
 
 ```bash
 sudo modprobe -r hid-barracuda
-sudo dkms remove hid-barracuda/0.1.5 --all
-sudo rm -r /usr/src/hid-barracuda-0.1.5
+sudo dkms remove hid-barracuda/0.1.7 --all
+sudo rm -r /usr/src/hid-barracuda-0.1.7
 sudo rm /etc/udev/rules.d/99-barracuda-battery.rules
 sudo udevadm control --reload-rules
 ```
@@ -142,6 +149,13 @@ does not prove that the cable or charging state is unchanged.
 Version 0.1.3 removes the arbitrary ten-minute expiry and its periodic worker.
 Regression tests cover retained percentage across disconnect and suspend,
 replacement by new telemetry, and clearing on driver state initialization.
+
+Version 0.1.7 avoids the deprecated `system_wq` warning on kernel 7.2 when a
+cable change brings a refresh forward.
+
+Version 0.1.6 adds `voltage_now`, periodic refreshes (`poll_interval`) and a
+refresh after cable changes. A cable report only counts as a change against a
+known previous state, so the driver's own GET reply does not re-trigger it.
 
 Version 0.1.5 queries battery and cable state on each confirmed link and shows
 full at 100% with the cable connected. Physical GETs returned `21 01 01 64`

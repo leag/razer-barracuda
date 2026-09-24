@@ -37,6 +37,18 @@ typedef void (*barracuda_frame_fn)(void *, const unsigned char *, unsigned int);
 #define BARRACUDA_GET_BATTERY 0x21
 #define BARRACUDA_GET_CABLE 0x2a
 
+/* Family-6 GET_BATTERY (0x31) result: little-endian millivolts, -1 if implausible. */
+#define BARRACUDA_GET_VOLTAGE 0x31
+static inline int barracuda_voltage_mv(const unsigned char *result, int size)
+{
+	int mv;
+
+	if (size < 2)
+		return -1;
+	mv = result[0] | result[1] << 8;
+	return mv >= 2500 && mv <= 4500 ? mv : -1;
+}
+
 /*
  * Correlated acknowledgment `PI 01 .. LEN16 FAMILY SEQ|80 STATUS RESULT`.
  * Returns the result length and sets *result, -1 if unrelated, -2 on failure.

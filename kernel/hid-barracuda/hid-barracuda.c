@@ -14,6 +14,13 @@
 
 #define BARRACUDA_VENDOR 0x1532
 #define BARRACUDA_PRODUCT 0x0552
+#define BARRACUDA_MIN_POLL 30
+
+/* Like bq27xxx_battery: seconds between refreshes while linked; 0 disables. */
+static unsigned int poll_interval = 360;
+module_param(poll_interval, uint, 0644);
+MODULE_PARM_DESC(poll_interval,
+		 "battery, cable and voltage refresh interval in seconds while linked (0 disables, minimum 30)");
 
 struct barracuda {
 	struct hid_device *hdev;
@@ -39,6 +46,8 @@ struct barracuda {
 	u8 want_param;
 	u8 seq;
 	int reply_value;
+	/* Headset voltage read at the last confirmed link; -1 if unknown. */
+	int voltage_mv;
 };
 
 static enum power_supply_property barracuda_properties[] = {
@@ -46,6 +55,7 @@ static enum power_supply_property barracuda_properties[] = {
 	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_CAPACITY,
 	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
+	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_SCOPE,
 	POWER_SUPPLY_PROP_MODEL_NAME,
 	POWER_SUPPLY_PROP_MANUFACTURER,
@@ -72,6 +82,12 @@ static int barracuda_get_property(struct power_supply *psy,
 			ret = -ENODATA;
 		else
 			val->intval = b->state.capacity;
+		break;
+	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+		if (!present || b->voltage_mv < 0)
+			ret = -ENODATA;
+		else
+			val->intval = b->voltage_mv * 1000;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
 		/* Keep discovery possible while precise capacity is unavailable. */
@@ -109,9 +125,14 @@ static int barracuda_get_property(struct power_supply *psy,
 static void barracuda_event(void *context, enum barracuda_event event, int value)
 {
 	struct barracuda *b = context;
+	int cable = b->state.external_power;
 
 	if (!barracuda_state_event(&b->state, event, value))
 		return;
+	/* Plugging or unplugging changes the voltage; read it again soon. */
+	if (event == BARRACUDA_EXTERNAL_POWER && !b->stopping &&
+	    barracuda_cable_changed(cable, value))
+		b->refresh_due = true;
 	b->changed = true;
 	if (event == BARRACUDA_LINK && value == 1 && !b->stopping)
 		b->refresh_due = true;
@@ -133,10 +154,16 @@ static void barracuda_frame(void *context, const unsigned char *p, unsigned int 
 		len = barracuda_customer_reply(p, size, b->want_param);
 	} else {
 		len = barracuda_ack(p, size, b->want_family, b->want_seq, &result);
-		if (len >= 0)
+		if (len >= 0 && b->want_family == 6) {
+			/* Family-6 results carry a value; only GET_BATTERY is sent. */
+			len = barracuda_voltage_mv(result, len);
+			if (len < 0)
+				len = -EPROTO;
+		} else if (len >= 0) {
 			len = 0;
-		else if (len == -2)
+		} else if (len == -2) {
 			len = -EPROTO;
+		}
 	}
 	if (len == -1)
 		return;
@@ -170,8 +197,11 @@ static int barracuda_raw_event(struct hid_device *hdev, struct hid_report *repor
 	spin_unlock_irqrestore(&b->lock, flags);
 	if (changed)
 		power_supply_changed(b->battery);
-	if (refresh)
+	if (refresh) {
+		/* Bring a pending periodic refresh forward; safe in this context. */
+		cancel_delayed_work(&b->refresh_work);
 		schedule_delayed_work(&b->refresh_work, 3 * HZ);
+	}
 	/* Preserve hidraw and the normal media-key input path. */
 	return 0;
 }
@@ -268,6 +298,19 @@ static int barracuda_set_route(struct barracuda *b, u8 remote)
 	return barracuda_get(b, 0xe0) == remote ? 0 : -EPROTO;
 }
 
+static bool barracuda_refresh_wanted(struct barracuda *b);
+
+/* Queue the next periodic refresh while linked. */
+static void barracuda_schedule_poll(struct barracuda *b)
+{
+	unsigned int interval = READ_ONCE(poll_interval);
+
+	if (!interval || !barracuda_refresh_wanted(b))
+		return;
+	schedule_delayed_work(&b->refresh_work,
+			      max(interval, (unsigned int)BARRACUDA_MIN_POLL) * HZ);
+}
+
 static bool barracuda_refresh_wanted(struct barracuda *b)
 {
 	unsigned long flags;
@@ -297,18 +340,23 @@ static void barracuda_refresh(struct work_struct *work)
 {
 	struct barracuda *b = container_of(to_delayed_work(work),
 					 struct barracuda, refresh_work);
-	int status, attempt, battery = -1, cable = -1;
+	static const u8 voltage_query[] = { BARRACUDA_GET_VOLTAGE };
+	int status, attempt, battery = -1, cable = -1, mv = -1;
+	unsigned long flags;
 	bool restored = false;
 
 	if (!barracuda_refresh_wanted(b))
 		return;
 	/* Use the existing headset transport only (E6 bit 0x08); never create it. */
 	status = barracuda_get(b, 0xe6);
-	if (status < 0 || !(status & 0x08) || barracuda_get(b, 0xe0) != 0)
+	if (status < 0 || !(status & 0x08) || barracuda_get(b, 0xe0) != 0) {
+		barracuda_schedule_poll(b);
 		return;
+	}
 	if (!barracuda_set_route(b, 1)) {
 		battery = barracuda_customer_get(b, BARRACUDA_GET_BATTERY);
 		cable = barracuda_customer_get(b, BARRACUDA_GET_CABLE);
+		mv = barracuda_request(b, 6, voltage_query, sizeof(voltage_query), 0, 0);
 	}
 	/* Restore even if selecting the remote route failed part-way. */
 	for (attempt = 0; attempt < 2 && !restored; attempt++)
@@ -316,7 +364,17 @@ static void barracuda_refresh(struct work_struct *work)
 	if (!restored)
 		hid_warn(b->hdev, "could not restore the local diagnostic route\n");
 	else
-		hid_dbg(b->hdev, "refreshed battery %d, cable %d\n", battery, cable);
+		hid_dbg(b->hdev, "refreshed battery %d, cable %d, %d mV\n",
+			battery, cable, mv);
+	if (mv >= 0) {
+		spin_lock_irqsave(&b->lock, flags);
+		b->voltage_mv = mv;
+		spin_unlock_irqrestore(&b->lock, flags);
+		power_supply_changed(b->battery);
+	}
+	/* After a failed restoration, stop touching the route until the next link. */
+	if (restored)
+		barracuda_schedule_poll(b);
 }
 
 static int barracuda_probe(struct hid_device *hdev, const struct hid_device_id *id)
@@ -332,6 +390,7 @@ static int barracuda_probe(struct hid_device *hdev, const struct hid_device_id *
 	if (!b)
 		return -ENOMEM;
 	b->hdev = hdev;
+	b->voltage_mv = -1;
 	barracuda_state_reset(&b->state);
 	spin_lock_init(&b->lock);
 	INIT_DELAYED_WORK(&b->query_work, barracuda_query);
@@ -443,4 +502,4 @@ module_hid_driver(barracuda_driver);
 
 MODULE_LICENSE("Dual MIT/GPL");
 MODULE_DESCRIPTION("Razer Barracuda X (2022) HID battery driver");
-MODULE_VERSION("0.1.5");
+MODULE_VERSION("0.1.7");

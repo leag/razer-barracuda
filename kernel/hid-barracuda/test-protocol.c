@@ -104,6 +104,30 @@ static void test_customer_get_replies(void)
 	assert(r.count == 1 && r.event == BARRACUDA_LINK && r.value == 1);
 }
 
+static void test_cable_change(void)
+{
+	assert(!barracuda_cable_changed(BARRACUDA_UNKNOWN, 0));
+	assert(!barracuda_cable_changed(BARRACUDA_UNKNOWN, 1));
+	assert(!barracuda_cable_changed(0, 0) && !barracuda_cable_changed(1, 1));
+	assert(barracuda_cable_changed(0, 1) && barracuda_cable_changed(1, 0));
+}
+
+static void test_voltage(void)
+{
+	/* Remote GET_BATTERY results captured on 2026-09-22 and 2026-09-24. */
+	const unsigned char charging[] = { 0x68, 0x10, 0, 0 };
+	const unsigned char resting[] = { 0xfa, 0x0e, 0, 0 };
+	const unsigned char local[] = { 0x35, 0x01, 0, 0 };
+	const unsigned char zero[] = { 0, 0, 0, 0 };
+
+	assert(barracuda_voltage_mv(charging, sizeof(charging)) == 4200);
+	assert(barracuda_voltage_mv(resting, sizeof(resting)) == 3834);
+	/* The dongle's own local reading (309) is not a battery voltage. */
+	assert(barracuda_voltage_mv(local, sizeof(local)) == -1);
+	assert(barracuda_voltage_mv(zero, sizeof(zero)) == -1);
+	assert(barracuda_voltage_mv(charging, 1) == -1);
+}
+
 static void test_replies(void)
 {
 	const unsigned char ack[] = { 0x50, 0x49, 1, 0xc0, 0x48, 0x1f, 0x0a, 0, 3, 0,
@@ -226,6 +250,8 @@ int main(void)
 	}
 	test_reconnect();
 	test_customer_get_replies();
+	test_voltage();
+	test_cable_change();
 	test_replies();
 	puts("Barracuda protocol tests passed");
 	return 0;
