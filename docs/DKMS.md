@@ -15,7 +15,7 @@ The Makefile selects LLVM for kernels configured with Clang. From this checkout:
 sudo python3 scripts/install_dkms.py --activate
 ```
 
-This copies only module sources to `/usr/src/hid-barracuda-0.2.0`, builds and
+This copies only module sources to `/usr/src/hid-barracuda-0.2.1`, builds and
 installs for the running kernel, and rebinds only the matching HID interface.
 Without `--activate`, reconnect the dongle to activate the installed driver.
 DKMS rebuilds for subsequent kernels through the distribution's DKMS hooks.
@@ -61,8 +61,13 @@ Replies are `PARAM 01 01 VALUE` and are decoded like the headset's own
 `PARAM 02 01 VALUE` reports. The GET returned 100% on a fully charged headset,
 whose unsolicited reports had stopped at 99.
 
-Battery presence follows the validated wireless link, independently of whether
-a percentage is available. A missing percentage remains unknown. A cable
+Like hid-corsair-void, the battery device exists only while the wireless link
+is confirmed. It is registered on a validated link report and removed on a
+validated disconnect, so UPower and KDE stop listing the headset while it is
+off. The driver also sets the standard USB `wireless_status` attribute
+(`connected`/`disconnected`) on the HID interface. An unknown link (startup
+before the first response, resume) neither creates nor removes it. While
+registered, presence does not depend on whether a percentage is available. A missing percentage remains unknown. A cable
 connection or battery change may provide the first reading; installing the
 driver does not guarantee an immediate value.
 The percentage is the last observed reading, retained without a time limit until
@@ -108,8 +113,8 @@ Disconnect the dongle, then run:
 
 ```bash
 sudo modprobe -r hid-barracuda
-sudo dkms remove hid-barracuda/0.2.0 --all
-sudo rm -r /usr/src/hid-barracuda-0.2.0
+sudo dkms remove hid-barracuda/0.2.1 --all
+sudo rm -r /usr/src/hid-barracuda-0.2.1
 sudo rm /etc/udev/rules.d/99-barracuda-battery.rules
 sudo udevadm control --reload-rules
 ```
@@ -155,6 +160,10 @@ does not prove that the cable or charging state is unchanged.
 Version 0.1.3 removes the arbitrary ten-minute expiry and its periodic worker.
 Regression tests cover retained percentage across disconnect and suspend,
 replacement by new telemetry, and clearing on driver state initialization.
+
+Version 0.2.1 registers the battery only while linked and sets
+`wireless_status`. Battery registration and UPower notifications run in a work
+item under a mutex, never from the HID event path.
 
 Version 0.2.0 adds a "Headset Jack" input device reporting the confirmed
 wireless link as `SW_HEADPHONE_INSERT` and `SW_MICROPHONE_INSERT`. It follows

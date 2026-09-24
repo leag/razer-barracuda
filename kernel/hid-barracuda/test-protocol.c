@@ -112,6 +112,17 @@ static void test_cable_change(void)
 	assert(barracuda_cable_changed(0, 1) && barracuda_cable_changed(1, 0));
 }
 
+static void test_supply_action(void)
+{
+	assert(barracuda_supply_action(1, false) == BARRACUDA_SUPPLY_REGISTER);
+	assert(barracuda_supply_action(1, true) == BARRACUDA_SUPPLY_NOTIFY);
+	assert(barracuda_supply_action(0, true) == BARRACUDA_SUPPLY_UNREGISTER);
+	assert(barracuda_supply_action(0, false) == BARRACUDA_SUPPLY_NONE);
+	/* Unknown (startup, resume) never creates or removes the battery. */
+	assert(barracuda_supply_action(BARRACUDA_UNKNOWN, false) == BARRACUDA_SUPPLY_NONE);
+	assert(barracuda_supply_action(BARRACUDA_UNKNOWN, true) == BARRACUDA_SUPPLY_NOTIFY);
+}
+
 static void test_voltage(void)
 {
 	/* Remote GET_BATTERY results captured on 2026-09-22 and 2026-09-24. */
@@ -251,6 +262,7 @@ int main(void)
 	test_reconnect();
 	test_customer_get_replies();
 	test_voltage();
+	test_supply_action();
 	test_cable_change();
 	test_replies();
 	puts("Barracuda protocol tests passed");

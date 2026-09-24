@@ -59,4 +59,25 @@ static inline bool barracuda_cable_changed(int previous, int value)
 	return previous >= 0 && previous != value;
 }
 
+enum barracuda_supply_action {
+	BARRACUDA_SUPPLY_NONE,
+	BARRACUDA_SUPPLY_REGISTER,
+	BARRACUDA_SUPPLY_UNREGISTER,
+	BARRACUDA_SUPPLY_NOTIFY,
+};
+
+/*
+ * Like hid-corsair-void, the battery exists only while the headset is linked.
+ * An unknown link (startup, resume) keeps the current registration.
+ */
+static inline enum barracuda_supply_action
+barracuda_supply_action(int linked, bool registered)
+{
+	if (linked == 1)
+		return registered ? BARRACUDA_SUPPLY_NOTIFY : BARRACUDA_SUPPLY_REGISTER;
+	if (linked == 0)
+		return registered ? BARRACUDA_SUPPLY_UNREGISTER : BARRACUDA_SUPPLY_NONE;
+	return registered ? BARRACUDA_SUPPLY_NOTIFY : BARRACUDA_SUPPLY_NONE;
+}
+
 #endif

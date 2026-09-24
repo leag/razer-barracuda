@@ -10,6 +10,7 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/usb.h>
+#include <linux/version.h>
 #include <linux/workqueue.h>
 
 #include "barracuda-state.h"
@@ -32,7 +33,11 @@ MODULE_PARM_DESC(voltage_max_age,
 
 struct barracuda {
 	struct hid_device *hdev;
+	/* Registered only while linked; guarded by supply_lock. */
 	struct power_supply *battery;
+	struct mutex supply_lock;
+	struct work_struct supply_work;
+	int wireless_reported;	/* last wireless_status link value, or unknown */
 	struct power_supply_desc desc;
 	spinlock_t lock;
 	struct barracuda_stream stream;
@@ -232,8 +237,9 @@ static int barracuda_raw_event(struct hid_device *hdev, struct hid_report *repor
 		input_report_switch(b->jack, SW_MICROPHONE_INSERT, jack);
 		input_sync(b->jack);
 	}
+	/* Registering, removing and notifying the battery may sleep. */
 	if (changed)
-		power_supply_changed(b->battery);
+		schedule_work(&b->supply_work);
 	if (refresh) {
 		/* Bring a pending periodic refresh forward; safe in this context. */
 		cancel_delayed_work(&b->refresh_work);
@@ -450,7 +456,7 @@ static void barracuda_refresh(struct work_struct *work)
 	hid_dbg(b->hdev, "refreshed battery %d, cable %d, %d mV\n", battery, cable, mv);
 	if (mv >= 0) {
 		barracuda_store_voltage(b, mv);
-		power_supply_changed(b->battery);
+		schedule_work(&b->supply_work);
 	}
 	if (restored)
 		barracuda_schedule_poll(b);
@@ -481,6 +487,62 @@ static void barracuda_voltage_on_demand(struct barracuda *b)
 		barracuda_store_voltage(b, mv);
 }
 
+/*
+ * Standard USB wireless_status (sysfs-bus-usb), like hid-corsair-void: lets
+ * userspace treat the headset as absent while the dongle has no link.
+ */
+static void barracuda_set_wireless_status(struct barracuda *b, int linked)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+	struct usb_interface *intf = to_usb_interface(b->hdev->dev.parent);
+
+	if (linked < 0 || linked == b->wireless_reported)
+		return;
+	b->wireless_reported = linked;
+	usb_set_wireless_status(intf, linked ? USB_WIRELESS_STATUS_CONNECTED :
+					       USB_WIRELESS_STATUS_DISCONNECTED);
+#endif
+}
+
+/* Apply the link to the battery registration, or notify UPower of changes. */
+static void barracuda_supply_work(struct work_struct *work)
+{
+	struct barracuda *b = container_of(work, struct barracuda, supply_work);
+	struct power_supply_config config = { .drv_data = b };
+	struct power_supply *battery;
+	unsigned long flags;
+	bool stopping;
+	int linked;
+
+	spin_lock_irqsave(&b->lock, flags);
+	linked = b->state.linked;
+	stopping = b->stopping;
+	spin_unlock_irqrestore(&b->lock, flags);
+	mutex_lock(&b->supply_lock);
+	switch (barracuda_supply_action(linked, b->battery)) {
+	case BARRACUDA_SUPPLY_REGISTER:
+		if (stopping)
+			break;
+		battery = power_supply_register(&b->hdev->dev, &b->desc, &config);
+		if (IS_ERR(battery))
+			hid_warn(b->hdev, "could not register battery: %ld\n", PTR_ERR(battery));
+		else
+			b->battery = battery;
+		break;
+	case BARRACUDA_SUPPLY_UNREGISTER:
+		power_supply_unregister(b->battery);
+		b->battery = NULL;
+		break;
+	case BARRACUDA_SUPPLY_NOTIFY:
+		power_supply_changed(b->battery);
+		break;
+	case BARRACUDA_SUPPLY_NONE:
+		break;
+	}
+	barracuda_set_wireless_status(b, linked);
+	mutex_unlock(&b->supply_lock);
+}
+
 /* Parented to the HID device so a sound driver can match the same USB device. */
 static int barracuda_jack_create(struct barracuda *b)
 {
@@ -507,7 +569,6 @@ static int barracuda_jack_create(struct barracuda *b)
 
 static int barracuda_probe(struct hid_device *hdev, const struct hid_device_id *id)
 {
-	struct power_supply_config config = {};
 	struct usb_interface *intf = to_usb_interface(hdev->dev.parent);
 	struct barracuda *b;
 	int ret;
@@ -520,7 +581,10 @@ static int barracuda_probe(struct hid_device *hdev, const struct hid_device_id *
 	b->hdev = hdev;
 	b->voltage_mv = -1;
 	b->jack_report = BARRACUDA_UNKNOWN;
+	b->wireless_reported = BARRACUDA_UNKNOWN;
 	mutex_init(&b->route_lock);
+	mutex_init(&b->supply_lock);
+	INIT_WORK(&b->supply_work, barracuda_supply_work);
 	barracuda_state_reset(&b->state);
 	spin_lock_init(&b->lock);
 	INIT_DELAYED_WORK(&b->query_work, barracuda_query);
@@ -538,10 +602,7 @@ static int barracuda_probe(struct hid_device *hdev, const struct hid_device_id *
 	b->desc.properties = barracuda_properties;
 	b->desc.num_properties = ARRAY_SIZE(barracuda_properties);
 	b->desc.get_property = barracuda_get_property;
-	config.drv_data = b;
-	b->battery = devm_power_supply_register(&hdev->dev, &b->desc, &config);
-	if (IS_ERR(b->battery))
-		return PTR_ERR(b->battery);
+	/* The battery is registered by barracuda_supply_work() once linked. */
 	ret = barracuda_jack_create(b);
 	if (ret)
 		return ret;
@@ -570,6 +631,7 @@ static void barracuda_stop(struct barracuda *b)
 	b->stopped = true;
 	spin_unlock_irqrestore(&b->lock, flags);
 	cancel_delayed_work_sync(&b->query_work);
+	cancel_work_sync(&b->supply_work);
 }
 
 static void barracuda_remove(struct hid_device *hdev)
@@ -577,6 +639,11 @@ static void barracuda_remove(struct hid_device *hdev)
 	struct barracuda *b = hid_get_drvdata(hdev);
 
 	barracuda_stop(b);
+	mutex_lock(&b->supply_lock);
+	if (b->battery)
+		power_supply_unregister(b->battery);
+	b->battery = NULL;
+	mutex_unlock(&b->supply_lock);
 	hid_hw_close(hdev);
 	hid_hw_stop(hdev);
 }
@@ -592,7 +659,11 @@ static int barracuda_suspend(struct hid_device *hdev, pm_message_t message)
 	barracuda_state_suspend(&b->state);
 	b->stream.used = 0;
 	spin_unlock_irqrestore(&b->lock, flags);
-	power_supply_changed(b->battery);
+	/* The link is unknown now: keep the battery, reported as not present. */
+	mutex_lock(&b->supply_lock);
+	if (b->battery)
+		power_supply_changed(b->battery);
+	mutex_unlock(&b->supply_lock);
 	return 0;
 }
 
@@ -635,4 +706,4 @@ module_hid_driver(barracuda_driver);
 
 MODULE_LICENSE("Dual MIT/GPL");
 MODULE_DESCRIPTION("Razer Barracuda X (2022) HID battery driver");
-MODULE_VERSION("0.2.0");
+MODULE_VERSION("0.2.1");
