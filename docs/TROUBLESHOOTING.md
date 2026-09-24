@@ -32,6 +32,33 @@ These are audio-server profile names. The USB transport is digital even when the
 selected profile is called analog stereo. The app leaves profiles and volumes
 unchanged. The analog stereo profile was used during local validation.
 
+The dongle declares one playback format and one capture format: 16-bit stereo
+and 16-bit mono at 48 kHz, each in a single alternate setting, with a Speaker
+and a Microphone terminal. It has no digital output terminal. Windows shows only
+the stereo output. On Linux the extra "Digital Stereo (IEC958)" and "Digital
+Surround 5.1 (IEC958/AC3)" profiles appear because:
+
+1. PipeWire's ACP uses `profile-sets/default.conf` when no UCM profile exists.
+   It opens each mapping's ALSA device on the card and offers every one that
+   opens: `analog-stereo` (`front:`, priority 15), `iec958-stereo`
+   (`iec958:`, priority 5) and `iec958-ac3-surround-51` (`a52:`, priority 3).
+2. alsa-lib's `/usr/share/alsa/cards/USB-Audio.conf` defines `iec958` for every
+   USB card as `hw:CARD,0` unless the card's name is listed in
+   `USB-Audio.pcm.iec958_device`. That is the same PCM as analog; the file notes
+   that it cannot set the AES parameters. Headsets without digital I/O are
+   listed with `999` to prevent opening it, among them "SWTOR Gaming Headset by
+   Razer", but "Razer Barracuda X 2.4" is not.
+3. alsa-plugins' `a52` encodes AC3 in software on top of that `iec958` device.
+   The headset does not decode AC3; this was not tested.
+
+So the S/PDIF profile plays the same stereo stream, but it has no jack-aware
+port. With jack detection it stays available while the headset is off, and
+WirePlumber may pick its output. The optional
+`packaging/51-barracuda-analog-only.conf` rule limits the card to
+`analog-only.conf`. The equivalent upstream fix would be listing
+"Razer Barracuda X 2.4" with `999` in alsa-lib's `USB-Audio.conf`; a local ALSA
+override of that table has not been tested here.
+
 ## Duplicate instances or old versions
 
 Use the tray's Quit action before launching another copy. If a local transient
