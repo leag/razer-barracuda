@@ -2,6 +2,7 @@
 /* Razer Barracuda X (2022) USB HID battery support. */
 #include <linux/completion.h>
 #include <linux/hid.h>
+#include <linux/input.h>
 #include <linux/jiffies.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
@@ -60,6 +61,12 @@ struct barracuda {
 	struct mutex route_lock;
 	/* A failed restoration stops remote-route use until the next link. */
 	bool route_failed;
+	/*
+	 * Headset link as jack switches, like hid-playstation's "Headset Jack":
+	 * the dongle is a UAC1 device without jack detection of its own.
+	 */
+	struct input_dev *jack;
+	int jack_report;	/* link value to report, or BARRACUDA_UNKNOWN */
 };
 
 static void barracuda_voltage_on_demand(struct barracuda *b);
@@ -155,6 +162,9 @@ static void barracuda_event(void *context, enum barracuda_event event, int value
 		b->refresh_due = true;
 		b->route_failed = false;
 	}
+	/* Only confirmed transitions; unknown keeps the last reported state. */
+	if (event == BARRACUDA_LINK)
+		b->jack_report = value;
 }
 
 /* Called under lock for every complete frame; completes a pending query. */
@@ -197,6 +207,7 @@ static int barracuda_raw_event(struct hid_device *hdev, struct hid_report *repor
 	struct barracuda *b = hid_get_drvdata(hdev);
 	unsigned long flags;
 	bool changed, refresh;
+	int jack;
 
 	if (size <= 0 || data[0] != 1 || report->type != HID_INPUT_REPORT)
 		return 0;
@@ -213,7 +224,14 @@ static int barracuda_raw_event(struct hid_device *hdev, struct hid_report *repor
 	changed = b->changed;
 	refresh = b->refresh_due;
 	b->refresh_due = false;
+	jack = b->jack_report;
+	b->jack_report = BARRACUDA_UNKNOWN;
 	spin_unlock_irqrestore(&b->lock, flags);
+	if (jack != BARRACUDA_UNKNOWN) {
+		input_report_switch(b->jack, SW_HEADPHONE_INSERT, jack);
+		input_report_switch(b->jack, SW_MICROPHONE_INSERT, jack);
+		input_sync(b->jack);
+	}
 	if (changed)
 		power_supply_changed(b->battery);
 	if (refresh) {
@@ -463,6 +481,30 @@ static void barracuda_voltage_on_demand(struct barracuda *b)
 		barracuda_store_voltage(b, mv);
 }
 
+/* Parented to the HID device so a sound driver can match the same USB device. */
+static int barracuda_jack_create(struct barracuda *b)
+{
+	struct hid_device *hdev = b->hdev;
+	struct input_dev *jack;
+
+	jack = devm_input_allocate_device(&hdev->dev);
+	if (!jack)
+		return -ENOMEM;
+	jack->name = devm_kasprintf(&hdev->dev, GFP_KERNEL, "%s Headset Jack",
+				    hdev->name);
+	if (!jack->name)
+		return -ENOMEM;
+	jack->id.bustype = hdev->bus;
+	jack->id.vendor = hdev->vendor;
+	jack->id.product = hdev->product;
+	jack->id.version = hdev->version;
+	jack->uniq = hdev->uniq;
+	input_set_capability(jack, EV_SW, SW_HEADPHONE_INSERT);
+	input_set_capability(jack, EV_SW, SW_MICROPHONE_INSERT);
+	b->jack = jack;
+	return input_register_device(jack);
+}
+
 static int barracuda_probe(struct hid_device *hdev, const struct hid_device_id *id)
 {
 	struct power_supply_config config = {};
@@ -477,6 +519,7 @@ static int barracuda_probe(struct hid_device *hdev, const struct hid_device_id *
 		return -ENOMEM;
 	b->hdev = hdev;
 	b->voltage_mv = -1;
+	b->jack_report = BARRACUDA_UNKNOWN;
 	mutex_init(&b->route_lock);
 	barracuda_state_reset(&b->state);
 	spin_lock_init(&b->lock);
@@ -499,6 +542,9 @@ static int barracuda_probe(struct hid_device *hdev, const struct hid_device_id *
 	b->battery = devm_power_supply_register(&hdev->dev, &b->desc, &config);
 	if (IS_ERR(b->battery))
 		return PTR_ERR(b->battery);
+	ret = barracuda_jack_create(b);
+	if (ret)
+		return ret;
 	ret = hid_hw_start(hdev, HID_CONNECT_DEFAULT);
 	if (ret)
 		return ret;
@@ -589,4 +635,4 @@ module_hid_driver(barracuda_driver);
 
 MODULE_LICENSE("Dual MIT/GPL");
 MODULE_DESCRIPTION("Razer Barracuda X (2022) HID battery driver");
-MODULE_VERSION("0.1.9");
+MODULE_VERSION("0.2.0");

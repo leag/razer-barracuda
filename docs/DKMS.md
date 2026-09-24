@@ -15,7 +15,7 @@ The Makefile selects LLVM for kernels configured with Clang. From this checkout:
 sudo python3 scripts/install_dkms.py --activate
 ```
 
-This copies only module sources to `/usr/src/hid-barracuda-0.1.9`, builds and
+This copies only module sources to `/usr/src/hid-barracuda-0.2.0`, builds and
 installs for the running kernel, and rebinds only the matching HID interface.
 Without `--activate`, reconnect the dongle to activate the installed driver.
 DKMS rebuilds for subsequent kernels through the distribution's DKMS hooks.
@@ -108,8 +108,8 @@ Disconnect the dongle, then run:
 
 ```bash
 sudo modprobe -r hid-barracuda
-sudo dkms remove hid-barracuda/0.1.9 --all
-sudo rm -r /usr/src/hid-barracuda-0.1.9
+sudo dkms remove hid-barracuda/0.2.0 --all
+sudo rm -r /usr/src/hid-barracuda-0.2.0
 sudo rm /etc/udev/rules.d/99-barracuda-battery.rules
 sudo udevadm control --reload-rules
 ```
@@ -155,6 +155,14 @@ does not prove that the cable or charging state is unchanged.
 Version 0.1.3 removes the arbitrary ten-minute expiry and its periodic worker.
 Regression tests cover retained percentage across disconnect and suspend,
 replacement by new telemetry, and clearing on driver state initialization.
+
+Version 0.2.0 adds a "Headset Jack" input device reporting the confirmed
+wireless link as `SW_HEADPHONE_INSERT` and `SW_MICROPHONE_INSERT`. It follows
+hid-playstation, whose events snd-usb-audio's DualSense quirk turns into ALSA
+jack controls because that UAC1 device has no jack detection. No such quirk
+exists for 1532:0552 yet, so PipeWire does not use these switches; they are a
+standard link signal for other consumers. Only confirmed 0/1 transitions are
+reported; an unknown link keeps the last value.
 
 Version 0.1.9 sets the `voltage_max_age` default to 60 s after measuring that
 background readers turned 10 s into a query every ~11 s.
