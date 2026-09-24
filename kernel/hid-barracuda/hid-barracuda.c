@@ -4,6 +4,7 @@
 #include <linux/hid.h>
 #include <linux/jiffies.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/power_supply.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
@@ -21,6 +22,12 @@ static unsigned int poll_interval = 360;
 module_param(poll_interval, uint, 0644);
 MODULE_PARM_DESC(poll_interval,
 		 "battery, cable and voltage refresh interval in seconds while linked (0 disables, minimum 30)");
+
+/* Like bq27xxx_battery's 5 s cache: reading voltage_now re-reads older values. */
+static unsigned int voltage_max_age = 60;
+module_param(voltage_max_age, uint, 0644);
+MODULE_PARM_DESC(voltage_max_age,
+		 "seconds a voltage_now reading stays valid before a read queries the headset (0: refreshes only)");
 
 struct barracuda {
 	struct hid_device *hdev;
@@ -46,9 +53,16 @@ struct barracuda {
 	u8 want_param;
 	u8 seq;
 	int reply_value;
-	/* Headset voltage read at the last confirmed link; -1 if unknown. */
+	/* Last headset voltage and when it was read; -1 if unknown. */
 	int voltage_mv;
+	unsigned long voltage_at;
+	/* Serializes remote-route sequences; one query slot is shared. */
+	struct mutex route_lock;
+	/* A failed restoration stops remote-route use until the next link. */
+	bool route_failed;
 };
+
+static void barracuda_voltage_on_demand(struct barracuda *b);
 
 static enum power_supply_property barracuda_properties[] = {
 	POWER_SUPPLY_PROP_PRESENT,
@@ -70,6 +84,9 @@ static int barracuda_get_property(struct power_supply *psy,
 	bool present, capacity_valid;
 	int ret = 0;
 
+	/* May sleep, like bq27xxx_battery's cache refresh in get_property. */
+	if (prop == POWER_SUPPLY_PROP_VOLTAGE_NOW)
+		barracuda_voltage_on_demand(b);
 	spin_lock_irqsave(&b->lock, flags);
 	present = barracuda_state_present(&b->state);
 	capacity_valid = present && b->state.capacity >= 0;
@@ -134,8 +151,10 @@ static void barracuda_event(void *context, enum barracuda_event event, int value
 	    barracuda_cable_changed(cable, value))
 		b->refresh_due = true;
 	b->changed = true;
-	if (event == BARRACUDA_LINK && value == 1 && !b->stopping)
+	if (event == BARRACUDA_LINK && value == 1 && !b->stopping) {
 		b->refresh_due = true;
+		b->route_failed = false;
+	}
 }
 
 /* Called under lock for every complete frame; completes a pending query. */
@@ -336,45 +355,112 @@ static int barracuda_customer_get(struct barracuda *b, u8 param)
  * diagnostic route (validated on 2026-09-24); the local route is always
  * restored. Replies are decoded like the headset's own reports.
  */
+/*
+ * Select the remote diagnostic route using the existing headset transport
+ * (E6 bit 0x08; never created). Caller holds route_lock. On failure nothing
+ * was changed, except after a partial E1 01, which barracuda_remote_end() undoes.
+ */
+static int barracuda_remote_begin(struct barracuda *b, bool *selected)
+{
+	int status;
+
+	*selected = false;
+	if (READ_ONCE(b->route_failed))
+		return -EIO;
+	status = barracuda_get(b, 0xe6);
+	if (status < 0 || !(status & 0x08) || barracuda_get(b, 0xe0) != 0)
+		return -ENODEV;
+	*selected = true;	/* restore even if E1 01 fails part-way */
+	return barracuda_set_route(b, 1);
+}
+
+/* Always restore the local route, retrying once; returns false on failure. */
+static bool barracuda_remote_end(struct barracuda *b, bool selected)
+{
+	int attempt;
+
+	if (!selected)
+		return true;
+	for (attempt = 0; attempt < 2; attempt++)
+		if (!barracuda_set_route(b, 0))
+			return true;
+	WRITE_ONCE(b->route_failed, true);
+	hid_warn(b->hdev, "could not restore the local diagnostic route\n");
+	return false;
+}
+
+static int barracuda_read_voltage(struct barracuda *b)
+{
+	static const u8 voltage_query[] = { BARRACUDA_GET_VOLTAGE };
+
+	return barracuda_request(b, 6, voltage_query, sizeof(voltage_query), 0, 0);
+}
+
+static void barracuda_store_voltage(struct barracuda *b, int mv)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&b->lock, flags);
+	b->voltage_mv = mv;
+	b->voltage_at = jiffies;
+	spin_unlock_irqrestore(&b->lock, flags);
+}
+
+/*
+ * On each confirmed link, cable change and poll_interval, ask the headset for
+ * its battery percentage, cable state and voltage. The dongle answers only on
+ * the temporary remote diagnostic route (validated on 2026-09-24); the local
+ * route is always restored. GET replies are decoded like the headset's reports.
+ */
 static void barracuda_refresh(struct work_struct *work)
 {
 	struct barracuda *b = container_of(to_delayed_work(work),
 					 struct barracuda, refresh_work);
-	static const u8 voltage_query[] = { BARRACUDA_GET_VOLTAGE };
-	int status, attempt, battery = -1, cable = -1, mv = -1;
-	unsigned long flags;
-	bool restored = false;
+	int battery = -1, cable = -1, mv = -1;
+	bool selected, restored;
 
 	if (!barracuda_refresh_wanted(b))
 		return;
-	/* Use the existing headset transport only (E6 bit 0x08); never create it. */
-	status = barracuda_get(b, 0xe6);
-	if (status < 0 || !(status & 0x08) || barracuda_get(b, 0xe0) != 0) {
-		barracuda_schedule_poll(b);
-		return;
-	}
-	if (!barracuda_set_route(b, 1)) {
+	mutex_lock(&b->route_lock);
+	if (!barracuda_remote_begin(b, &selected)) {
 		battery = barracuda_customer_get(b, BARRACUDA_GET_BATTERY);
 		cable = barracuda_customer_get(b, BARRACUDA_GET_CABLE);
-		mv = barracuda_request(b, 6, voltage_query, sizeof(voltage_query), 0, 0);
+		mv = barracuda_read_voltage(b);
 	}
-	/* Restore even if selecting the remote route failed part-way. */
-	for (attempt = 0; attempt < 2 && !restored; attempt++)
-		restored = !barracuda_set_route(b, 0);
-	if (!restored)
-		hid_warn(b->hdev, "could not restore the local diagnostic route\n");
-	else
-		hid_dbg(b->hdev, "refreshed battery %d, cable %d, %d mV\n",
-			battery, cable, mv);
+	restored = barracuda_remote_end(b, selected);
+	mutex_unlock(&b->route_lock);
+	hid_dbg(b->hdev, "refreshed battery %d, cable %d, %d mV\n", battery, cable, mv);
 	if (mv >= 0) {
-		spin_lock_irqsave(&b->lock, flags);
-		b->voltage_mv = mv;
-		spin_unlock_irqrestore(&b->lock, flags);
+		barracuda_store_voltage(b, mv);
 		power_supply_changed(b->battery);
 	}
-	/* After a failed restoration, stop touching the route until the next link. */
 	if (restored)
 		barracuda_schedule_poll(b);
+}
+
+/* Re-read a voltage older than voltage_max_age when voltage_now is read. */
+static void barracuda_voltage_on_demand(struct barracuda *b)
+{
+	unsigned int max_age = READ_ONCE(voltage_max_age);
+	unsigned long flags;
+	bool stale, selected;
+	int mv = -1;
+
+	if (!max_age)
+		return;
+	spin_lock_irqsave(&b->lock, flags);
+	stale = !b->stopping && barracuda_state_present(&b->state) &&
+		(b->voltage_mv < 0 || time_after(jiffies, b->voltage_at + max_age * HZ));
+	spin_unlock_irqrestore(&b->lock, flags);
+	/* A running refresh is about to store a fresh value; do not wait for it. */
+	if (!stale || !mutex_trylock(&b->route_lock))
+		return;
+	if (!barracuda_remote_begin(b, &selected))
+		mv = barracuda_read_voltage(b);
+	barracuda_remote_end(b, selected);
+	mutex_unlock(&b->route_lock);
+	if (mv >= 0)
+		barracuda_store_voltage(b, mv);
 }
 
 static int barracuda_probe(struct hid_device *hdev, const struct hid_device_id *id)
@@ -391,6 +477,7 @@ static int barracuda_probe(struct hid_device *hdev, const struct hid_device_id *
 		return -ENOMEM;
 	b->hdev = hdev;
 	b->voltage_mv = -1;
+	mutex_init(&b->route_lock);
 	barracuda_state_reset(&b->state);
 	spin_lock_init(&b->lock);
 	INIT_DELAYED_WORK(&b->query_work, barracuda_query);
@@ -502,4 +589,4 @@ module_hid_driver(barracuda_driver);
 
 MODULE_LICENSE("Dual MIT/GPL");
 MODULE_DESCRIPTION("Razer Barracuda X (2022) HID battery driver");
-MODULE_VERSION("0.1.7");
+MODULE_VERSION("0.1.9");

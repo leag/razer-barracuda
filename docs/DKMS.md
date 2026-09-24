@@ -15,7 +15,7 @@ The Makefile selects LLVM for kernels configured with Clang. From this checkout:
 sudo python3 scripts/install_dkms.py --activate
 ```
 
-This copies only module sources to `/usr/src/hid-barracuda-0.1.7`, builds and
+This copies only module sources to `/usr/src/hid-barracuda-0.1.9`, builds and
 installs for the running kernel, and rebinds only the matching HID interface.
 Without `--activate`, reconnect the dongle to activate the installed driver.
 DKMS rebuilds for subsequent kernels through the distribution's DKMS hooks.
@@ -39,6 +39,12 @@ asks the headset for its battery percentage, cable state and voltage. Both are
 then known without waiting for a change. `poll_interval` defaults to 360 s, like
 `bq27xxx_battery`, with a 30 s minimum; 0 disables periodic refreshes:
 `echo 600 | sudo tee /sys/module/hid_barracuda/parameters/poll_interval`.
+Reading `voltage_now` queries the headset again when the stored reading is
+older than `voltage_max_age` seconds (default 60; 0 uses refreshes only), like
+`bq27xxx_battery`'s 5 s cache. On the tested KDE desktop a background reader
+read it continuously, so a 10 s value produced a remote query every ~11 s. Such a read can take tens of milliseconds, and
+at most one voltage query runs per `voltage_max_age` whatever the number of
+readers. If a refresh is already running, the stored value is returned.
 UPower does not show `voltage_now` for this peripheral; read it from
 `/sys/class/power_supply/barracuda-*/uevent`. The dongle answers these family-8 GETs only on the
 temporary remote diagnostic route, validated on 2026-09-24 (frame layout from
@@ -102,8 +108,8 @@ Disconnect the dongle, then run:
 
 ```bash
 sudo modprobe -r hid-barracuda
-sudo dkms remove hid-barracuda/0.1.7 --all
-sudo rm -r /usr/src/hid-barracuda-0.1.7
+sudo dkms remove hid-barracuda/0.1.9 --all
+sudo rm -r /usr/src/hid-barracuda-0.1.9
 sudo rm /etc/udev/rules.d/99-barracuda-battery.rules
 sudo udevadm control --reload-rules
 ```
@@ -149,6 +155,13 @@ does not prove that the cable or charging state is unchanged.
 Version 0.1.3 removes the arbitrary ten-minute expiry and its periodic worker.
 Regression tests cover retained percentage across disconnect and suspend,
 replacement by new telemetry, and clearing on driver state initialization.
+
+Version 0.1.9 sets the `voltage_max_age` default to 60 s after measuring that
+background readers turned 10 s into a query every ~11 s.
+
+Version 0.1.8 re-reads a stale voltage when `voltage_now` is read
+(`voltage_max_age`). It serializes remote-route sequences with a mutex and stops
+using the route after a failed restoration until the next link.
 
 Version 0.1.7 avoids the deprecated `system_wq` warning on kernel 7.2 when a
 cable change brings a refresh forward.
