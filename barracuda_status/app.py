@@ -178,7 +178,10 @@ class AudioWorker(QThread):
                 return
             try:
                 self.router.update(pending)
-                self.result.emit(tr("Automatic audio switching enabled"))
+                if self.router.mode == 'pipewire':
+                    self.result.emit(tr("Audio switching handled by PipeWire"))
+                else:
+                    self.result.emit(tr("Automatic audio switching enabled"))
             except Exception as exc:
                 self.result.emit(tr("Could not switch output: {error}", error=exc))
 

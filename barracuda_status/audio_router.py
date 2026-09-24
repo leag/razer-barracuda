@@ -12,6 +12,8 @@ class AudioRouter:
         self.previous = None
         self.headset = None
         self.last = 'unknown'
+        # 'pipewire' when jack detection lets PipeWire switch outputs itself.
+        self.mode = 'pactl'
         try:
             saved = json.loads(self.state_file.read_text())
             self.previous = saved.get('previous')
@@ -22,6 +24,25 @@ class AudioRouter:
     def command(self, *args):
         return subprocess.run(['pactl', *args], check=True, capture_output=True,
                               text=True, timeout=3).stdout.strip()
+
+    def jack_managed(self):
+        """True when PipeWire sees jack detection on the Barracuda card.
+
+        With a jack, the card's ports carry an availability group; WirePlumber
+        then falls back and returns to the headset without our set-default-sink,
+        which would overwrite the user's configured default.
+        """
+        try:
+            cards = json.loads(self.command('-f', 'json', 'list', 'cards') or '[]')
+        except (subprocess.SubprocessError, ValueError):
+            return False
+        for card in cards:
+            props = card.get('properties', {})
+            if (props.get('device.vendor.id') == '0x1532'
+                    and props.get('device.product.id') == '0x0552'):
+                return any(port.get('availability_group')
+                           for port in card.get('ports', {}).values())
+        return False
 
     def save(self):
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
@@ -34,6 +55,10 @@ class AudioRouter:
             return
         connected = linked is True
         if connected == self.last:
+            return
+        self.mode = 'pipewire' if self.jack_managed() else 'pactl'
+        if self.mode == 'pipewire':
+            self.last = connected
             return
         sinks = json.loads(self.command('-f', 'json', 'list', 'sinks'))
         names = {sink['name'] for sink in sinks}

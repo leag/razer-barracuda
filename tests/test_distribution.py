@@ -72,3 +72,9 @@ class DistributionTests(unittest.TestCase):
             desktop = (home / 'config/autostart/org.razer.BarracudaStatus.desktop').read_text()
             self.assertIn('--language es', desktop)
             self.assertIn(f'Exec="{launcher}"', desktop)
+            rule = home / 'config/wireplumber/wireplumber.conf.d/51-barracuda-analog-only.conf'
+            self.assertFalse(rule.exists())
+            subprocess.run([sys.executable, str(ROOT / 'scripts/install.py'),
+                            '--wireplumber-analog-only'], env=env, check=True,
+                           capture_output=True, text=True)
+            self.assertIn('analog-only.conf', rule.read_text())

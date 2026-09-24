@@ -75,6 +75,28 @@ uv run barracuda-status                 # English
 uv run barracuda-status --language es   # Español
 ```
 
+## Jack detection (experimental)
+
+The DKMS driver reports the wireless link as `SW_HEADPHONE_INSERT` and
+`SW_MICROPHONE_INSERT`. The official `snd-usb-audio` does not yet turn these into
+ALSA jack controls for `1532:0552`; this needs a two-line quirk like the Sony
+DualSense's. With such a module loaded, PipeWire marks the headset output
+unavailable when the headset is off and switches outputs itself. The tray
+detects this through the card's port availability group and stops changing the
+default output, which would otherwise overwrite the output you configured.
+
+On the dongle, the S/PDIF profile has no jack-aware port and stays available
+while the headset is off. Install the WirePlumber rule that limits the card to
+its analog profiles, then restart WirePlumber:
+
+```bash
+uv run python scripts/install.py --wireplumber-analog-only
+systemctl --user restart wireplumber
+```
+
+Select the Barracuda once as your output. WirePlumber falls back to another
+output while the headset is off and returns to it when it reconnects.
+
 ## Pairing a headset
 
 `barracuda-pair` replaces the dongle's current pairing, the same way Razer's Windows

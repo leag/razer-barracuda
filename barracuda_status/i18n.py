@@ -4,6 +4,7 @@ LANGUAGE = "en"
 SPANISH = {'Razer Barracuda X: waiting for a valid connection response': 'Razer Barracuda X: esperando una respuesta válida de conexión',
  'The adapter stopped responding': 'El adaptador dejó de responder',
  'Automatic audio switching enabled': 'Cambio automático de salida activado',
+ 'Audio switching handled by PipeWire': 'Cambio de salida gestionado por PipeWire',
  'Could not switch output: {error}': 'No se pudo cambiar la salida: {error}',
  'Razer Barracuda X: waiting for link status': 'Razer Barracuda X: esperando estado de enlace',
  'Checking…': 'Consultando…',
