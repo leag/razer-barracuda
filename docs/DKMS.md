@@ -15,7 +15,7 @@ The Makefile selects LLVM for kernels configured with Clang. From this checkout:
 sudo python3 scripts/install_dkms.py --activate
 ```
 
-This copies only module sources to `/usr/src/hid-barracuda-0.1.3`, builds and
+This copies only module sources to `/usr/src/hid-barracuda-0.1.5`, builds and
 installs for the running kernel, and rebinds only the matching HID interface.
 Without `--activate`, reconnect the dongle to activate the installed driver.
 DKMS rebuilds for subsequent kernels through the distribution's DKMS hooks.
@@ -29,9 +29,24 @@ telemetry until fresh notifications arrive.
 
 ## Readings and limitations
 
-The driver sends only the validated E3 connection query, at most three times,
+The driver sends the validated E3 connection query, at most three times,
 two seconds apart. Battery percentage and cable state come from passive,
-validated notifications. No remote diagnostic or firmware commands are sent.
+validated notifications. Firmware commands are never sent.
+
+On each confirmed link (dongle plug-in, headset power-on, resume), the driver
+asks the headset for its battery percentage and cable state, so both are known
+without waiting for a change. The dongle answers these family-8 GETs only on the
+temporary remote diagnostic route, validated on 2026-09-24 (frame layout from
+[razer-barracuda-2.4-linux](https://github.com/TarikTopalovic/razer-barracuda-2.4-linux);
+see [battery and cable queries](PROTOCOL.md#battery-and-cable-queries)):
+- E6 must show the existing headset transport (bit `0x08`), and E0 must read `00`.
+- It sends `E1 01` and verifies E0 `01`.
+- It sends GET `0x21` (battery) and GET `0x2a` (cable): `PA 08 SEQ 03 PARAM 00 00`.
+- It always restores `E1 00` and verifies E0 `00`, retrying once.
+
+Replies are `PARAM 01 01 VALUE` and are decoded like the headset's own
+`PARAM 02 01 VALUE` reports. The GET returned 100% on a fully charged headset,
+whose unsolicited reports had stopped at 99.
 
 Battery presence follows the validated wireless link, independently of whether
 a percentage is available. A missing percentage remains unknown. A cable
@@ -40,12 +55,21 @@ driver does not guarantee an immediate value.
 The percentage is the last observed reading, retained without a time limit until
 a new report replaces it or dongle removal/module reload clears it. It may be
 outdated after a long disconnection; it is not a fresh measurement on reconnect.
+At the headset's green full-charge LED, a live cable removal and reconnection
+produced cable-state reports but no new percentage during the remainder of a
+three-minute read-only capture. Version 0.1.3 therefore continued exposing the last
+reported 99%; it cannot infer 100% from the cable report, and the LED state is
+not available through the validated dongle messages.
 Silence never establishes disconnection or invalidates an observed reading.
 Disconnect and suspend clear cable state; suspend also makes the link unknown,
 while preserving the last percentage. Reconnection alone does not confirm charging.
 Cable-present below 100% is exposed as charging; cable-absent as discharging.
-At 100% with the cable connected, status remains unknown because charge
-termination has not been validated. Missing cable state also means unknown.
+At 100% with the cable connected, status is full. This is a presentation choice:
+the headset never reports termination, and at the green full-charge LED it
+held 99. On 2026-09-24, charging while powered on, the LED kept
+blinking red for over 15 minutes with the voltage constant at 4200 mV and no
+current measurable at the power supply, so the green LED may only appear with
+the headset off. Missing cable state means unknown.
 
 Inspect the native device and desktop view with:
 
@@ -59,8 +83,7 @@ dkms status
 An unknown coarse capacity level keeps UPower discovery available before the
 first precise percentage. KDE exposes unknown charge as -1 rather than hiding
 a confirmed connected headset. UPower may expose a placeholder percentage
-marked as unknown (which consumers must ignore), and may infer
-fully charged from 100% even though the driver does not claim charge termination.
+marked as unknown (which consumers must ignore).
 
 UPower/KDE presentation depends on the desktop version and available readings.
 The battery has device scope and does not represent the computer's own battery.
@@ -72,8 +95,8 @@ Disconnect the dongle, then run:
 
 ```bash
 sudo modprobe -r hid-barracuda
-sudo dkms remove hid-barracuda/0.1.3 --all
-sudo rm -r /usr/src/hid-barracuda-0.1.3
+sudo dkms remove hid-barracuda/0.1.5 --all
+sudo rm -r /usr/src/hid-barracuda-0.1.5
 sudo rm /etc/udev/rules.d/99-barracuda-battery.rules
 sudo udevadm control --reload-rules
 ```
@@ -119,3 +142,9 @@ does not prove that the cable or charging state is unchanged.
 Version 0.1.3 removes the arbitrary ten-minute expiry and its periodic worker.
 Regression tests cover retained percentage across disconnect and suspend,
 replacement by new telemetry, and clearing on driver state initialization.
+
+Version 0.1.5 queries battery and cable state on each confirmed link and shows
+full at 100% with the cable connected. Physical GETs returned `21 01 01 64`
+(100%) with `2a 01 01 00` unplugged and `2a 01 01 01` plugged in, with the local
+route restored each time. Tests cover op-01 replies for battery and cable, the
+rejection of op-01 link values, and reply correlation.

@@ -12,6 +12,13 @@ SPEC.loader.exec_module(installer)
 
 
 class DkmsInstallerTests(unittest.TestCase):
+    def test_versions_match(self):
+        kernel = Path(__file__).resolve().parents[1] / 'kernel/hid-barracuda'
+        source = (kernel / 'hid-barracuda.c').read_text()
+        conf = (kernel / 'dkms.conf').read_text()
+        self.assertIn(f'MODULE_VERSION("{installer.VERSION}");', source)
+        self.assertIn(f'PACKAGE_VERSION="{installer.VERSION}"', conf)
+
     def test_copy_whitelist_and_refuse_changed_version(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -168,6 +168,26 @@ Linux kernel log). A post-pairing
 `E6` value alone is not link evidence. The same OTA family also has
 flash erase, write and reboot commands; none are used.
 
+## Battery and cable queries
+
+Family 8 is the SDK's `customer_data_command` channel: `PA 08 SEQ LEN DATA`.
+The headset's reports use `PARAM OP LEN VALUE`, with op `02` for unsolicited
+reports. A request is `PARAM 00 00`, and the reply uses op `01`:
+
+```text
+01 80 08 50 41 08 SS 03 21 00 00   GET battery -> PI 08 ... 04 00 21 01 01 VV
+01 80 08 50 41 08 SS 03 2a 00 00   GET cable   -> PI 08 ... 04 00 2a 01 01 00/01
+```
+
+On 1532:0552 these GETs got no reply on the local route. After `E1 01` they
+returned `21 01 01 64` (100%) with `2a 01 01 00` unplugged and `2a 01 01 01`
+plugged in (2026-09-24). The frame layout came from the Barracuda 2.4
+(1532:053C) project
+[razer-barracuda-2.4-linux](https://github.com/TarikTopalovic/razer-barracuda-2.4-linux)
+(`tools/razer_barracuda.py`), which calls `E1 01` an "RF refresh" and does not
+restore it. Here it is the diagnostic-route selector,
+so `E1 00` must follow. The DKMS driver uses these queries; see docs/DKMS.md.
+
 ## Firmware research
 
 See [firmware and protocol findings](FIRMWARE_ANALYSIS.md) for architectures,

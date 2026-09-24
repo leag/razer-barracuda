@@ -25,8 +25,11 @@ attempts two seconds apart, stopping after a valid status. Fall back to passive
 reading if write access is unavailable. The HID reader never pairs. Pairing runs
 only on explicit user request, from the `barracuda-pair` command or the tray's
 confirmed "Pair headset…" action, both through barracuda_status/pairing.py, which
-replays the captured vendor sequence documented in docs/PROTOCOL.md. Never
-introduce firmware (OTA write, erase, reboot) or other unverified output commands.
+replays the captured vendor sequence documented in docs/PROTOCOL.md. The DKMS
+driver may additionally, on each confirmed link, query battery and cable
+state (E6, E0, `E1 01`, family-8 GET `0x21` and `0x2a`, then always `E1 00` and
+E0 verification) as documented in docs/DKMS.md. Never introduce firmware (OTA write, erase, reboot) or other
+unverified output commands.
 USB presence does not confirm connectivity.
 Validate transition bytes 0..4 (`01 80 0E 50 49`) and 11..15 (`04 00 20 02 01`)
 before interpreting byte 16 as 00/01. For E3 validate bytes 0..5
