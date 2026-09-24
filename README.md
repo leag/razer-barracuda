@@ -85,8 +85,25 @@ unavailable when the headset is off and switches outputs itself. The tray
 detects this through the card's port availability group and stops changing the
 default output, which would otherwise overwrite the output you configured.
 
-On the dongle, the S/PDIF profile has no jack-aware port and stays available
-while the headset is off. Install the WirePlumber rule that limits the card to
+To load such a module, install it as a DKMS package for the running kernel. The
+installer downloads `sound/usb` for the matching upstream stable version (GPL-2.0,
+not stored here), applies `kernel/snd-usb-audio/*.patch` only if it applies
+cleanly, and restricts the package to that exact kernel release:
+
+```bash
+sudo python3 scripts/install_snd_usb_audio_quirk.py          # then reboot
+sudo python3 scripts/install_snd_usb_audio_quirk.py --remove
+```
+
+After a kernel update the package does not build, the official module loads,
+and the tray routes outputs itself again. Rerun the installer for the new kernel.
+The upstream stable `sound/usb` is used, so distribution changes to it (for
+example in CachyOS kernels) are not included.
+
+On the dongle, the S/PDIF and AC3 profiles are ALSA devices that PipeWire probes
+on the single stereo USB stream; Windows shows only the stereo output. The
+S/PDIF profile has no jack-aware port and stays available while the headset is
+off. Install the WirePlumber rule that limits the card to
 its analog profiles, then restart WirePlumber:
 
 ```bash
