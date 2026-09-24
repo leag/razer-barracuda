@@ -62,10 +62,13 @@ class DistributionTests(unittest.TestCase):
             result = subprocess.run([str(launcher), '--help'], cwd=directory, env=env,
                                     check=True, capture_output=True, text=True)
             self.assertIn('--language', result.stdout)
+            # The launcher runs `python -c`; help must not show "-c" as the program.
+            self.assertTrue(result.stdout.startswith('usage: barracuda-status'))
             result = subprocess.run([str(home / '.local/bin/barracuda-pair'), '--help'],
                                     cwd=directory, env=env, check=True, capture_output=True,
                                     text=True)
             self.assertIn('--scan', result.stdout)
+            self.assertTrue(result.stdout.startswith('usage: barracuda-pair'))
             desktop = (home / 'config/autostart/org.razer.BarracudaStatus.desktop').read_text()
             self.assertIn('--language es', desktop)
             self.assertIn(f'Exec="{launcher}"', desktop)

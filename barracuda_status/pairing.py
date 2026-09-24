@@ -330,6 +330,7 @@ def run(session, *, scan_only, address, timeout):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
+        prog="barracuda-pair",
         description="Pair a Razer Barracuda X headset with its 2.4 GHz dongle")
     parser.add_argument("--scan", action="store_true",
                         help="only list nearby Bluetooth devices; do not pair")

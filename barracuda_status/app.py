@@ -271,12 +271,17 @@ class Tray(QSystemTrayIcon):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Barracuda X link status and automatic audio routing")
+    parser = argparse.ArgumentParser(prog="barracuda-status",
+                                     description="Barracuda X link status and automatic audio routing")
     parser.add_argument("--language", choices=("en", "es"), default="en",
                         help="Interface language (default: en)")
     args = parser.parse_args()
     set_language(args.language)
-    app = QApplication([sys.argv[0]])
+    # The installed launcher runs `python -c`, so argv[0] is "-c"; name the app explicitly.
+    app = QApplication(["barracuda-status"])
+    app.setApplicationName("barracuda-status")
+    app.setApplicationDisplayName("Barracuda Status")
+    app.setDesktopFileName("org.razer.BarracudaStatus")
     app.setQuitOnLastWindowClosed(False)
     if not QSystemTrayIcon.isSystemTrayAvailable():
         print(tr("No system tray is available"), file=sys.stderr)
