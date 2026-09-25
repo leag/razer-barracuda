@@ -101,19 +101,20 @@ and the tray routes outputs itself again. Rerun the installer for the new kernel
 The upstream stable `sound/usb` is used, so distribution changes to it (for
 example in CachyOS kernels) are not included.
 
-On the dongle, the S/PDIF and AC3 profiles are ALSA devices that PipeWire probes
-on the single stereo USB stream; Windows shows only the stereo output. The
-S/PDIF profile has no jack-aware port and stays available while the headset is
-off. Install the WirePlumber rule that limits the card to
-its analog profiles, then restart WirePlumber:
+The installer also installs an ALSA card profile set for the dongle
+(`packaging/razer-barracuda.conf`, selected by a udev rule). PipeWire's default
+set gives the card S/PDIF and AC3 profiles, which play the same stereo stream
+but have no jack-aware port, and a microphone port bound to no jack because the
+stock headset-mic path expects a differently named mixer element. The
+Barracuda set offers only the analog profiles and one microphone port that
+follows the `Headset Mic Jack`, so both the output and the microphone become
+unavailable while the headset is off. It applies after the reboot.
 
-```bash
-uv run python scripts/install.py --wireplumber-analog-only
-systemctl --user restart wireplumber
-```
-
-Select the Barracuda once as your output. WirePlumber falls back to another
-output while the headset is off and returns to it when it reconnects.
+Select the Barracuda once as your output and input. WirePlumber falls back to
+other devices while the headset is off and returns to them when it reconnects.
+Earlier versions used a WirePlumber rule (`51-barracuda-analog-only.conf`) for
+the profiles; remove it from `~/.config/wireplumber/wireplumber.conf.d/`, since
+it overrides the profile set.
 
 ### When PipeWire handles wireless_status
 
@@ -121,7 +122,7 @@ The DKMS driver sets the standard USB `wireless_status` attribute.
 PipeWire's upstream commit `03f894b` ("alsa-udev: Add wireless device status
 monitoring", March 2026, not in the 1.6 series) hides a USB card while its
 dongle reports `disconnected`. With such a PipeWire, WirePlumber falls back
-and returns without the snd-usb-audio quirk or the analog-only rule. The tray
+and returns without the snd-usb-audio quirk or the profile set. The tray
 detects this, from `wireless_status` in PipeWire's ALSA plugin and on the
 dongle, and leaves output switching to PipeWire.
 
@@ -132,12 +133,10 @@ grep -c wireless_status /usr/lib/spa-0.2/alsa/libspa-alsa.so
 ```
 
 Once it does and switching works with the headset off and on, the quirk and
-the rule can be removed:
+the profile set can be removed:
 
 ```bash
-sudo python3 scripts/install_snd_usb_audio_quirk.py --remove
-rm ~/.config/wireplumber/wireplumber.conf.d/51-barracuda-analog-only.conf
-systemctl --user restart wireplumber   # then reboot to load the official snd-usb-audio
+sudo python3 scripts/install_snd_usb_audio_quirk.py --remove   # then reboot
 ```
 
 ## Pairing a headset

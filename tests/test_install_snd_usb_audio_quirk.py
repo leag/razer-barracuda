@@ -70,6 +70,26 @@ class SndUsbAudioQuirkTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 installer.stage(tree, '7.2.6-1-cachyos', link)
 
+    def test_profile_set_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            installer.install_profile_set(root)
+            profile = root / 'usr/share/alsa-card-profile/mixer/profile-sets/razer-barracuda.conf'
+            path = root / 'usr/share/alsa-card-profile/mixer/paths/analog-input-headset-mic-razer-barracuda.conf'
+            rule = root / 'etc/udev/rules.d/89-razer-barracuda-acp.rules'
+            self.assertIn('paths-input = analog-input-headset-mic-razer-barracuda', profile.read_text())
+            self.assertNotIn('iec958', profile.read_text())
+            self.assertIn('[Jack Headset Mic]', path.read_text())
+            self.assertIn('[Element Mic]', path.read_text())
+            self.assertIn('ATTRS{idVendor}=="1532", ATTRS{idProduct}=="0552"', rule.read_text())
+            self.assertIn('ENV{ACP_PROFILE_SET}="razer-barracuda.conf"', rule.read_text())
+            installer.remove_profile_set(root)
+            self.assertFalse(profile.exists() or path.exists() or rule.exists())
+            link = root / 'etc/udev/rules.d/89-razer-barracuda-acp.rules'
+            link.symlink_to(root / 'elsewhere')
+            with self.assertRaises(RuntimeError):
+                installer.install_profile_set(root)
+
 
 if __name__ == '__main__':
     unittest.main()

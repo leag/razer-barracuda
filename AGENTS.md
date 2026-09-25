@@ -15,8 +15,8 @@ user in their conversation language. Read README.md and docs/PROTOCOL.md first.
 - barracuda_status/i18n.py: explicit UI translations.
 - barracuda_status/assets/: original, distributable SVGs.
 - tests/: hardware-independent unittest suite.
-- scripts/install.py and packaging/: user installation, desktop entry, udev and
-  WirePlumber rules.
+- scripts/install.py and packaging/: user installation, desktop entry, udev rules and
+  the ALSA card profile set for the jack quirk.
 - kernel/hid-razer-barracuda/: the DKMS driver and its KUnit tests, exactly as in
   the upstream series, plus dkms.conf, the DKMS Makefile and an `hid-ids.h`
   used only by the DKMS build.

@@ -53,9 +53,16 @@ Surround 5.1 (IEC958/AC3)" profiles appear because:
 
 So the S/PDIF profile plays the same stereo stream, but it has no jack-aware
 port. With jack detection it stays available while the headset is off, and
-WirePlumber may pick its output. The optional
-`packaging/51-barracuda-analog-only.conf` rule limits the card to
-`analog-only.conf`. The equivalent upstream fix would be listing
+WirePlumber may pick its output. The quirk installer therefore installs the
+`packaging/razer-barracuda.conf` profile set, selected by
+`89-razer-barracuda-acp.rules`, which defines only the analog profiles. It also
+gives the microphone a single port bound to the `Headset Mic Jack` through
+`analog-input-headset-mic-razer-barracuda.conf`: the stock headset-mic path
+expects a "Headset Mic" mixer element while this card's is "Mic", so the stock
+set kept a jack-less "Microphone" port that never became unavailable. A
+WirePlumber `device.profile-set` rule overrides the udev selection, so the
+earlier `51-barracuda-analog-only.conf` must be removed. The equivalent upstream
+fix for the profiles would be listing
 "Razer Barracuda X 2.4" with `999` in alsa-lib's `USB-Audio.conf`; a local ALSA
 override of that table has not been tested here.
 

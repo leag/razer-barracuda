@@ -5,6 +5,9 @@ Downloads sound/usb for the running kernel's upstream stable version, applies
 kernel/snd-usb-audio/*.patch only if it applies cleanly, and installs a DKMS
 package restricted to that exact kernel release. Other kernels keep the
 official module without jack detection.
+Also installs an ALSA card profile set for the dongle, selected by a udev
+rule, so that the microphone follows the headset link like the output does
+and the S/PDIF and AC3 profiles are not offered.
 The downloaded sound/usb sources are GPL-2.0 and are not stored in this repository.
 """
 import argparse
@@ -20,6 +23,13 @@ REVISION = 'barracuda1'
 STABLE = 'https://github.com/gregkh/linux.git'
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / 'kernel' / 'snd-usb-audio'
+PACKAGING = ROOT / 'packaging'
+ACP = Path('usr/share/alsa-card-profile/mixer')
+PROFILE_FILES = {
+    'razer-barracuda.conf': ACP / 'profile-sets',
+    'analog-input-headset-mic-razer-barracuda.conf': ACP / 'paths',
+    '89-razer-barracuda-acp.rules': Path('etc/udev/rules.d'),
+}
 
 
 def run(*command, cwd=None):
@@ -87,6 +97,27 @@ def stage(tree, release, target):
     (target / 'dkms.conf').write_text(dkms_conf(release))
 
 
+def profile_targets(root=Path('/')):
+    return {PACKAGING / name: root / directory / name
+            for name, directory in PROFILE_FILES.items()}
+
+
+def install_profile_set(root=Path('/')):
+    """Copy the profile set, its path and the udev rule that selects it."""
+    for source, target in profile_targets(root).items():
+        if target.is_symlink():
+            raise RuntimeError(f'Refusing symlink destination: {target}')
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        target.chmod(0o644)
+
+
+def remove_profile_set(root=Path('/')):
+    for target in profile_targets(root).values():
+        if target.is_file() and not target.is_symlink():
+            target.unlink()
+
+
 def main():
     parser = argparse.ArgumentParser(prog='install_snd_usb_audio_quirk.py', description=__doc__)
     parser.add_argument('--kernel', default=os.uname().release,
@@ -103,7 +134,9 @@ def main():
     if args.remove:
         run('dkms', 'remove', '-m', NAME, '-v', version, '--all')
         shutil.rmtree(target, ignore_errors=True)
-        print(f'Removed {NAME} {version}. Reboot or reload snd-usb-audio to use the official module.')
+        remove_profile_set()
+        print(f'Removed {NAME} {version} and the Barracuda ALSA card profile set. '
+              'Reboot or reload snd-usb-audio to use the official module.')
         return
     with tempfile.TemporaryDirectory(prefix='snd-usb-audio-') as directory:
         tree = Path(directory) / 'linux'
@@ -111,8 +144,11 @@ def main():
         apply_patches(tree)
         stage(tree, args.kernel, target)
     run('dkms', 'install', '-m', NAME, '-v', version, '-k', args.kernel)
+    install_profile_set()
     print(f'Installed {NAME} {version} for {args.kernel}. It loads on the next boot or when '
-          'snd-usb-audio is reloaded with audio stopped. No audio services were restarted.')
+          'snd-usb-audio is reloaded with audio stopped. No audio services were restarted.\n'
+          'The Barracuda ALSA card profile set applies after a reboot, or after '
+          '"udevadm trigger --subsystem-match=sound" and a WirePlumber restart.')
 
 
 if __name__ == '__main__':

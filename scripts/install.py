@@ -12,8 +12,6 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--language', choices=('en', 'es'), default='en')
     parser.add_argument('--autostart', action='store_true')
-    parser.add_argument('--wireplumber-analog-only', action='store_true',
-                        help='limit the dongle to analog profiles (for jack detection)')
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     data = Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local/share'))
@@ -47,12 +45,6 @@ def main():
     for destination in destinations:
         destination.mkdir(parents=True, exist_ok=True)
         (destination / 'org.razer.BarracudaStatus.desktop').write_text(desktop)
-    if args.wireplumber_analog_only:
-        rules = config / 'wireplumber/wireplumber.conf.d'
-        rules.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(root / 'packaging/51-barracuda-analog-only.conf', rules)
-        print(f'Installed {rules}/51-barracuda-analog-only.conf; '
-              'restart WirePlumber to apply it.')
     print(f'Installed {binary}. Existing processes were not restarted.')
 
 

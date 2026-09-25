@@ -5,7 +5,8 @@
 - `barracuda_status/i18n.py`: English source strings and Spanish translations.
 - `barracuda_status/assets/`: original SVG icons shipped in the Python package.
 - `barracuda_status/pairing.py`: pairing sequence and the `barracuda-pair` CLI.
-- `packaging/`: desktop template, udev rules and the WirePlumber analog-only rule.
+- `packaging/`: desktop template, udev rules, and the ALSA card profile set with
+  its microphone path for the jack quirk.
 - `scripts/install.py`: installation for the current user without root.
 - `scripts/install_dkms.py`, `scripts/install_snd_usb_audio_quirk.py`: DKMS installers.
 - `kernel/hid-razer-barracuda/`: the out-of-tree HID driver and its KUnit tests,

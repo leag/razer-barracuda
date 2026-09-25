@@ -1,0 +1,2 @@
+# Use the Barracuda X (2022) ALSA card profile set for the dongle's sound card.
+SUBSYSTEM=="sound", KERNEL=="card*", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="0552", ENV{ACP_PROFILE_SET}="razer-barracuda.conf"
