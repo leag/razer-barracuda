@@ -3,7 +3,7 @@
 # tracked tree with `uv build --sdist` and updates the checksum.
 pkgbase=barracuda-status
 pkgname=(barracuda-status hid-razer-barracuda-dkms)
-pkgver=0.3.1
+pkgver=0.3.2
 pkgrel=1
 pkgdesc="Tray monitor, audio routing and HID driver for the Razer Barracuda X (2022) dongle"
 arch=(any)
@@ -13,7 +13,7 @@ license=(MIT)
 makedepends=(python-build python-installer python-setuptools python-wheel
              python-pyqt6 libpulse dkms hicolor-icon-theme)
 source=("barracuda_status-$pkgver.tar.gz")
-sha256sums=('7ad7916806eaafd326f3dab05fa963d023f7b1d5c623934b7c36089d5eb71dc9')
+sha256sums=('3c5e7a801c3714039d9e3f213b2a7fbfff30974a8f5f357f318fdb5f4eb29a65')
 
 build() {
   cd "barracuda_status-$pkgver"

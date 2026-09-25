@@ -1,4 +1,4 @@
-From 04540da65ceb4b63986d3f19bc3c23e725b775e0 Mon Sep 17 00:00:00 2001
+From f2a67f56ff6411a8c9dff91ef309b093a8cd6c42 Mon Sep 17 00:00:00 2001
 From: Luis Atala <luis.atala@gmail.com>
 Date: Thu, 24 Sep 2026 14:13:40 -0300
 Subject: [PATCH 2/2] HID: razer-barracuda: query battery, cable and voltage
@@ -225,7 +225,7 @@ index d960add29..95182c585 100644
  };
  
 diff --git a/drivers/hid/hid-razer-barracuda.c b/drivers/hid/hid-razer-barracuda.c
-index f77a324cb..87387e99a 100644
+index 6a0a38d20..6cae76c17 100644
 --- a/drivers/hid/hid-razer-barracuda.c
 +++ b/drivers/hid/hid-razer-barracuda.c
 @@ -11,10 +11,12 @@
@@ -757,7 +757,7 @@ index f77a324cb..87387e99a 100644
  	case POWER_SUPPLY_PROP_SCOPE:
  		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
  		break;
-@@ -512,11 +850,15 @@ static void barracuda_init(struct barracuda *b, struct hid_device *hdev)
+@@ -513,11 +851,15 @@ static void barracuda_init(struct barracuda *b, struct hid_device *hdev)
  {
  	b->hdev = hdev;
  	spin_lock_init(&b->lock);
@@ -773,7 +773,7 @@ index f77a324cb..87387e99a 100644
  	INIT_WORK(&b->supply_work, barracuda_supply_work);
  }
  
-@@ -575,8 +917,13 @@ static void barracuda_stop(struct barracuda *b)
+@@ -576,8 +918,13 @@ static void barracuda_stop(struct barracuda *b)
  {
  	unsigned long flags;
  

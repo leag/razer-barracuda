@@ -751,7 +751,8 @@ static int barracuda_get_property(struct power_supply *psy,
 		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
 		break;
 	case POWER_SUPPLY_PROP_MODEL_NAME:
-		val->strval = b->hdev->name;
+		/* The headset's name; the USB strings name the dongle and its chip vendor. */
+		val->strval = "Razer Barracuda X (2022)";
 		break;
 	case POWER_SUPPLY_PROP_MANUFACTURER:
 		val->strval = "Razer";

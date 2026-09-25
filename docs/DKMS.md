@@ -15,7 +15,7 @@ The Makefile selects LLVM for kernels configured with Clang. From this checkout:
 sudo python3 scripts/install_dkms.py --activate
 ```
 
-This copies only module sources to `/usr/src/hid-razer-barracuda-0.3.1`, builds and
+This copies only module sources to `/usr/src/hid-razer-barracuda-0.3.2`, builds and
 installs for the running kernel, and rebinds only the matching HID interface.
 Without `--activate`, reconnect the dongle to activate the installed driver.
 DKMS rebuilds for subsequent kernels through the distribution's DKMS hooks.
@@ -110,8 +110,8 @@ Disconnect the dongle, then run:
 
 ```bash
 sudo modprobe -r hid-razer-barracuda
-sudo dkms remove hid-razer-barracuda/0.3.1 --all
-sudo rm -r /usr/src/hid-razer-barracuda-0.3.1
+sudo dkms remove hid-razer-barracuda/0.3.2 --all
+sudo rm -r /usr/src/hid-razer-barracuda-0.3.2
 sudo rm /etc/udev/rules.d/99-barracuda-battery.rules
 sudo udevadm control --reload-rules
 ```
@@ -165,6 +165,10 @@ does not prove that the cable or charging state is unchanged.
 Version 0.1.3 removes the arbitrary ten-minute expiry and its periodic worker.
 Regression tests cover retained percentage across disconnect and suspend,
 replacement by new telemetry, and clearing on driver state initialization.
+
+Version 0.3.2 reports the headset's name, "Razer Barracuda X (2022)", as the
+battery model instead of the dongle's USB strings, which start with the chip
+vendor "Macronix".
 
 Version 0.3.1 accepts a route query's (E0, E6) data reply only after the
 acknowledgment that echoes its sequence number, since the replies themselves
