@@ -32,6 +32,13 @@ For a ZIP of the tracked source only:
 git archive --format=zip --output=dist/barracuda-status-source.zip HEAD
 ```
 
-Use tracked source for release archives. Update both version fields
-in `pyproject.toml` and `barracuda_status/__init__.py` for a new release, then run
-`uv lock` and commit the updated lockfile.
+Use tracked source for release archives. For a new release update the version
+in `pyproject.toml`, `barracuda_status/__init__.py`, `packaging/arch/PKGBUILD`,
+`kernel/hid-razer-barracuda/dkms.conf` and `scripts/install_dkms.py` (the tests
+check they agree), then run `uv lock` and commit the updated lockfile.
+
+## Arch packages
+
+`packaging/arch/build.sh` builds `barracuda-status` and
+`hid-razer-barracuda-dkms` from an sdist of the tracked tree with `makepkg`.
+Check them with `namcap PKGBUILD *.pkg.tar.zst` before publishing.

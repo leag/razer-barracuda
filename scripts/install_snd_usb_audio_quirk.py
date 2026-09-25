@@ -124,6 +124,8 @@ def main():
                         help='kernel release to build for (default: running kernel)')
     parser.add_argument('--remove', action='store_true',
                         help='remove this DKMS package for the kernel')
+    parser.add_argument('--no-profile-set', action='store_true',
+                        help='leave the ALSA card profile set alone (installed by a package)')
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error('Run this installer with sudo or pkexec; it writes /usr/src and installs a kernel module')
@@ -134,9 +136,9 @@ def main():
     if args.remove:
         run('dkms', 'remove', '-m', NAME, '-v', version, '--all')
         shutil.rmtree(target, ignore_errors=True)
-        remove_profile_set()
-        print(f'Removed {NAME} {version} and the Barracuda ALSA card profile set. '
-              'Reboot or reload snd-usb-audio to use the official module.')
+        if not args.no_profile_set:
+            remove_profile_set()
+        print(f'Removed {NAME} {version}. Reboot or reload snd-usb-audio to use the official module.')
         return
     with tempfile.TemporaryDirectory(prefix='snd-usb-audio-') as directory:
         tree = Path(directory) / 'linux'
@@ -144,7 +146,8 @@ def main():
         apply_patches(tree)
         stage(tree, args.kernel, target)
     run('dkms', 'install', '-m', NAME, '-v', version, '-k', args.kernel)
-    install_profile_set()
+    if not args.no_profile_set:
+        install_profile_set()
     print(f'Installed {NAME} {version} for {args.kernel}. It loads on the next boot or when '
           'snd-usb-audio is reloaded with audio stopped. No audio services were restarted.\n'
           'The Barracuda ALSA card profile set applies after a reboot, or after '

@@ -36,7 +36,25 @@ sudo pacman -S python uv libpulse
 
 ## Install
 
-From a checkout:
+### Arch Linux and CachyOS
+
+Build and install the packages from a checkout:
+
+```bash
+sudo pacman -S --needed dkms linux-headers python-build python-installer   # headers for your kernel
+packaging/arch/build.sh
+sudo pacman -U packaging/arch/barracuda-status-*.pkg.tar.zst packaging/arch/hid-razer-barracuda-dkms-*.pkg.tar.zst
+```
+
+`barracuda-status` installs the tray app, `barracuda-pair`, the desktop entry
+and the hidraw udev rule. `hid-razer-barracuda-dkms` installs the driver for
+every installed kernel through DKMS, the battery udev rule, the dongle's ALSA
+card profile set, and `barracuda-snd-usb-audio-quirk`, the per-kernel installer
+for the [jack detection](#jack-detection-experimental) module. Add
+Barracuda Status to your session's autostart from the desktop settings.
+Reconnect the dongle once after installing the udev rules.
+
+### From a checkout without packages
 
 ```bash
 uv sync --locked
@@ -95,6 +113,9 @@ cleanly, and restricts the package to that exact kernel release:
 sudo python3 scripts/install_snd_usb_audio_quirk.py          # then reboot
 sudo python3 scripts/install_snd_usb_audio_quirk.py --remove
 ```
+
+With the Arch package, run `sudo barracuda-snd-usb-audio-quirk` instead; the
+package already provides the profile set described below.
 
 After a kernel update the package does not build, the official module loads,
 and the tray routes outputs itself again. Rerun the installer for the new kernel.

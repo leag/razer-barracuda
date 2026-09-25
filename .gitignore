@@ -36,3 +36,8 @@ htmlcov/
 Module.symvers
 modules.order
 .tmp_versions/
+# Arch package builds
+/packaging/arch/*.tar.gz
+/packaging/arch/*.pkg.tar*
+/packaging/arch/pkg/
+/packaging/arch/src/
