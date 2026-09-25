@@ -15,7 +15,7 @@ The Makefile selects LLVM for kernels configured with Clang. From this checkout:
 sudo python3 scripts/install_dkms.py --activate
 ```
 
-This copies only module sources to `/usr/src/hid-razer-barracuda-0.3.0`, builds and
+This copies only module sources to `/usr/src/hid-razer-barracuda-0.3.1`, builds and
 installs for the running kernel, and rebinds only the matching HID interface.
 Without `--activate`, reconnect the dongle to activate the installed driver.
 DKMS rebuilds for subsequent kernels through the distribution's DKMS hooks.
@@ -78,8 +78,8 @@ not available through the validated dongle messages.
 Silence never establishes disconnection or invalidates an observed reading.
 Disconnect and suspend clear cable state; suspend also makes the link unknown,
 while preserving the last percentage. Reconnection alone does not confirm charging.
-Cable-present below 100% is exposed as charging; cable-absent as discharging.
-At 100% with the cable connected, status is full. This is a presentation choice:
+Cable-present is exposed as charging, also before the first percentage arrives;
+cable-absent as discharging. At 100% with the cable connected, status is full. This is a presentation choice:
 the headset never reports termination, and at the green full-charge LED it
 held 99. On 2026-09-24, charging while powered on, the LED kept
 blinking red for over 15 minutes with the voltage constant at 4200 mV and no
@@ -110,8 +110,8 @@ Disconnect the dongle, then run:
 
 ```bash
 sudo modprobe -r hid-razer-barracuda
-sudo dkms remove hid-razer-barracuda/0.3.0 --all
-sudo rm -r /usr/src/hid-razer-barracuda-0.3.0
+sudo dkms remove hid-razer-barracuda/0.3.1 --all
+sudo rm -r /usr/src/hid-razer-barracuda-0.3.1
 sudo rm /etc/udev/rules.d/99-barracuda-battery.rules
 sudo udevadm control --reload-rules
 ```
@@ -165,6 +165,16 @@ does not prove that the cable or charging state is unchanged.
 Version 0.1.3 removes the arbitrary ten-minute expiry and its periodic worker.
 Regression tests cover retained percentage across disconnect and suspend,
 replacement by new telemetry, and clearing on driver state initialization.
+
+Version 0.3.1 accepts a route query's (E0, E6) data reply only after the
+acknowledgment that echoes its sequence number, since the replies themselves
+carry a device counter (see [PROTOCOL.md](PROTOCOL.md#battery-and-cable-queries));
+a reply left over from a timed-out query can no longer satisfy the next one.
+Family-8 GET replies are not acknowledged and still match directly. The
+refresh stops between queries when suspend or removal is waiting for it, still
+restoring the local route. All refresh work runs on `system_long_wq`, and a
+linked headset with the cable connected reports charging before the first
+percentage arrives.
 
 Version 0.3.0 renames the module to `hid-razer-barracuda` and prepares it for
 submission to the kernel: a single source file, KUnit tests instead of the

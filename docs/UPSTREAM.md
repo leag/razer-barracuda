@@ -56,6 +56,11 @@ make W=1 C=2 drivers/hid/hid-razer-barracuda.o
 ./scripts/checkpatch.pl --strict -g HEAD~2..HEAD
 ```
 
+On 2026-09-25, against `for-next` at `145c2b2e9`: KUnit passed 13 tests after
+patch 1 and 18 after patch 2 under QEMU with KASAN and UBSAN, checkpatch
+reported only the missing `Signed-off-by`, and the DKMS build against
+7.2.7-1-cachyos with Clang was clean at `W=1`. Sparse was not rerun.
+
 On 2026-09-24, against `for-next` at `d72f75f1d` (v7.3-rc4): KUnit passed
 13 tests after patch 1 and 18 after patch 2, with no KASAN, UBSAN or lockdep
 report. The W=1 and sparse builds were clean, built-in and as a module, and so

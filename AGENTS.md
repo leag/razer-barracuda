@@ -48,7 +48,9 @@ E6, acknowledgments, malformed and unknown values are not link evidence.
 Keep unknown, disconnected and missing-adapter states distinct. In the driver,
 an unknown link neither creates nor removes the battery; never register the
 battery or notify UPower from the HID event path, and never send a query from a
-power-supply property read. A silent dongle
+power-supply property read. Data responses carry a device counter, not the query
+sequence; match a route query's acknowledgment (which echoes the sequence) before
+accepting its data response; family-8 GET replies have no acknowledgment. A silent dongle
 is not a disconnected headset. Reads must be interruptible and workers joined.
 
 ## Audio invariants

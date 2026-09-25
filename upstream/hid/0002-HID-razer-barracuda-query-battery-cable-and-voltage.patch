@@ -1,4 +1,4 @@
-From 39931ee01f82c71433932cb21daed90094c9446e Mon Sep 17 00:00:00 2001
+From 04540da65ceb4b63986d3f19bc3c23e725b775e0 Mon Sep 17 00:00:00 2001
 From: Luis Atala <luis.atala@gmail.com>
 Date: Thu, 24 Sep 2026 14:13:40 -0300
 Subject: [PATCH 2/2] HID: razer-barracuda: query battery, cable and voltage
@@ -33,12 +33,12 @@ The GET frame layout comes from a userspace tool for the Barracuda 2.4
 Link: https://github.com/TarikTopalovic/razer-barracuda-2.4-linux
 Assisted-by: LLM sparse
 ---
- drivers/hid/hid-razer-barracuda-test.c | 130 +++++++++
- drivers/hid/hid-razer-barracuda.c      | 353 ++++++++++++++++++++++++-
- 2 files changed, 471 insertions(+), 12 deletions(-)
+ drivers/hid/hid-razer-barracuda-test.c | 162 +++++++++++
+ drivers/hid/hid-razer-barracuda.c      | 371 ++++++++++++++++++++++++-
+ 2 files changed, 521 insertions(+), 12 deletions(-)
 
 diff --git a/drivers/hid/hid-razer-barracuda-test.c b/drivers/hid/hid-razer-barracuda-test.c
-index d960add29..8cddfdb32 100644
+index d960add29..95182c585 100644
 --- a/drivers/hid/hid-razer-barracuda-test.c
 +++ b/drivers/hid/hid-razer-barracuda-test.c
 @@ -19,6 +19,12 @@ static const u8 barracuda_test_e3[] = {
@@ -54,7 +54,7 @@ index d960add29..8cddfdb32 100644
  static struct barracuda *barracuda_test_alloc(struct kunit *test)
  {
  	struct barracuda *b = kunit_kzalloc(test, sizeof(*b), GFP_KERNEL);
-@@ -237,6 +243,125 @@ static void barracuda_test_supply_action(struct kunit *test)
+@@ -237,6 +243,157 @@ static void barracuda_test_supply_action(struct kunit *test)
  			BARRACUDA_SUPPLY_NOTIFY);
  }
  
@@ -152,8 +152,17 @@ index d960add29..8cddfdb32 100644
 +		0x50, 0x49, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00,
 +		0x06, 0xe1, 0x00, 0x68, 0x10, 0x00, 0x00,
 +	};
++	static const u8 ack[] = {
++		0x50, 0x49, 0x01, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00,
++		0x0e, 0xe2, 0x00,
++	};
++	static const u8 e0[] = {
++		0x50, 0x49, 0x0e, 0xc5, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00,
++		0xe0, 0x01,
++	};
 +	struct barracuda *b = barracuda_test_alloc(test);
 +
++	/* Family 0x08 GET replies are not acknowledged and match directly. */
 +	b->waiting = true;
 +	b->want_param = BARRACUDA_PARAM_CABLE;
 +	b->reply_value = -ETIMEDOUT;
@@ -168,7 +177,30 @@ index d960add29..8cddfdb32 100644
 +	KUNIT_EXPECT_FALSE(test, b->waiting);
 +	KUNIT_EXPECT_EQ(test, b->reply_value, 100);
 +
++	/*
++	 * A route reply counts only after the acknowledgment that echoes the
++	 * sequence, so a reply left over from a timed-out query is ignored.
++	 */
 +	b->waiting = true;
++	b->acked = false;
++	b->want_family = BARRACUDA_FAMILY_LINK;
++	b->want_seq = 0x62;
++	b->want_param = 0;
++	b->want_command = BARRACUDA_CMD_GET_ROUTE;
++	b->reply_value = -ETIMEDOUT;
++	barracuda_test_chunk(b, e0, sizeof(e0));
++	KUNIT_EXPECT_TRUE(test, b->waiting);
++	KUNIT_EXPECT_FALSE(test, b->acked);
++	barracuda_test_chunk(b, ack, sizeof(ack));
++	KUNIT_EXPECT_TRUE(test, b->waiting);
++	KUNIT_EXPECT_TRUE(test, b->acked);
++	barracuda_test_chunk(b, e0, sizeof(e0));
++	KUNIT_EXPECT_FALSE(test, b->waiting);
++	KUNIT_EXPECT_EQ(test, b->reply_value, 1);
++	b->want_command = 0;
++
++	b->waiting = true;
++	b->acked = false;
 +	b->want_param = 0;
 +	b->want_family = BARRACUDA_FAMILY_DIAG;
 +	b->want_seq = 0x61;
@@ -180,7 +212,7 @@ index d960add29..8cddfdb32 100644
  static struct kunit_case barracuda_test_cases[] = {
  	KUNIT_CASE(barracuda_test_split),
  	KUNIT_CASE(barracuda_test_values),
-@@ -247,6 +372,11 @@ static struct kunit_case barracuda_test_cases[] = {
+@@ -247,6 +404,11 @@ static struct kunit_case barracuda_test_cases[] = {
  	KUNIT_CASE(barracuda_test_recovery),
  	KUNIT_CASE(barracuda_test_state),
  	KUNIT_CASE(barracuda_test_supply_action),
@@ -193,7 +225,7 @@ index d960add29..8cddfdb32 100644
  };
  
 diff --git a/drivers/hid/hid-razer-barracuda.c b/drivers/hid/hid-razer-barracuda.c
-index cee689320..208bff045 100644
+index f77a324cb..87387e99a 100644
 --- a/drivers/hid/hid-razer-barracuda.c
 +++ b/drivers/hid/hid-razer-barracuda.c
 @@ -11,10 +11,12 @@
@@ -263,7 +295,7 @@ index cee689320..208bff045 100644
  
  #define BARRACUDA_UNKNOWN		(-1)
  
-@@ -83,18 +105,34 @@ struct barracuda_state {
+@@ -83,18 +105,40 @@ struct barracuda_state {
  struct barracuda {
  	struct hid_device *hdev;
  
@@ -284,8 +316,14 @@ index cee689320..208bff045 100644
  	int jack_report;
 +	/* Set when the local route could not be restored, until the next link. */
 +	bool route_failed;
-+	/* The one outstanding query, matched in barracuda_match_reply(). */
++	/*
++	 * The one outstanding query, matched in barracuda_match_reply(). Data
++	 * replies carry a device counter, not the query sequence; only the
++	 * acknowledgment echoes it, so a route reply counts after its
++	 * acknowledgment. Family 0x08 GET replies are not acknowledged.
++	 */
 +	bool waiting;
++	bool acked;
 +	u8 want_family;
 +	u8 want_seq;
 +	u8 want_command;
@@ -299,7 +337,7 @@ index cee689320..208bff045 100644
  
  	/* Serializes battery registration; battery exists only while linked. */
  	struct mutex supply_lock;
-@@ -104,6 +142,7 @@ struct barracuda {
+@@ -104,6 +148,7 @@ struct barracuda {
  
  	struct input_dev *jack;
  	struct delayed_work link_work;
@@ -307,7 +345,7 @@ index cee689320..208bff045 100644
  	struct work_struct supply_work;
  };
  
-@@ -143,6 +182,12 @@ static bool barracuda_state_event(struct barracuda_state *s,
+@@ -143,6 +188,12 @@ static bool barracuda_state_event(struct barracuda_state *s,
  	return true;
  }
  
@@ -320,7 +358,7 @@ index cee689320..208bff045 100644
  /* An unknown link (startup, resume) neither registers nor removes the battery. */
  static enum barracuda_supply_action
  barracuda_supply_action(int linked, bool registered)
-@@ -163,9 +208,48 @@ static int barracuda_link_reply(const u8 *p, unsigned int size, u8 command)
+@@ -163,9 +214,48 @@ static int barracuda_link_reply(const u8 *p, unsigned int size, u8 command)
  	return p[11];
  }
  
@@ -334,7 +372,9 @@ index cee689320..208bff045 100644
 +	return p[13];
 +}
 +
-+/*
+ /*
+- * Decode link, battery and cable messages. Only the E3 reply and the 0x20
+- * report are link evidence.
 + * Acknowledgment FAMILY SEQ|80 STATUS RESULT. Returns the result length and
 + * sets *result, -1 if unrelated or -2 if the device reported a failure.
 + */
@@ -363,15 +403,13 @@ index cee689320..208bff045 100644
 +	return mv;
 +}
 +
- /*
-- * Decode link, battery and cable messages. Only the E3 reply and the 0x20
-- * report are link evidence.
++/*
 + * Decode link, battery and cable messages. Only the E3 reply and the
 + * unsolicited 0x20 report are link evidence; GET replies are not.
   */
  static bool barracuda_decode(const u8 *p, unsigned int size,
  			     enum barracuda_event *event, int *value)
-@@ -178,14 +262,15 @@ static bool barracuda_decode(const u8 *p, unsigned int size,
+@@ -178,14 +268,15 @@ static bool barracuda_decode(const u8 *p, unsigned int size,
  		return true;
  	}
  	if (size != 14 || p[2] != BARRACUDA_FAMILY_CUSTOMER || p[8] != 4 ||
@@ -389,7 +427,7 @@ index cee689320..208bff045 100644
  	case BARRACUDA_PARAM_BATTERY:
  		*event = BARRACUDA_CAPACITY;
  		return p[13] <= 100;
-@@ -200,12 +285,54 @@ static bool barracuda_decode(const u8 *p, unsigned int size,
+@@ -200,12 +291,61 @@ static bool barracuda_decode(const u8 *p, unsigned int size,
  static void barracuda_event(struct barracuda *b, enum barracuda_event event,
  			    int value)
  {
@@ -421,22 +459,29 @@ index cee689320..208bff045 100644
 +
 +	if (!b->waiting)
 +		return;
-+	if (b->want_command) {
-+		ret = barracuda_link_reply(p, size, b->want_command);
-+	} else if (b->want_param) {
++	if (b->want_param) {
 +		/* The value itself reaches the state through barracuda_decode(). */
 +		ret = barracuda_customer_reply(p, size, b->want_param);
-+	} else {
++	} else if (!b->acked) {
 +		ret = barracuda_ack(p, size, b->want_family, b->want_seq, &result);
++		if (ret == -1)
++			return;
++		if (ret >= 0 && b->want_command) {
++			/* A stale reply to an earlier query is ignored until here. */
++			b->acked = true;
++			return;
++		}
 +		if (ret == -2) {
 +			ret = -EPROTO;
-+		} else if (ret >= 0 && b->want_family == BARRACUDA_FAMILY_DIAG) {
++		} else if (b->want_family == BARRACUDA_FAMILY_DIAG) {
 +			ret = barracuda_voltage_mv(result, ret);
 +			if (ret < 0)
 +				ret = -EPROTO;
-+		} else if (ret >= 0) {
++		} else {
 +			ret = 0;
 +		}
++	} else {
++		ret = barracuda_link_reply(p, size, b->want_command);
 +	}
 +	if (ret == -1)
 +		return;
@@ -446,7 +491,7 @@ index cee689320..208bff045 100644
  }
  
  static void barracuda_frame(struct barracuda *b, const u8 *p, unsigned int size)
-@@ -215,6 +342,7 @@ static void barracuda_frame(struct barracuda *b, const u8 *p, unsigned int size)
+@@ -215,6 +355,7 @@ static void barracuda_frame(struct barracuda *b, const u8 *p, unsigned int size)
  
  	if (barracuda_decode(p, size, &event, &value))
  		barracuda_event(b, event, value);
@@ -454,7 +499,7 @@ index cee689320..208bff045 100644
  }
  
  /*
-@@ -264,7 +392,7 @@ static int barracuda_raw_event(struct hid_device *hdev,
+@@ -264,7 +405,7 @@ static int barracuda_raw_event(struct hid_device *hdev,
  {
  	struct barracuda *b = hid_get_drvdata(hdev);
  	unsigned long flags;
@@ -463,7 +508,7 @@ index cee689320..208bff045 100644
  	int jack;
  
  	if (report->type != HID_INPUT_REPORT || size <= 0 ||
-@@ -283,6 +411,8 @@ static int barracuda_raw_event(struct hid_device *hdev,
+@@ -283,6 +424,8 @@ static int barracuda_raw_event(struct hid_device *hdev,
  	barracuda_feed(b, data, size);
  	b->fragment_at = jiffies;
  	changed = b->changed;
@@ -472,17 +517,17 @@ index cee689320..208bff045 100644
  	jack = b->jack_report;
  	b->jack_report = BARRACUDA_UNKNOWN;
  	spin_unlock_irqrestore(&b->lock, flags);
-@@ -295,6 +425,9 @@ static int barracuda_raw_event(struct hid_device *hdev,
+@@ -295,6 +438,9 @@ static int barracuda_raw_event(struct hid_device *hdev,
  	/* Registering and notifying the power supply may sleep. */
  	if (changed)
  		schedule_work(&b->supply_work);
 +	if (refresh)
-+		mod_delayed_work(system_percpu_wq, &b->refresh_work,
++		mod_delayed_work(system_long_wq, &b->refresh_work,
 +				 BARRACUDA_REFRESH_DELAY);
  
  	/* Leave the report to hidraw and the media-key input path. */
  	return 0;
-@@ -303,16 +436,19 @@ static int barracuda_raw_event(struct hid_device *hdev,
+@@ -303,16 +449,19 @@ static int barracuda_raw_event(struct hid_device *hdev,
  static void barracuda_fill(u8 *buf, u8 family, u8 seq, const u8 *payload,
  			   u8 len)
  {
@@ -504,7 +549,7 @@ index cee689320..208bff045 100644
  }
  
  /*
-@@ -355,11 +491,189 @@ static void barracuda_link_query(struct work_struct *work)
+@@ -355,11 +504,194 @@ static void barracuda_link_query(struct work_struct *work)
  	spin_unlock_irqrestore(&b->lock, flags);
  }
  
@@ -534,6 +579,7 @@ index cee689320..208bff045 100644
 +	b->want_param = reply_param;
 +	b->reply_value = -ETIMEDOUT;
 +	reinit_completion(&b->reply_done);
++	b->acked = false;
 +	b->waiting = true;
 +	spin_unlock_irqrestore(&b->lock, flags);
 +
@@ -664,11 +710,14 @@ index cee689320..208bff045 100644
 +	if (!barracuda_refresh_wanted(b))
 +		return;
 +
++	/* Suspend and removal wait for this: stop early, but restore the route. */
 +	mutex_lock(&b->route_lock);
-+	if (!barracuda_route_begin(b, &selected)) {
++	if (!barracuda_route_begin(b, &selected) && barracuda_refresh_wanted(b)) {
 +		battery = barracuda_customer_get(b, BARRACUDA_PARAM_BATTERY);
-+		cable = barracuda_customer_get(b, BARRACUDA_PARAM_CABLE);
-+		mv = barracuda_read_voltage(b);
++		if (barracuda_refresh_wanted(b))
++			cable = barracuda_customer_get(b, BARRACUDA_PARAM_CABLE);
++		if (barracuda_refresh_wanted(b))
++			mv = barracuda_read_voltage(b);
 +	}
 +	restored = barracuda_route_end(b, selected);
 +	mutex_unlock(&b->route_lock);
@@ -682,7 +731,8 @@ index cee689320..208bff045 100644
 +		schedule_work(&b->supply_work);
 +	}
 +	if (restored && barracuda_refresh_wanted(b))
-+		schedule_delayed_work(&b->refresh_work, BARRACUDA_POLL_INTERVAL);
++		queue_delayed_work(system_long_wq, &b->refresh_work,
++				   BARRACUDA_POLL_INTERVAL);
 +}
 +
  static const enum power_supply_property barracuda_properties[] = {
@@ -694,7 +744,7 @@ index cee689320..208bff045 100644
  	POWER_SUPPLY_PROP_SCOPE,
  	POWER_SUPPLY_PROP_MODEL_NAME,
  	POWER_SUPPLY_PROP_MANUFACTURER,
-@@ -406,6 +720,12 @@ static int barracuda_get_property(struct power_supply *psy,
+@@ -409,6 +741,12 @@ static int barracuda_get_property(struct power_supply *psy,
  		 */
  		val->intval = POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN;
  		break;
@@ -707,7 +757,7 @@ index cee689320..208bff045 100644
  	case POWER_SUPPLY_PROP_SCOPE:
  		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
  		break;
-@@ -509,11 +829,15 @@ static void barracuda_init(struct barracuda *b, struct hid_device *hdev)
+@@ -512,11 +850,15 @@ static void barracuda_init(struct barracuda *b, struct hid_device *hdev)
  {
  	b->hdev = hdev;
  	spin_lock_init(&b->lock);
@@ -723,7 +773,7 @@ index cee689320..208bff045 100644
  	INIT_WORK(&b->supply_work, barracuda_supply_work);
  }
  
-@@ -572,8 +896,13 @@ static void barracuda_stop(struct barracuda *b)
+@@ -575,8 +917,13 @@ static void barracuda_stop(struct barracuda *b)
  {
  	unsigned long flags;
  

@@ -23,9 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The runner's cloud kernel lacks USB_HID, so build against the generic headers.
       - name: Install kernel headers
-        run: sudo apt-get update && sudo apt-get install -y linux-headers-$(uname -r)
-      - run: make -C kernel/hid-razer-barracuda W=1
+        run: sudo apt-get update && sudo apt-get install -y linux-headers-generic
+      - run: make -C kernel/hid-razer-barracuda W=1 KDIR=$(ls -d /usr/src/linux-headers-*-generic | sort -V | tail -1)
   kunit:
     runs-on: ubuntu-latest
     steps:

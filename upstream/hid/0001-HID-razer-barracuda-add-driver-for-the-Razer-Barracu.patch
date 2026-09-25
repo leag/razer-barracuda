@@ -1,4 +1,4 @@
-From 9cb37f4f2aa6319c2de0d66c2ac14ac1fba48f01 Mon Sep 17 00:00:00 2001
+From 2a49bd64b2b736da177c43eac7c155043b54498a Mon Sep 17 00:00:00 2001
 From: Luis Atala <luis.atala@gmail.com>
 Date: Thu, 24 Sep 2026 14:12:58 -0300
 Subject: [PATCH 1/2] HID: razer-barracuda: add driver for the Razer Barracuda
@@ -45,8 +45,8 @@ Assisted-by: LLM sparse
  drivers/hid/Makefile                   |   1 +
  drivers/hid/hid-ids.h                  |   1 +
  drivers/hid/hid-razer-barracuda-test.c | 258 ++++++++++
- drivers/hid/hid-razer-barracuda.c      | 657 +++++++++++++++++++++++++
- 6 files changed, 946 insertions(+)
+ drivers/hid/hid-razer-barracuda.c      | 660 +++++++++++++++++++++++++
+ 6 files changed, 949 insertions(+)
  create mode 100644 drivers/hid/hid-razer-barracuda-test.c
  create mode 100644 drivers/hid/hid-razer-barracuda.c
 
@@ -391,10 +391,10 @@ index 000000000..d960add29
 +kunit_test_suite(barracuda_test_suite);
 diff --git a/drivers/hid/hid-razer-barracuda.c b/drivers/hid/hid-razer-barracuda.c
 new file mode 100644
-index 000000000..cee689320
+index 000000000..f77a324cb
 --- /dev/null
 +++ b/drivers/hid/hid-razer-barracuda.c
-@@ -0,0 +1,657 @@
+@@ -0,0 +1,660 @@
 +// SPDX-License-Identifier: GPL-2.0-only OR MIT
 +/*
 + * HID driver for the Razer Barracuda X (2022) 2.4 GHz USB dongle
@@ -782,13 +782,16 @@ index 000000000..cee689320
 +		val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
 +		if (!present || b->state.external_power < 0)
 +			break;
-+		/* The headset never reports charge termination. */
++		/*
++		 * The headset never reports charge termination; a cable with
++		 * no percentage yet is charging.
++		 */
 +		if (!b->state.external_power)
 +			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
-+		else if (capacity_valid && b->state.capacity < 100)
-+			val->intval = POWER_SUPPLY_STATUS_CHARGING;
-+		else if (capacity_valid)
++		else if (capacity_valid && b->state.capacity >= 100)
 +			val->intval = POWER_SUPPLY_STATUS_FULL;
++		else
++			val->intval = POWER_SUPPLY_STATUS_CHARGING;
 +		break;
 +	case POWER_SUPPLY_PROP_CAPACITY:
 +		if (capacity_valid)

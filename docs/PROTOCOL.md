@@ -153,7 +153,16 @@ commands are `50 41 0e SEQ N CMD ARGS` with `N = 1 + len(ARGS)`. OTA-family
 commands are `50 41 06 SEQ LEN16 PAYLOAD`. Responses are `50 49 CLASS SEQ
 xx xx xx xx LEN16 DATA`; long responses continue in further `01 80 LEN` reports
 without a `50 49` header. Acknowledgments use class `01` with data
-`CLASS SEQ|0x80 STATUS [RESULT]`, status `00` meaning success.
+`CLASS SEQ|0x80 STATUS [RESULT]`, status `00` meaning success. Only the
+acknowledgment echoes the host's SEQ: in a 2026-09-24 capture, family `0e`
+queries with SEQ `21` and `22` were each answered by an acknowledgment
+(`0e a1`, `0e a2`) followed by a data response whose SEQ was a device counter
+(`c5`, `c6`). The acknowledgment arrives before the data response, so a
+query's data response is the first matching frame after its acknowledgment.
+A read-only hidraw capture of the driver's refresh on 2026-09-25 showed the
+same for E6, E0 and E1, while the family `08` GET replies (`21`, `2a`) and the
+family `06` voltage result (carried in its acknowledgment) had no separate
+acknowledgment of their own.
 
 | Step | Frame | Library name | Effect |
 |---|---|---|---|

@@ -337,8 +337,17 @@ static void barracuda_test_match_reply(struct kunit *test)
 		0x50, 0x49, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00,
 		0x06, 0xe1, 0x00, 0x68, 0x10, 0x00, 0x00,
 	};
+	static const u8 ack[] = {
+		0x50, 0x49, 0x01, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00,
+		0x0e, 0xe2, 0x00,
+	};
+	static const u8 e0[] = {
+		0x50, 0x49, 0x0e, 0xc5, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00,
+		0xe0, 0x01,
+	};
 	struct barracuda *b = barracuda_test_alloc(test);
 
+	/* Family 0x08 GET replies are not acknowledged and match directly. */
 	b->waiting = true;
 	b->want_param = BARRACUDA_PARAM_CABLE;
 	b->reply_value = -ETIMEDOUT;
@@ -353,7 +362,30 @@ static void barracuda_test_match_reply(struct kunit *test)
 	KUNIT_EXPECT_FALSE(test, b->waiting);
 	KUNIT_EXPECT_EQ(test, b->reply_value, 100);
 
+	/*
+	 * A route reply counts only after the acknowledgment that echoes the
+	 * sequence, so a reply left over from a timed-out query is ignored.
+	 */
 	b->waiting = true;
+	b->acked = false;
+	b->want_family = BARRACUDA_FAMILY_LINK;
+	b->want_seq = 0x62;
+	b->want_param = 0;
+	b->want_command = BARRACUDA_CMD_GET_ROUTE;
+	b->reply_value = -ETIMEDOUT;
+	barracuda_test_chunk(b, e0, sizeof(e0));
+	KUNIT_EXPECT_TRUE(test, b->waiting);
+	KUNIT_EXPECT_FALSE(test, b->acked);
+	barracuda_test_chunk(b, ack, sizeof(ack));
+	KUNIT_EXPECT_TRUE(test, b->waiting);
+	KUNIT_EXPECT_TRUE(test, b->acked);
+	barracuda_test_chunk(b, e0, sizeof(e0));
+	KUNIT_EXPECT_FALSE(test, b->waiting);
+	KUNIT_EXPECT_EQ(test, b->reply_value, 1);
+	b->want_command = 0;
+
+	b->waiting = true;
+	b->acked = false;
 	b->want_param = 0;
 	b->want_family = BARRACUDA_FAMILY_DIAG;
 	b->want_seq = 0x61;

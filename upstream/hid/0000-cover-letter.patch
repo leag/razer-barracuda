@@ -1,6 +1,6 @@
-From 39931ee01f82c71433932cb21daed90094c9446e Mon Sep 17 00:00:00 2001
+From 04540da65ceb4b63986d3f19bc3c23e725b775e0 Mon Sep 17 00:00:00 2001
 From: Luis Atala <luis.atala@gmail.com>
-Date: Thu, 24 Sep 2026 14:15:28 -0300
+Date: Fri, 25 Sep 2026 19:29:50 -0300
 Subject: [PATCH 0/2] HID: add driver for the Razer Barracuda X (2022) dongle
 
 The Razer Barracuda X (2022) is a wireless headset with a 2.4 GHz USB
@@ -58,18 +58,18 @@ Luis Atala (2):
     dongle
   HID: razer-barracuda: query battery, cable and voltage
 
- MAINTAINERS                            |   6 +
- drivers/hid/Kconfig                    |  23 +
- drivers/hid/Makefile                   |   1 +
- drivers/hid/hid-ids.h                  |   1 +
- drivers/hid/hid-razer-barracuda-test.c | 388 ++++++++++
- drivers/hid/hid-razer-barracuda.c      | 986 +++++++++++++++++++++++++
- 6 files changed, 1405 insertions(+)
+ MAINTAINERS                            |    6 +
+ drivers/hid/Kconfig                    |   23 +
+ drivers/hid/Makefile                   |    1 +
+ drivers/hid/hid-ids.h                  |    1 +
+ drivers/hid/hid-razer-barracuda-test.c |  420 ++++++++++
+ drivers/hid/hid-razer-barracuda.c      | 1007 ++++++++++++++++++++++++
+ 6 files changed, 1458 insertions(+)
  create mode 100644 drivers/hid/hid-razer-barracuda-test.c
  create mode 100644 drivers/hid/hid-razer-barracuda.c
 
 
-base-commit: d72f75f1d9c038ead2588b42de6c2531e3b80bea
+base-commit: 145c2b2e9a5c0f794fb4009bcb072ab19f8ccfcd
 -- 
 2.55.0
 

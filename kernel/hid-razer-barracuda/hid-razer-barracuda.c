@@ -121,8 +121,14 @@ struct barracuda {
 	int jack_report;
 	/* Set when the local route could not be restored, until the next link. */
 	bool route_failed;
-	/* The one outstanding query, matched in barracuda_match_reply(). */
+	/*
+	 * The one outstanding query, matched in barracuda_match_reply(). Data
+	 * replies carry a device counter, not the query sequence; only the
+	 * acknowledgment echoes it, so a route reply counts after its
+	 * acknowledgment. Family 0x08 GET replies are not acknowledged.
+	 */
 	bool waiting;
+	bool acked;
 	u8 want_family;
 	u8 want_seq;
 	u8 want_command;
@@ -311,22 +317,29 @@ static void barracuda_match_reply(struct barracuda *b, const u8 *p,
 
 	if (!b->waiting)
 		return;
-	if (b->want_command) {
-		ret = barracuda_link_reply(p, size, b->want_command);
-	} else if (b->want_param) {
+	if (b->want_param) {
 		/* The value itself reaches the state through barracuda_decode(). */
 		ret = barracuda_customer_reply(p, size, b->want_param);
-	} else {
+	} else if (!b->acked) {
 		ret = barracuda_ack(p, size, b->want_family, b->want_seq, &result);
+		if (ret == -1)
+			return;
+		if (ret >= 0 && b->want_command) {
+			/* A stale reply to an earlier query is ignored until here. */
+			b->acked = true;
+			return;
+		}
 		if (ret == -2) {
 			ret = -EPROTO;
-		} else if (ret >= 0 && b->want_family == BARRACUDA_FAMILY_DIAG) {
+		} else if (b->want_family == BARRACUDA_FAMILY_DIAG) {
 			ret = barracuda_voltage_mv(result, ret);
 			if (ret < 0)
 				ret = -EPROTO;
-		} else if (ret >= 0) {
+		} else {
 			ret = 0;
 		}
+	} else {
+		ret = barracuda_link_reply(p, size, b->want_command);
 	}
 	if (ret == -1)
 		return;
@@ -426,7 +439,7 @@ static int barracuda_raw_event(struct hid_device *hdev,
 	if (changed)
 		schedule_work(&b->supply_work);
 	if (refresh)
-		mod_delayed_work(system_percpu_wq, &b->refresh_work,
+		mod_delayed_work(system_long_wq, &b->refresh_work,
 				 BARRACUDA_REFRESH_DELAY);
 
 	/* Leave the report to hidraw and the media-key input path. */
@@ -517,6 +530,7 @@ static int barracuda_request(struct barracuda *b, u8 family, const u8 *payload,
 	b->want_param = reply_param;
 	b->reply_value = -ETIMEDOUT;
 	reinit_completion(&b->reply_done);
+	b->acked = false;
 	b->waiting = true;
 	spin_unlock_irqrestore(&b->lock, flags);
 
@@ -647,11 +661,14 @@ static void barracuda_refresh(struct work_struct *work)
 	if (!barracuda_refresh_wanted(b))
 		return;
 
+	/* Suspend and removal wait for this: stop early, but restore the route. */
 	mutex_lock(&b->route_lock);
-	if (!barracuda_route_begin(b, &selected)) {
+	if (!barracuda_route_begin(b, &selected) && barracuda_refresh_wanted(b)) {
 		battery = barracuda_customer_get(b, BARRACUDA_PARAM_BATTERY);
-		cable = barracuda_customer_get(b, BARRACUDA_PARAM_CABLE);
-		mv = barracuda_read_voltage(b);
+		if (barracuda_refresh_wanted(b))
+			cable = barracuda_customer_get(b, BARRACUDA_PARAM_CABLE);
+		if (barracuda_refresh_wanted(b))
+			mv = barracuda_read_voltage(b);
 	}
 	restored = barracuda_route_end(b, selected);
 	mutex_unlock(&b->route_lock);
@@ -665,7 +682,8 @@ static void barracuda_refresh(struct work_struct *work)
 		schedule_work(&b->supply_work);
 	}
 	if (restored && barracuda_refresh_wanted(b))
-		schedule_delayed_work(&b->refresh_work, BARRACUDA_POLL_INTERVAL);
+		queue_delayed_work(system_long_wq, &b->refresh_work,
+				   BARRACUDA_POLL_INTERVAL);
 }
 
 static const enum power_supply_property barracuda_properties[] = {
@@ -699,13 +717,16 @@ static int barracuda_get_property(struct power_supply *psy,
 		val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
 		if (!present || b->state.external_power < 0)
 			break;
-		/* The headset never reports charge termination. */
+		/*
+		 * The headset never reports charge termination; a cable with
+		 * no percentage yet is charging.
+		 */
 		if (!b->state.external_power)
 			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
-		else if (capacity_valid && b->state.capacity < 100)
-			val->intval = POWER_SUPPLY_STATUS_CHARGING;
-		else if (capacity_valid)
+		else if (capacity_valid && b->state.capacity >= 100)
 			val->intval = POWER_SUPPLY_STATUS_FULL;
+		else
+			val->intval = POWER_SUPPLY_STATUS_CHARGING;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
 		if (capacity_valid)
