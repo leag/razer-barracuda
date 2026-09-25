@@ -193,6 +193,14 @@ Linux kernel log). A post-pairing
 flash erase, write and reboot commands; neither the monitor nor the driver sends
 them. Pairing runs only through `barracuda-pair` on explicit request.
 
+On 2026-09-25 `barracuda-pair --address` was pointed at a non-Razer Bluetooth
+headset (Sony WF-C500, class `0x240404`) found by the same inquiry. The dongle
+acknowledged the connect command and sent an unsolicited `e3 00` about 0.7 s
+later, then nothing else; no link formed. The previously paired Barracuda
+connected normally on its next power-on, so a failed connect does not replace
+the stored pairing. The dongle discovers generic Bluetooth audio devices but
+does not link with them.
+
 ## Battery and cable queries
 
 Family 8 is the SDK's `customer_data_command` channel: `PA 08 SEQ LEN DATA`.
