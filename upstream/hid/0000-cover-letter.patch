@@ -1,0 +1,75 @@
+From 39931ee01f82c71433932cb21daed90094c9446e Mon Sep 17 00:00:00 2001
+From: Luis Atala <luis.atala@gmail.com>
+Date: Thu, 24 Sep 2026 14:15:28 -0300
+Subject: [PATCH 0/2] HID: add driver for the Razer Barracuda X (2022) dongle
+
+The Razer Barracuda X (2022) is a wireless headset with a 2.4 GHz USB
+dongle (1532:0552). The dongle is a UAC1 audio device plus a HID
+interface over which it tunnels vendor messages from the headset. Without
+a driver, userspace cannot tell whether the headset is on, and does not
+see its battery.
+
+This series adds a driver for that HID interface. It registers a
+device-scoped battery only while the headset is linked, sets the USB
+wireless_status attribute, and reports the link as headset jack switches.
+
+Patch 1 uses only what the dongle reports by itself, plus one link-state
+query on probe and resume. Patch 2 asks the headset for its battery,
+cable state and voltage. This requires routing the dongle's diagnostic
+queries to the headset for the duration of the query, and restoring the
+local route afterwards. It is a separate patch so that it can be reviewed,
+or dropped, on its own.
+
+The driver is separate from hid-razer, which handles keyboard macro keys
+and shares no protocol with this device.
+
+Two userspace consumers use the link state:
+- PipeWire hides a USB card while its wireless_status is "disconnected",
+  from commit 03f894b ("alsa-udev: Add wireless device status
+  monitoring"), which has not been released yet.
+- The jack switches follow hid-playstation. A one-line snd-usb-audio
+  patch reuses the DualSense jack quirk for this dongle, so that PipeWire
+  falls back to another output while the headset is off. I will send it
+  to alsa-devel once this driver is accepted.
+
+Testing:
+- KUnit: 13 tests after patch 1, 18 after patch 2, under QEMU x86_64
+  with KASAN, UBSAN and lockdep.
+- W=1 and sparse (C=2) builds without warnings, built-in and as a module.
+- Hardware: an out-of-tree version of this driver with the same protocol
+  handling has been in use with a Razer Barracuda X (RZ04-04430-100) on
+  v7.2.6. That covered headset power cycles, cable plug and unplug, the
+  battery and cable GETs, and UPower and KDE listing the battery.
+  Suspend and resume have not been tested on hardware.
+
+Razer does not document the protocol. It was derived from USB captures of
+the vendor's Windows software and from the dongle firmware.
+
+Tool use: most of the driver code and the commit messages were written
+with an AI coding assistant (Claude Code, Anthropic) under my direction,
+over several sessions. The sessions covered protocol analysis of my own
+captures, the out-of-tree driver, and restructuring it for submission:
+a single file, KUnit tests instead of a userspace test, a hid_is_usb()
+check, and removal of the module parameters. checkpatch and sparse were
+run on the result.
+
+Luis Atala (2):
+  HID: razer-barracuda: add driver for the Razer Barracuda X (2022)
+    dongle
+  HID: razer-barracuda: query battery, cable and voltage
+
+ MAINTAINERS                            |   6 +
+ drivers/hid/Kconfig                    |  23 +
+ drivers/hid/Makefile                   |   1 +
+ drivers/hid/hid-ids.h                  |   1 +
+ drivers/hid/hid-razer-barracuda-test.c | 388 ++++++++++
+ drivers/hid/hid-razer-barracuda.c      | 986 +++++++++++++++++++++++++
+ 6 files changed, 1405 insertions(+)
+ create mode 100644 drivers/hid/hid-razer-barracuda-test.c
+ create mode 100644 drivers/hid/hid-razer-barracuda.c
+
+
+base-commit: d72f75f1d9c038ead2588b42de6c2531e3b80bea
+-- 
+2.55.0
+

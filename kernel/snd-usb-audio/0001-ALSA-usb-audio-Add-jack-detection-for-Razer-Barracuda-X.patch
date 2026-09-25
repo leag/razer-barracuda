@@ -2,16 +2,15 @@ SPDX-License-Identifier: GPL-2.0
 Subject: ALSA: usb-audio: Add jack detection for Razer Barracuda X (2022) dongle
 
 The Razer Barracuda X (2022) 2.4 GHz dongle (1532:0552) is a UAC1 device
-without jack detection, like the Sony DualSense. The out-of-tree hid-barracuda
-driver in this repository reports the headset's wireless link as
-SW_HEADPHONE_INSERT and SW_MICROPHONE_INSERT on a "Headset Jack" input device
-parented to the same USB device. Reuse the DualSense quirk, which matches that
-input device by VID:PID and parent chain, to create "Headphone Jack" and
-"Headset Mic Jack" controls.
+without jack detection. The hid-razer-barracuda driver reports the headset's
+wireless link as SW_HEADPHONE_INSERT and SW_MICROPHONE_INSERT on a "Headset
+Jack" input device below the same USB device. Reuse the DualSense quirk, which
+matches that input device by VID:PID and parent chain, to create "Headphone
+Jack" and "Headset Mic Jack" controls.
 
-Tested on v7.2.6 with hid-barracuda 0.2.0: jacks follow headset power, and
-PipeWire falls back to another output while the headset is off.
-Not submitted upstream; it depends on hid-barracuda being in-tree.
+Tested on v7.2.6 with the out-of-tree driver (0.2.0, then named hid-barracuda):
+jacks follow headset power, and PipeWire falls back to another output while the
+headset is off. The version for submission is upstream/alsa/ in this repository.
 
 diff --git a/sound/usb/mixer_quirks.c b/sound/usb/mixer_quirks.c
 index 74d26fd..57b1e8e 100644
@@ -21,7 +20,7 @@ index 74d26fd..57b1e8e 100644
  #if IS_REACHABLE(CONFIG_INPUT)
  	case USB_ID(0x054c, 0x0ce6): /* Sony DualSense controller (PS5) */
  	case USB_ID(0x054c, 0x0df2): /* Sony DualSense Edge controller (PS5) */
-+	/* Link state reported by the out-of-tree hid-barracuda driver as jack switches */
++	/* Headset link reported as jack switches by hid-razer-barracuda */
 +	case USB_ID(0x1532, 0x0552): /* Razer Barracuda X (2022) 2.4 GHz dongle */
  		err = snd_dualsense_controls_create(mixer);
  		break;

@@ -1,0 +1,1057 @@
+From 9cb37f4f2aa6319c2de0d66c2ac14ac1fba48f01 Mon Sep 17 00:00:00 2001
+From: Luis Atala <luis.atala@gmail.com>
+Date: Thu, 24 Sep 2026 14:12:58 -0300
+Subject: [PATCH 1/2] HID: razer-barracuda: add driver for the Razer Barracuda
+ X (2022) dongle
+
+The Razer Barracuda X (2022) is a wireless headset whose 2.4 GHz USB
+dongle (1532:0552) is a composite UAC1 audio and HID device. Over HID
+report 1 the dongle tunnels vendor messages from the headset: wireless
+link changes, battery percentage and charging cable state. Razer does not
+document the protocol; it was derived from USB captures of the vendor's
+Windows software and from the dongle firmware.
+
+Add a driver for the dongle's HID interface that:
+
+- asks for the link state (E3) on probe and resume, up to three times,
+  because the dongle sends nothing while the link is unchanged;
+- registers a device-scoped battery only while the headset is linked, so
+  that userspace stops listing the headset while it is off, as
+  hid-corsair-void does;
+- sets the USB wireless_status attribute of the interface;
+- reports the link as SW_HEADPHONE_INSERT and SW_MICROPHONE_INSERT on a
+  "Headset Jack" input device, as hid-playstation does, for a sound
+  driver to turn into jack controls.
+
+Frames are reassembled from report chunks and validated before use.
+Acknowledgments, other command replies and malformed frames are never
+link evidence. An unknown link, before the first reply and after resume,
+neither registers nor removes the battery. Reports are passed on to
+hidraw and to the generic input path, which handles the headset's
+play/pause button.
+
+The percentage is the last one the headset reported. The headset never
+reports charge termination, so the status is charging while the cable is
+plugged in below 100% and full at 100%. CAPACITY_LEVEL is always
+UNKNOWN: without a readable level UPower does not list the battery until
+the first percentage arrives, which may take minutes.
+
+Add KUnit tests for the stream decoder and the state handling.
+
+Assisted-by: LLM sparse
+---
+ MAINTAINERS                            |   6 +
+ drivers/hid/Kconfig                    |  23 +
+ drivers/hid/Makefile                   |   1 +
+ drivers/hid/hid-ids.h                  |   1 +
+ drivers/hid/hid-razer-barracuda-test.c | 258 ++++++++++
+ drivers/hid/hid-razer-barracuda.c      | 657 +++++++++++++++++++++++++
+ 6 files changed, 946 insertions(+)
+ create mode 100644 drivers/hid/hid-razer-barracuda-test.c
+ create mode 100644 drivers/hid/hid-razer-barracuda.c
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index a8ffd8336..e06a07999 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -11643,6 +11643,12 @@ L:	linux-input@vger.kernel.org
+ S:	Maintained
+ F:	drivers/hid/hid-pulsar.c
+ 
++HID RAZER BARRACUDA X DRIVER
++M:	Luis Atala <luis.atala@gmail.com>
++L:	linux-input@vger.kernel.org
++S:	Maintained
++F:	drivers/hid/hid-razer-barracuda*
++
+ HID SENSOR HUB DRIVERS
+ M:	Jiri Kosina <jikos@kernel.org>
+ M:	Jonathan Cameron <jic23@kernel.org>
+diff --git a/drivers/hid/Kconfig b/drivers/hid/Kconfig
+index 0e3a0ccd6..114c8e5ad 100644
+--- a/drivers/hid/Kconfig
++++ b/drivers/hid/Kconfig
+@@ -1076,6 +1076,29 @@ config HID_RAZER
+ 	Support for Razer devices that are not fully compliant with the
+ 	HID standard.
+ 
++config HID_RAZER_BARRACUDA
++	tristate "Razer Barracuda X (2022) wireless headset dongle"
++	depends on USB_HID
++	select POWER_SUPPLY
++	help
++	  Support for the Razer Barracuda X (2022) 2.4 GHz USB dongle.
++	  Reports the headset's battery as a power supply, its wireless
++	  link as the USB wireless_status attribute and as headset jack
++	  switches.
++
++	  To compile this driver as a module, choose M here: the module
++	  will be called hid-razer-barracuda.
++
++config HID_RAZER_BARRACUDA_KUNIT_TEST
++	bool "KUnit tests for the Razer Barracuda X (2022) driver" if !KUNIT_ALL_TESTS
++	depends on KUNIT && HID_RAZER_BARRACUDA
++	depends on HID_RAZER_BARRACUDA = KUNIT || KUNIT = y
++	default KUNIT_ALL_TESTS
++	help
++	  Builds unit tests for the Razer Barracuda X (2022) driver's
++	  stream decoder. They are only useful for kernel developers
++	  running KUnit.
++
+ config HID_PRIMAX
+ 	tristate "Primax non-fully HID-compliant devices"
+ 	help
+diff --git a/drivers/hid/Makefile b/drivers/hid/Makefile
+index 79384d905..f6c973f21 100644
+--- a/drivers/hid/Makefile
++++ b/drivers/hid/Makefile
+@@ -121,6 +121,7 @@ obj-$(CONFIG_HID_PXRC)		+= hid-pxrc.o
+ obj-$(CONFIG_HID_RAKK)		+= hid-rakk.o
+ obj-$(CONFIG_HID_RAPOO) += hid-rapoo.o
+ obj-$(CONFIG_HID_RAZER)	+= hid-razer.o
++obj-$(CONFIG_HID_RAZER_BARRACUDA)	+= hid-razer-barracuda.o
+ obj-$(CONFIG_HID_REDRAGON)	+= hid-redragon.o
+ obj-$(CONFIG_HID_RETRODE)	+= hid-retrode.o
+ obj-$(CONFIG_HID_ROCCAT)	+= hid-roccat.o hid-roccat-common.o \
+diff --git a/drivers/hid/hid-ids.h b/drivers/hid/hid-ids.h
+index a9537b7bb..115eefb1e 100644
+--- a/drivers/hid/hid-ids.h
++++ b/drivers/hid/hid-ids.h
+@@ -1254,6 +1254,7 @@
+ #define USB_DEVICE_ID_RAZER_BLACKWIDOW            0x010e
+ #define USB_DEVICE_ID_RAZER_BLACKWIDOW_CLASSIC    0x011b
+ #define USB_DEVICE_ID_RAZER_BLADE_14   0x011D
++#define USB_DEVICE_ID_RAZER_BARRACUDA_X_2022	0x0552
+ 
+ #define USB_VENDOR_ID_REALTEK		0x0bda
+ #define USB_DEVICE_ID_REALTEK_READER	0x0152
+diff --git a/drivers/hid/hid-razer-barracuda-test.c b/drivers/hid/hid-razer-barracuda-test.c
+new file mode 100644
+index 000000000..d960add29
+--- /dev/null
++++ b/drivers/hid/hid-razer-barracuda-test.c
+@@ -0,0 +1,258 @@
++// SPDX-License-Identifier: GPL-2.0-only OR MIT
++/*
++ * KUnit tests for the Razer Barracuda X (2022) driver
++ *
++ * Copyright (c) 2026 Luis Atala <luis.atala@gmail.com>
++ */
++
++#include <kunit/test.h>
++
++/* Unsolicited 58% battery report. */
++static const u8 barracuda_test_battery[] = {
++	0x50, 0x49, 0x08, 0xf8, 0x71, 0x71, 0x41, 0x00, 0x04, 0x00,
++	0x21, 0x02, 0x01, 0x3a,
++};
++
++/* E3 reply: headset linked. */
++static const u8 barracuda_test_e3[] = {
++	0x50, 0x49, 0x0e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00,
++	0xe3, 0x01,
++};
++
++static struct barracuda *barracuda_test_alloc(struct kunit *test)
++{
++	struct barracuda *b = kunit_kzalloc(test, sizeof(*b), GFP_KERNEL);
++
++	KUNIT_ASSERT_NOT_NULL(test, b);
++	barracuda_init(b, NULL);
++	return b;
++}
++
++static void barracuda_test_reset(struct barracuda *b)
++{
++	barracuda_state_reset(&b->state);
++	b->frame_used = 0;
++}
++
++static void barracuda_test_chunk(struct barracuda *b, const u8 *data,
++				 unsigned int count)
++{
++	u8 report[BARRACUDA_REPORT_SIZE] = { BARRACUDA_REPORT_ID, BARRACUDA_TUNNEL };
++
++	report[2] = count;
++	memcpy(report + 3, data, count);
++	barracuda_feed(b, report, sizeof(report));
++}
++
++/* Every split point, with a media-key report between the two chunks. */
++static void barracuda_test_split(struct kunit *test)
++{
++	static const u8 media[] = { 0x02, 0x00, 0x02, 0x00, 0x00 };
++	const u8 *msg = barracuda_test_battery;
++	struct barracuda *b = barracuda_test_alloc(test);
++	unsigned int i;
++
++	for (i = 1; i < sizeof(barracuda_test_battery); i++) {
++		barracuda_test_reset(b);
++		barracuda_test_chunk(b, msg, i);
++		KUNIT_EXPECT_EQ(test, b->state.capacity, BARRACUDA_UNKNOWN);
++		barracuda_feed(b, media, sizeof(media));
++		barracuda_test_chunk(b, msg + i, sizeof(barracuda_test_battery) - i);
++		KUNIT_EXPECT_EQ(test, b->state.capacity, 58);
++	}
++}
++
++/* Every value byte: invalid percentages and enums are never accepted. */
++static void barracuda_test_values(struct kunit *test)
++{
++	struct barracuda *b = barracuda_test_alloc(test);
++	u8 data[sizeof(barracuda_test_battery)];
++	unsigned int i;
++
++	memcpy(data, barracuda_test_battery, sizeof(data));
++	for (i = 0; i < 256; i++) {
++		data[13] = i;
++
++		data[10] = BARRACUDA_PARAM_LINK;
++		barracuda_test_reset(b);
++		barracuda_test_chunk(b, data, sizeof(data));
++		KUNIT_EXPECT_EQ(test, b->state.linked,
++				i <= 1 ? (int)i : BARRACUDA_UNKNOWN);
++
++		data[10] = BARRACUDA_PARAM_BATTERY;
++		barracuda_test_reset(b);
++		barracuda_test_chunk(b, data, sizeof(data));
++		KUNIT_EXPECT_EQ(test, b->state.capacity,
++				i <= 100 ? (int)i : BARRACUDA_UNKNOWN);
++
++		data[10] = BARRACUDA_PARAM_CABLE;
++		barracuda_test_reset(b);
++		barracuda_test_chunk(b, data, sizeof(data));
++		KUNIT_EXPECT_EQ(test, b->state.external_power,
++				i <= 1 ? (int)i : BARRACUDA_UNKNOWN);
++	}
++}
++
++/* E3 is link evidence; E6 and acknowledgments are not. */
++static void barracuda_test_link_query(struct kunit *test)
++{
++	struct barracuda *b = barracuda_test_alloc(test);
++	u8 data[sizeof(barracuda_test_e3)];
++
++	barracuda_test_chunk(b, barracuda_test_e3, sizeof(barracuda_test_e3));
++	KUNIT_EXPECT_EQ(test, b->state.linked, 1);
++
++	memcpy(data, barracuda_test_e3, sizeof(data));
++	data[10] = 0xe6;
++	barracuda_test_reset(b);
++	barracuda_test_chunk(b, data, sizeof(data));
++	KUNIT_EXPECT_EQ(test, b->state.linked, BARRACUDA_UNKNOWN);
++
++	data[2] = 0x01;
++	barracuda_test_chunk(b, data, sizeof(data));
++	KUNIT_EXPECT_EQ(test, b->state.linked, BARRACUDA_UNKNOWN);
++}
++
++/* Corrupted magic, family and payload markers produce no telemetry. */
++static void barracuda_test_malformed(struct kunit *test)
++{
++	static const unsigned int offsets[] = { 0, 1, 2, 10, 11, 12 };
++	struct barracuda *b = barracuda_test_alloc(test);
++	u8 data[sizeof(barracuda_test_battery)];
++	unsigned int i;
++
++	for (i = 0; i < ARRAY_SIZE(offsets); i++) {
++		memcpy(data, barracuda_test_battery, sizeof(data));
++		data[offsets[i]] = 0xff;
++		barracuda_test_reset(b);
++		barracuda_test_chunk(b, data, sizeof(data));
++		KUNIT_EXPECT_EQ(test, b->state.capacity, BARRACUDA_UNKNOWN);
++	}
++}
++
++/* A report shorter than its chunk count is dropped, not read as padding. */
++static void barracuda_test_truncated(struct kunit *test)
++{
++	struct barracuda *b = barracuda_test_alloc(test);
++	u8 report[BARRACUDA_REPORT_SIZE] = { BARRACUDA_REPORT_ID, BARRACUDA_TUNNEL,
++					     sizeof(barracuda_test_battery) };
++	unsigned int i;
++
++	memcpy(report + 3, barracuda_test_battery, sizeof(barracuda_test_battery));
++	for (i = 0; i < 3 + sizeof(barracuda_test_battery); i++) {
++		barracuda_test_reset(b);
++		barracuda_feed(b, report, i);
++		KUNIT_EXPECT_EQ(test, b->state.capacity, BARRACUDA_UNKNOWN);
++	}
++}
++
++static void barracuda_test_two_frames(struct kunit *test)
++{
++	struct barracuda *b = barracuda_test_alloc(test);
++	u8 data[2 * sizeof(barracuda_test_battery)];
++
++	memcpy(data, barracuda_test_battery, sizeof(barracuda_test_battery));
++	memcpy(data + 14, barracuda_test_battery, sizeof(barracuda_test_battery));
++	data[14 + 10] = BARRACUDA_PARAM_CABLE;
++	data[14 + 13] = 1;
++	barracuda_test_chunk(b, data, sizeof(data));
++	KUNIT_EXPECT_EQ(test, b->state.capacity, 58);
++	KUNIT_EXPECT_EQ(test, b->state.external_power, 1);
++}
++
++/* Oversized frames and chunks, then arbitrary input, recover boundedly. */
++static void barracuda_test_recovery(struct kunit *test)
++{
++	struct barracuda *b = barracuda_test_alloc(test);
++	u8 data[sizeof(barracuda_test_battery)];
++	u8 report[BARRACUDA_REPORT_SIZE] = { BARRACUDA_REPORT_ID, BARRACUDA_TUNNEL,
++					     BARRACUDA_CHUNK_MAX + 1 };
++	unsigned int i, j;
++
++	memcpy(data, barracuda_test_battery, sizeof(data));
++	data[8] = 0xff;
++	data[9] = 0xff;
++	barracuda_test_chunk(b, data, sizeof(data));
++	KUNIT_EXPECT_EQ(test, b->frame_used, 0U);
++	KUNIT_EXPECT_EQ(test, b->state.capacity, BARRACUDA_UNKNOWN);
++
++	barracuda_feed(b, report, sizeof(report));
++	barracuda_test_chunk(b, barracuda_test_battery,
++			     sizeof(barracuda_test_battery));
++	KUNIT_EXPECT_EQ(test, b->state.capacity, 58);
++
++	for (j = 0; j < 256; j++) {
++		memset(report, j, sizeof(report));
++		for (i = 0; i <= sizeof(report); i++)
++			barracuda_feed(b, report, i);
++		KUNIT_EXPECT_LE(test, b->frame_used, (unsigned int)BARRACUDA_FRAME_MAX);
++	}
++}
++
++static void barracuda_test_state(struct kunit *test)
++{
++	struct barracuda_state s;
++
++	barracuda_state_reset(&s);
++	barracuda_state_event(&s, BARRACUDA_CAPACITY, 68);
++	KUNIT_EXPECT_EQ(test, s.linked, BARRACUDA_UNKNOWN);
++	barracuda_state_event(&s, BARRACUDA_LINK, 1);
++	KUNIT_EXPECT_EQ(test, s.capacity, 68);
++
++	/* Disconnect clears the cable and keeps the last percentage. */
++	barracuda_state_event(&s, BARRACUDA_EXTERNAL_POWER, 1);
++	barracuda_state_event(&s, BARRACUDA_LINK, 0);
++	KUNIT_EXPECT_EQ(test, s.capacity, 68);
++	KUNIT_EXPECT_EQ(test, s.external_power, BARRACUDA_UNKNOWN);
++
++	/* No telemetry is accepted while disconnected. */
++	KUNIT_EXPECT_FALSE(test, barracuda_state_event(&s, BARRACUDA_CAPACITY, 99));
++	KUNIT_EXPECT_EQ(test, s.capacity, 68);
++
++	/* Suspend makes the link unknown and keeps the last percentage. */
++	barracuda_state_event(&s, BARRACUDA_LINK, 1);
++	barracuda_state_event(&s, BARRACUDA_EXTERNAL_POWER, 1);
++	barracuda_state_suspend(&s);
++	KUNIT_EXPECT_EQ(test, s.linked, BARRACUDA_UNKNOWN);
++	KUNIT_EXPECT_EQ(test, s.capacity, 68);
++	KUNIT_EXPECT_EQ(test, s.external_power, BARRACUDA_UNKNOWN);
++
++	barracuda_state_reset(&s);
++	KUNIT_EXPECT_EQ(test, s.capacity, BARRACUDA_UNKNOWN);
++}
++
++static void barracuda_test_supply_action(struct kunit *test)
++{
++	KUNIT_EXPECT_EQ(test, barracuda_supply_action(1, false),
++			BARRACUDA_SUPPLY_REGISTER);
++	KUNIT_EXPECT_EQ(test, barracuda_supply_action(1, true),
++			BARRACUDA_SUPPLY_NOTIFY);
++	KUNIT_EXPECT_EQ(test, barracuda_supply_action(0, true),
++			BARRACUDA_SUPPLY_UNREGISTER);
++	KUNIT_EXPECT_EQ(test, barracuda_supply_action(0, false),
++			BARRACUDA_SUPPLY_NONE);
++	KUNIT_EXPECT_EQ(test, barracuda_supply_action(BARRACUDA_UNKNOWN, false),
++			BARRACUDA_SUPPLY_NONE);
++	KUNIT_EXPECT_EQ(test, barracuda_supply_action(BARRACUDA_UNKNOWN, true),
++			BARRACUDA_SUPPLY_NOTIFY);
++}
++
++static struct kunit_case barracuda_test_cases[] = {
++	KUNIT_CASE(barracuda_test_split),
++	KUNIT_CASE(barracuda_test_values),
++	KUNIT_CASE(barracuda_test_link_query),
++	KUNIT_CASE(barracuda_test_malformed),
++	KUNIT_CASE(barracuda_test_truncated),
++	KUNIT_CASE(barracuda_test_two_frames),
++	KUNIT_CASE(barracuda_test_recovery),
++	KUNIT_CASE(barracuda_test_state),
++	KUNIT_CASE(barracuda_test_supply_action),
++	{}
++};
++
++static struct kunit_suite barracuda_test_suite = {
++	.name = "hid_razer_barracuda",
++	.test_cases = barracuda_test_cases,
++};
++
++kunit_test_suite(barracuda_test_suite);
+diff --git a/drivers/hid/hid-razer-barracuda.c b/drivers/hid/hid-razer-barracuda.c
+new file mode 100644
+index 000000000..cee689320
+--- /dev/null
++++ b/drivers/hid/hid-razer-barracuda.c
+@@ -0,0 +1,657 @@
++// SPDX-License-Identifier: GPL-2.0-only OR MIT
++/*
++ * HID driver for the Razer Barracuda X (2022) 2.4 GHz USB dongle
++ *
++ * The dongle tunnels vendor messages between the host and the headset over
++ * HID report 1 of its HID interface. This driver tracks the headset's wireless
++ * link and battery and exposes them as a power supply that exists only while
++ * the headset is linked, as the USB wireless_status attribute and as headset
++ * jack switches. USB audio stays with snd-usb-audio.
++ *
++ * Copyright (c) 2026 Luis Atala <luis.atala@gmail.com>
++ */
++
++#include <linux/device.h>
++#include <linux/hid.h>
++#include <linux/input.h>
++#include <linux/jiffies.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/power_supply.h>
++#include <linux/slab.h>
++#include <linux/spinlock.h>
++#include <linux/usb.h>
++#include <linux/workqueue.h>
++
++#include "hid-ids.h"
++
++#define BARRACUDA_HID_INTERFACE		3
++
++/*
++ * Report 1 carries a tunnel chunk: 01 80 COUNT DATA[COUNT]. Chunks form a
++ * stream of frames. Host frames start with "PA", device frames with "PI":
++ *
++ *   50 41 FAMILY SEQ LEN PAYLOAD
++ *   50 49 FAMILY SEQ ID[4] LEN16 DATA
++ */
++#define BARRACUDA_REPORT_ID		0x01
++#define BARRACUDA_TUNNEL		0x80
++#define BARRACUDA_REPORT_SIZE		64
++#define BARRACUDA_CHUNK_MAX		(BARRACUDA_REPORT_SIZE - 3)
++#define BARRACUDA_FRAME_MAX		256
++#define BARRACUDA_FRAME_HEADER		10
++
++#define BARRACUDA_FAMILY_CUSTOMER	0x08
++#define BARRACUDA_FAMILY_LINK		0x0e
++
++/* Family 0x0e commands; replies are 02 00 CMD VALUE. */
++#define BARRACUDA_CMD_GET_LINK		0xe3
++
++/* Family 0x08 headset parameters: 04 00 PARAM OP 01 VALUE. */
++#define BARRACUDA_PARAM_LINK		0x20
++#define BARRACUDA_PARAM_BATTERY		0x21
++#define BARRACUDA_PARAM_CABLE		0x2a
++#define BARRACUDA_OP_REPORT		0x02
++
++/* Startup link queries use sequence numbers 1..3. */
++#define BARRACUDA_LINK_ATTEMPTS		3
++
++#define BARRACUDA_LINK_DELAY		(2 * HZ)
++#define BARRACUDA_FRAGMENT_TIMEOUT	(2 * HZ)
++
++#define BARRACUDA_UNKNOWN		(-1)
++
++enum barracuda_event {
++	BARRACUDA_LINK,
++	BARRACUDA_CAPACITY,
++	BARRACUDA_EXTERNAL_POWER,
++};
++
++enum barracuda_supply_action {
++	BARRACUDA_SUPPLY_NONE,
++	BARRACUDA_SUPPLY_REGISTER,
++	BARRACUDA_SUPPLY_UNREGISTER,
++	BARRACUDA_SUPPLY_NOTIFY,
++};
++
++struct barracuda_state {
++	int linked;
++	int capacity;
++	int external_power;
++};
++
++struct barracuda {
++	struct hid_device *hdev;
++
++	/* Protects the fields below up to supply_lock; taken from raw_event. */
++	spinlock_t lock;
++	u8 frame[BARRACUDA_FRAME_MAX];
++	unsigned int frame_used;
++	unsigned int frame_expected;
++	unsigned long fragment_at;
++	struct barracuda_state state;
++	unsigned int attempts;
++	bool stopping;
++	bool stopped;
++	bool changed;
++	int jack_report;
++
++	/* Serializes battery registration; battery exists only while linked. */
++	struct mutex supply_lock;
++	struct power_supply *battery;
++	struct power_supply_desc desc;
++	int wireless_reported;
++
++	struct input_dev *jack;
++	struct delayed_work link_work;
++	struct work_struct supply_work;
++};
++
++static void barracuda_state_reset(struct barracuda_state *s)
++{
++	s->linked = BARRACUDA_UNKNOWN;
++	s->capacity = BARRACUDA_UNKNOWN;
++	s->external_power = BARRACUDA_UNKNOWN;
++}
++
++/* Suspend makes the link and cable unknown; the last percentage is kept. */
++static void barracuda_state_suspend(struct barracuda_state *s)
++{
++	s->linked = BARRACUDA_UNKNOWN;
++	s->external_power = BARRACUDA_UNKNOWN;
++}
++
++/* Returns true if the event changed what the power supply reports. */
++static bool barracuda_state_event(struct barracuda_state *s,
++				  enum barracuda_event event, int value)
++{
++	bool changed;
++
++	if (event == BARRACUDA_LINK) {
++		changed = s->linked != value;
++		s->linked = value;
++		if (!value)
++			s->external_power = BARRACUDA_UNKNOWN;
++		return changed;
++	}
++	if (s->linked == 0)
++		return false;
++	if (event == BARRACUDA_CAPACITY)
++		s->capacity = value;
++	else
++		s->external_power = value;
++	return true;
++}
++
++/* An unknown link (startup, resume) neither registers nor removes the battery. */
++static enum barracuda_supply_action
++barracuda_supply_action(int linked, bool registered)
++{
++	if (linked == 1)
++		return registered ? BARRACUDA_SUPPLY_NOTIFY : BARRACUDA_SUPPLY_REGISTER;
++	if (linked == 0)
++		return registered ? BARRACUDA_SUPPLY_UNREGISTER : BARRACUDA_SUPPLY_NONE;
++	return registered ? BARRACUDA_SUPPLY_NOTIFY : BARRACUDA_SUPPLY_NONE;
++}
++
++/* Family 0x0e reply 02 00 CMD VALUE; returns VALUE or -1 if unrelated. */
++static int barracuda_link_reply(const u8 *p, unsigned int size, u8 command)
++{
++	if (size != 12 || p[2] != BARRACUDA_FAMILY_LINK || p[8] != 2 ||
++	    p[9] != 0 || p[10] != command)
++		return -1;
++	return p[11];
++}
++
++/*
++ * Decode link, battery and cable messages. Only the E3 reply and the 0x20
++ * report are link evidence.
++ */
++static bool barracuda_decode(const u8 *p, unsigned int size,
++			     enum barracuda_event *event, int *value)
++{
++	int link = barracuda_link_reply(p, size, BARRACUDA_CMD_GET_LINK);
++
++	if (link == 0 || link == 1) {
++		*event = BARRACUDA_LINK;
++		*value = link;
++		return true;
++	}
++	if (size != 14 || p[2] != BARRACUDA_FAMILY_CUSTOMER || p[8] != 4 ||
++	    p[9] != 0 || p[11] != BARRACUDA_OP_REPORT || p[12] != 1)
++		return false;
++
++	*value = p[13];
++	switch (p[10]) {
++	case BARRACUDA_PARAM_LINK:
++		*event = BARRACUDA_LINK;
++		return p[13] <= 1;
++	case BARRACUDA_PARAM_BATTERY:
++		*event = BARRACUDA_CAPACITY;
++		return p[13] <= 100;
++	case BARRACUDA_PARAM_CABLE:
++		*event = BARRACUDA_EXTERNAL_POWER;
++		return p[13] <= 1;
++	}
++	return false;
++}
++
++/* Called with b->lock held for every decoded event. */
++static void barracuda_event(struct barracuda *b, enum barracuda_event event,
++			    int value)
++{
++	if (!barracuda_state_event(&b->state, event, value))
++		return;
++	b->changed = true;
++	/* Only confirmed transitions; an unknown link keeps the last value. */
++	if (event == BARRACUDA_LINK)
++		b->jack_report = value;
++}
++
++static void barracuda_frame(struct barracuda *b, const u8 *p, unsigned int size)
++{
++	enum barracuda_event event;
++	int value;
++
++	if (barracuda_decode(p, size, &event, &value))
++		barracuda_event(b, event, value);
++}
++
++/*
++ * Reassemble frames from tunnel chunks, called with b->lock held. Other
++ * reports, such as media keys, may arrive between chunks. After corruption
++ * the stream restarts at the next chunk rather than scanning payload bytes
++ * for a header.
++ */
++static void barracuda_feed(struct barracuda *b, const u8 *report,
++			   unsigned int size)
++{
++	unsigned int i, count;
++
++	if (!size || report[0] != BARRACUDA_REPORT_ID)
++		return;
++	if (size < 3 || report[1] != BARRACUDA_TUNNEL ||
++	    report[2] > BARRACUDA_CHUNK_MAX || size < 3U + report[2]) {
++		b->frame_used = 0;
++		return;
++	}
++	count = report[2];
++	for (i = 0; i < count; i++) {
++		b->frame[b->frame_used++] = report[3 + i];
++		if ((b->frame_used == 1 && b->frame[0] != 0x50) ||
++		    (b->frame_used == 2 && b->frame[1] != 0x49)) {
++			b->frame_used = 0;
++			return;
++		}
++		if (b->frame_used == BARRACUDA_FRAME_HEADER) {
++			b->frame_expected = BARRACUDA_FRAME_HEADER + b->frame[8] +
++					    (b->frame[9] << 8);
++			if (b->frame_expected > BARRACUDA_FRAME_MAX) {
++				b->frame_used = 0;
++				return;
++			}
++		}
++		if (b->frame_used >= BARRACUDA_FRAME_HEADER &&
++		    b->frame_used == b->frame_expected) {
++			barracuda_frame(b, b->frame, b->frame_used);
++			b->frame_used = 0;
++		}
++	}
++}
++
++static int barracuda_raw_event(struct hid_device *hdev,
++			       struct hid_report *report, u8 *data, int size)
++{
++	struct barracuda *b = hid_get_drvdata(hdev);
++	unsigned long flags;
++	bool changed;
++	int jack;
++
++	if (report->type != HID_INPUT_REPORT || size <= 0 ||
++	    data[0] != BARRACUDA_REPORT_ID)
++		return 0;
++
++	spin_lock_irqsave(&b->lock, flags);
++	if (b->stopped) {
++		spin_unlock_irqrestore(&b->lock, flags);
++		return 0;
++	}
++	if (b->frame_used &&
++	    time_after(jiffies, b->fragment_at + BARRACUDA_FRAGMENT_TIMEOUT))
++		b->frame_used = 0;
++	b->changed = false;
++	barracuda_feed(b, data, size);
++	b->fragment_at = jiffies;
++	changed = b->changed;
++	jack = b->jack_report;
++	b->jack_report = BARRACUDA_UNKNOWN;
++	spin_unlock_irqrestore(&b->lock, flags);
++
++	if (jack != BARRACUDA_UNKNOWN) {
++		input_report_switch(b->jack, SW_HEADPHONE_INSERT, jack);
++		input_report_switch(b->jack, SW_MICROPHONE_INSERT, jack);
++		input_sync(b->jack);
++	}
++	/* Registering and notifying the power supply may sleep. */
++	if (changed)
++		schedule_work(&b->supply_work);
++
++	/* Leave the report to hidraw and the media-key input path. */
++	return 0;
++}
++
++static void barracuda_fill(u8 *buf, u8 family, u8 seq, const u8 *payload,
++			   u8 len)
++{
++	memset(buf, 0, BARRACUDA_REPORT_SIZE);
++	buf[0] = BARRACUDA_REPORT_ID;
++	buf[1] = BARRACUDA_TUNNEL;
++	buf[2] = len + 5;
++	buf[3] = 0x50;
++	buf[4] = 0x41;
++	buf[5] = family;
++	buf[6] = seq;
++	buf[7] = len;
++	memcpy(buf + 8, payload, len);
++}
++
++/*
++ * Ask for the link state (E3) until a valid state is known, at most
++ * BARRACUDA_LINK_ATTEMPTS times. A failed query leaves the state unknown;
++ * unsolicited link reports still update it.
++ */
++static void barracuda_link_query(struct work_struct *work)
++{
++	struct barracuda *b = container_of(to_delayed_work(work),
++					   struct barracuda, link_work);
++	static const u8 query[] = { BARRACUDA_CMD_GET_LINK };
++	unsigned long flags;
++	u8 *buf;
++	int ret;
++
++	buf = kmalloc(BARRACUDA_REPORT_SIZE, GFP_KERNEL);
++	if (!buf)
++		return;
++	spin_lock_irqsave(&b->lock, flags);
++	if (b->stopped || b->state.linked != BARRACUDA_UNKNOWN ||
++	    b->attempts >= BARRACUDA_LINK_ATTEMPTS) {
++		spin_unlock_irqrestore(&b->lock, flags);
++		kfree(buf);
++		return;
++	}
++	b->attempts++;
++	barracuda_fill(buf, BARRACUDA_FAMILY_LINK, b->attempts, query,
++		       sizeof(query));
++	spin_unlock_irqrestore(&b->lock, flags);
++
++	ret = hid_hw_output_report(b->hdev, buf, BARRACUDA_REPORT_SIZE);
++	kfree(buf);
++
++	spin_lock_irqsave(&b->lock, flags);
++	if (ret == BARRACUDA_REPORT_SIZE && !b->stopped &&
++	    b->state.linked == BARRACUDA_UNKNOWN &&
++	    b->attempts < BARRACUDA_LINK_ATTEMPTS)
++		schedule_delayed_work(&b->link_work, BARRACUDA_LINK_DELAY);
++	spin_unlock_irqrestore(&b->lock, flags);
++}
++
++static const enum power_supply_property barracuda_properties[] = {
++	POWER_SUPPLY_PROP_PRESENT,
++	POWER_SUPPLY_PROP_STATUS,
++	POWER_SUPPLY_PROP_CAPACITY,
++	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
++	POWER_SUPPLY_PROP_SCOPE,
++	POWER_SUPPLY_PROP_MODEL_NAME,
++	POWER_SUPPLY_PROP_MANUFACTURER,
++};
++
++static int barracuda_get_property(struct power_supply *psy,
++				  enum power_supply_property prop,
++				  union power_supply_propval *val)
++{
++	struct barracuda *b = power_supply_get_drvdata(psy);
++	bool present, capacity_valid;
++	unsigned long flags;
++	int ret = 0;
++
++	spin_lock_irqsave(&b->lock, flags);
++	present = b->state.linked == 1;
++	capacity_valid = present && b->state.capacity >= 0;
++	switch (prop) {
++	case POWER_SUPPLY_PROP_PRESENT:
++		val->intval = present;
++		break;
++	case POWER_SUPPLY_PROP_STATUS:
++		val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
++		if (!present || b->state.external_power < 0)
++			break;
++		/* The headset never reports charge termination. */
++		if (!b->state.external_power)
++			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
++		else if (capacity_valid && b->state.capacity < 100)
++			val->intval = POWER_SUPPLY_STATUS_CHARGING;
++		else if (capacity_valid)
++			val->intval = POWER_SUPPLY_STATUS_FULL;
++		break;
++	case POWER_SUPPLY_PROP_CAPACITY:
++		if (capacity_valid)
++			val->intval = b->state.capacity;
++		else
++			ret = -ENODATA;
++		break;
++	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
++		/*
++		 * Userspace needs a readable level to list the battery before the
++		 * first percentage arrives, which may take minutes.
++		 */
++		val->intval = POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN;
++		break;
++	case POWER_SUPPLY_PROP_SCOPE:
++		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
++		break;
++	case POWER_SUPPLY_PROP_MODEL_NAME:
++		val->strval = b->hdev->name;
++		break;
++	case POWER_SUPPLY_PROP_MANUFACTURER:
++		val->strval = "Razer";
++		break;
++	default:
++		ret = -EINVAL;
++		break;
++	}
++	spin_unlock_irqrestore(&b->lock, flags);
++	return ret;
++}
++
++static void barracuda_set_wireless_status(struct barracuda *b, int linked)
++{
++	struct usb_interface *intf = to_usb_interface(b->hdev->dev.parent);
++
++	if (linked < 0 || linked == b->wireless_reported)
++		return;
++	b->wireless_reported = linked;
++	usb_set_wireless_status(intf, linked ? USB_WIRELESS_STATUS_CONNECTED :
++					       USB_WIRELESS_STATUS_DISCONNECTED);
++}
++
++static void barracuda_supply_work(struct work_struct *work)
++{
++	struct barracuda *b = container_of(work, struct barracuda, supply_work);
++	struct power_supply_config config = { .drv_data = b };
++	struct power_supply *battery;
++	unsigned long flags;
++	bool stopping;
++	int linked;
++
++	spin_lock_irqsave(&b->lock, flags);
++	linked = b->state.linked;
++	stopping = b->stopping;
++	spin_unlock_irqrestore(&b->lock, flags);
++
++	mutex_lock(&b->supply_lock);
++	switch (barracuda_supply_action(linked, b->battery)) {
++	case BARRACUDA_SUPPLY_REGISTER:
++		if (stopping)
++			break;
++		battery = power_supply_register(&b->hdev->dev, &b->desc, &config);
++		if (IS_ERR(battery)) {
++			hid_warn(b->hdev, "failed to register battery: %pe\n",
++				 battery);
++			break;
++		}
++		power_supply_powers(battery, &b->hdev->dev);
++		b->battery = battery;
++		break;
++	case BARRACUDA_SUPPLY_UNREGISTER:
++		power_supply_unregister(b->battery);
++		b->battery = NULL;
++		break;
++	case BARRACUDA_SUPPLY_NOTIFY:
++		power_supply_changed(b->battery);
++		break;
++	case BARRACUDA_SUPPLY_NONE:
++		break;
++	}
++	barracuda_set_wireless_status(b, linked);
++	mutex_unlock(&b->supply_lock);
++}
++
++/*
++ * The dongle is a UAC1 device without jack detection. Report the headset link
++ * as jack switches on an input device under the same USB device, so that a
++ * sound driver can create jack controls from it.
++ */
++static int barracuda_jack_create(struct barracuda *b)
++{
++	struct hid_device *hdev = b->hdev;
++	struct input_dev *jack;
++
++	jack = devm_input_allocate_device(&hdev->dev);
++	if (!jack)
++		return -ENOMEM;
++	jack->name = devm_kasprintf(&hdev->dev, GFP_KERNEL, "%s Headset Jack",
++				    hdev->name);
++	if (!jack->name)
++		return -ENOMEM;
++	jack->phys = hdev->phys;
++	jack->uniq = hdev->uniq;
++	jack->id.bustype = hdev->bus;
++	jack->id.vendor = hdev->vendor;
++	jack->id.product = hdev->product;
++	jack->id.version = hdev->version;
++	input_set_capability(jack, EV_SW, SW_HEADPHONE_INSERT);
++	input_set_capability(jack, EV_SW, SW_MICROPHONE_INSERT);
++	b->jack = jack;
++	return input_register_device(jack);
++}
++
++static void barracuda_init(struct barracuda *b, struct hid_device *hdev)
++{
++	b->hdev = hdev;
++	spin_lock_init(&b->lock);
++	mutex_init(&b->supply_lock);
++	barracuda_state_reset(&b->state);
++	b->jack_report = BARRACUDA_UNKNOWN;
++	b->wireless_reported = BARRACUDA_UNKNOWN;
++	INIT_DELAYED_WORK(&b->link_work, barracuda_link_query);
++	INIT_WORK(&b->supply_work, barracuda_supply_work);
++}
++
++static int barracuda_probe(struct hid_device *hdev,
++			   const struct hid_device_id *id)
++{
++	struct usb_interface *intf;
++	struct barracuda *b;
++	int ret;
++
++	if (!hid_is_usb(hdev))
++		return -EINVAL;
++	intf = to_usb_interface(hdev->dev.parent);
++	if (intf->cur_altsetting->desc.bInterfaceNumber != BARRACUDA_HID_INTERFACE)
++		return -ENODEV;
++
++	b = devm_kzalloc(&hdev->dev, sizeof(*b), GFP_KERNEL);
++	if (!b)
++		return -ENOMEM;
++	barracuda_init(b, hdev);
++	hid_set_drvdata(hdev, b);
++
++	ret = hid_parse(hdev);
++	if (ret)
++		return ret;
++
++	b->desc.name = devm_kasprintf(&hdev->dev, GFP_KERNEL,
++				      "razer-barracuda-%s-battery",
++				      dev_name(&hdev->dev));
++	if (!b->desc.name)
++		return -ENOMEM;
++	b->desc.type = POWER_SUPPLY_TYPE_BATTERY;
++	b->desc.properties = barracuda_properties;
++	b->desc.num_properties = ARRAY_SIZE(barracuda_properties);
++	b->desc.get_property = barracuda_get_property;
++
++	ret = barracuda_jack_create(b);
++	if (ret)
++		return ret;
++
++	ret = hid_hw_start(hdev, HID_CONNECT_DEFAULT);
++	if (ret)
++		return ret;
++	ret = hid_hw_open(hdev);
++	if (ret) {
++		hid_hw_stop(hdev);
++		return ret;
++	}
++
++	/* The battery is registered by barracuda_supply_work() once linked. */
++	schedule_delayed_work(&b->link_work, HZ);
++	return 0;
++}
++
++static void barracuda_stop(struct barracuda *b)
++{
++	unsigned long flags;
++
++	spin_lock_irqsave(&b->lock, flags);
++	b->stopping = true;
++	b->stopped = true;
++	spin_unlock_irqrestore(&b->lock, flags);
++	cancel_delayed_work_sync(&b->link_work);
++	cancel_work_sync(&b->supply_work);
++}
++
++static void barracuda_remove(struct hid_device *hdev)
++{
++	struct barracuda *b = hid_get_drvdata(hdev);
++
++	barracuda_stop(b);
++	mutex_lock(&b->supply_lock);
++	if (b->battery)
++		power_supply_unregister(b->battery);
++	b->battery = NULL;
++	mutex_unlock(&b->supply_lock);
++	hid_hw_close(hdev);
++	hid_hw_stop(hdev);
++}
++
++static int barracuda_suspend(struct hid_device *hdev, pm_message_t message)
++{
++	struct barracuda *b = hid_get_drvdata(hdev);
++	unsigned long flags;
++
++	barracuda_stop(b);
++	spin_lock_irqsave(&b->lock, flags);
++	barracuda_state_suspend(&b->state);
++	b->frame_used = 0;
++	spin_unlock_irqrestore(&b->lock, flags);
++
++	/* The link is unknown: keep the battery, reported as not present. */
++	mutex_lock(&b->supply_lock);
++	if (b->battery)
++		power_supply_changed(b->battery);
++	mutex_unlock(&b->supply_lock);
++	return 0;
++}
++
++static int barracuda_resume(struct hid_device *hdev)
++{
++	struct barracuda *b = hid_get_drvdata(hdev);
++	unsigned long flags;
++
++	spin_lock_irqsave(&b->lock, flags);
++	b->stopped = false;
++	b->stopping = false;
++	barracuda_state_suspend(&b->state);
++	b->frame_used = 0;
++	b->attempts = 0;
++	spin_unlock_irqrestore(&b->lock, flags);
++	schedule_delayed_work(&b->link_work, HZ);
++	return 0;
++}
++
++static const struct hid_device_id barracuda_devices[] = {
++	{ HID_USB_DEVICE(USB_VENDOR_ID_RAZER,
++			 USB_DEVICE_ID_RAZER_BARRACUDA_X_2022) },
++	{ }
++};
++MODULE_DEVICE_TABLE(hid, barracuda_devices);
++
++static struct hid_driver barracuda_driver = {
++	.name = "razer-barracuda",
++	.id_table = barracuda_devices,
++	.probe = barracuda_probe,
++	.remove = barracuda_remove,
++	.raw_event = barracuda_raw_event,
++	.suspend = pm_ptr(barracuda_suspend),
++	.resume = pm_ptr(barracuda_resume),
++	.reset_resume = pm_ptr(barracuda_resume),
++};
++module_hid_driver(barracuda_driver);
++
++#if IS_ENABLED(CONFIG_HID_RAZER_BARRACUDA_KUNIT_TEST)
++#include "hid-razer-barracuda-test.c"
++#endif
++
++MODULE_AUTHOR("Luis Atala <luis.atala@gmail.com>");
++MODULE_DESCRIPTION("HID driver for the Razer Barracuda X (2022) dongle");
++MODULE_LICENSE("Dual MIT/GPL");
+-- 
+2.55.0
+

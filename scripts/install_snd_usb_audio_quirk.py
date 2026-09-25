@@ -4,7 +4,7 @@
 Downloads sound/usb for the running kernel's upstream stable version, applies
 kernel/snd-usb-audio/*.patch only if it applies cleanly, and installs a DKMS
 package restricted to that exact kernel release. Other kernels keep the
-official module, and the tray then routes audio itself as before.
+official module without jack detection.
 The downloaded sound/usb sources are GPL-2.0 and are not stored in this repository.
 """
 import argparse

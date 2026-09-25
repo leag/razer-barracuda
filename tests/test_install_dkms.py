@@ -12,12 +12,27 @@ SPEC.loader.exec_module(installer)
 
 
 class DkmsInstallerTests(unittest.TestCase):
-    def test_versions_match(self):
-        kernel = Path(__file__).resolve().parents[1] / 'kernel/hid-barracuda'
-        source = (kernel / 'hid-barracuda.c').read_text()
+    def test_package_matches_sources(self):
+        kernel = Path(__file__).resolve().parents[1] / 'kernel' / installer.NAME
         conf = (kernel / 'dkms.conf').read_text()
-        self.assertIn(f'MODULE_VERSION("{installer.VERSION}");', source)
+        self.assertIn(f'PACKAGE_NAME="{installer.NAME}"', conf)
         self.assertIn(f'PACKAGE_VERSION="{installer.VERSION}"', conf)
+        self.assertIn(f'BUILT_MODULE_NAME[0]="{installer.NAME}"', conf)
+        for name in installer.FILES:
+            self.assertTrue((kernel / name).is_file(), name)
+        source = (kernel / f'{installer.NAME}.c').read_text()
+        self.assertIn(f'.name = "{installer.DRIVER}"', source)
+        # Version strings are not used in-tree; dkms.conf carries the version.
+        self.assertNotIn('MODULE_VERSION', source)
+
+    def test_legacy_package_is_detected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            src = Path(directory)
+            self.assertEqual(installer.legacy_sources(src), [])
+            (src / f'{installer.NAME}-{installer.VERSION}').mkdir()
+            self.assertEqual(installer.legacy_sources(src), [])
+            (src / 'hid-barracuda-0.2.1').mkdir()
+            self.assertEqual(installer.legacy_sources(src), [src / 'hid-barracuda-0.2.1'])
 
     def test_copy_whitelist_and_refuse_changed_version(self):
         with tempfile.TemporaryDirectory() as directory:

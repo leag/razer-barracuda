@@ -18,7 +18,8 @@ is in English. This is an independent project, not an official Razer application
   or pairing commands.
 - Separate `barracuda-pair` command to pair a headset with the dongle from Linux.
 - Original SVG headset icons included.
-- Optional [DKMS HID driver](docs/DKMS.md) for native battery reporting to UPower/KDE.
+- Optional [DKMS HID driver](docs/DKMS.md) (`hid-razer-barracuda`) for native battery
+  reporting to UPower/KDE, prepared for [kernel submission](docs/UPSTREAM.md).
 
 ## Requirements
 
@@ -116,7 +117,7 @@ output while the headset is off and returns to it when it reconnects.
 
 ### When PipeWire handles wireless_status
 
-The DKMS driver (0.2.1+) sets the standard USB `wireless_status` attribute.
+The DKMS driver sets the standard USB `wireless_status` attribute.
 PipeWire's upstream commit `03f894b` ("alsa-udev: Add wireless device status
 monitoring", March 2026, not in the 1.6 series) hides a USB card while its
 dongle reports `disconnected`. With such a PipeWire, WirePlumber falls back

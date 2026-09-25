@@ -5,12 +5,14 @@ These are reverse-engineering observations for Barracuda X (2022), USB
 8051/MCS-51 code; its companion uses Andes NDS32. Addresses below are specific
 to the analyzed build and must not be assumed valid for other revisions.
 
-## Current application behavior and validation
+## Current application and driver behavior and validation
 
-The app sends only the E3 connection query when opening the dongle, at most three
+The tray app and the driver send the E3 connection query when opening or binding
+the dongle, at most three
 times two seconds apart, stopping after a valid status. Failed queries leave
-status unknown; read-only permission fallback preserves passive monitoring.
-No firmware, pairing, memory-write or restart commands are used by the app.
+status unknown and passive reading continues. The battery queries documented in
+[DKMS.md](DKMS.md) are the driver's only other commands; the app sends nothing else. No firmware, pairing,
+memory-write or restart commands are used.
 
 | Query | Headset on | Headset off |
 | --- | --- | --- |
@@ -18,7 +20,7 @@ No firmware, pairing, memory-write or restart commands are used by the app.
 | E6 | `1b` | `00` |
 
 Both queries returned in approximately 7–8 ms during hardware validation,
-without requiring a new power transition during each capture. The app uses E3;
+without requiring a new power transition during each capture. Both use E3;
 individual E6 bit meanings remain unresolved. Startup was also checked after
 installation. USB replug and alternate Bluetooth-mode semantics still require
 broader hardware validation. The USB RSSI getter returns changing signed values
@@ -122,7 +124,7 @@ Offsets here refer to `q`, excluding the report ID:
 | `q28`, `q29` | XDATA `0xc215`, `0xc214` |
 
 There is no demonstrated mapping from one of these fields to the headset's current
-wireless link. Do not replace the app's unknown state with an inference from them.
+wireless link. Do not replace the app's or the driver's unknown state with an inference from them.
 
 ## Tunnel and flow control
 
@@ -173,7 +175,8 @@ Routine **`0x3f87`** drains the host-facing ring into reports:
 
 `N` is at most 61. Thus a long inner message can span reports, and a short read
 may contain stream chunks rather than exactly one semantic message. A general
-protocol decoder needs reassembly; the app currently recognizes short observed
+protocol decoder needs reassembly; the driver's stream decoder reassembles
+chunks before validating messages, while the app recognizes short observed
 status frames only.
 
 For the previously captured link report:
@@ -185,7 +188,7 @@ For the previously captured link report:
 
 The bridge establishes `0x0e = 10-byte header + 4-byte inner payload`. The final
 inner payload is `20 02 01 00`; repeated physical transitions associated its final
-byte with link state. The bridge does not assign that application's semantics.
+byte with link state. The bridge itself does not assign it link semantics.
 The other observed report (`PI`, type `0x0e`, length 2, payload `e3 01`/`e3 00`)
 uses the same outer tunnel but a different inner message type.
 
@@ -328,10 +331,9 @@ the three-second observation window. That matches its exclusion from the
 recovered `0xe0..0xf1` selector table at `0x1fc1cd8c`; it cannot supply RSSI
 merely because the generic SDK implements a decoder for it.
 
-During those local tests the monitor was not restarted or modified, and no mode,
-pairing, firmware, register or audio-setting command was sent. Raw captures and vendor-derived
-artifacts remain outside the public source tree. The application continues to
-send only E3; this research does not add diagnostic polling to the monitor.
+During those local tests the monitor was not restarted or modified, and no mode, pairing, firmware, register or audio-setting
+command was sent. Raw captures and vendor-derived artifacts remain outside the
+public source tree. This research does not add RSSI polling to the monitor or the driver.
 
 ### Remote headset route: changing RSSI values
 
@@ -364,7 +366,7 @@ The destination reports, padded to 64 bytes, are:
 This is a **temporary diagnostic destination change**, not a read-only query.
 The test used a fixed command allowlist, correlated responses, bounded timeouts
 and a `finally` restoration path, then checked E0 readback and E3 link state.
-This does not authorize adding mode changes to the production monitor.
+This alone does not authorize adding mode changes to the monitor or the driver.
 
 Physical-device results on 2026-09-22:
 
@@ -417,7 +419,7 @@ distance conversion, audio-dropout threshold, or RSSI update cadence. Query
 latency is diagnostic round-trip latency, not audio latency.
 
 Raw reports and a reassembly-validated numerical summary are retained in the
-ignored research directory. No application behavior was changed.
+ignored research directory. No application or driver behavior was changed.
 
 ## Battery voltage, percentage and charging research
 
@@ -489,12 +491,78 @@ external power at full charge. The final percentage report was 58.
 These are not the
 SDK's generic MMI family-7 charger-state messages; do not reuse those enums.
 
-These payloads are not connection reports and must never trigger audio routing.
-The production application was not changed during this research.
+### Candidate charge-complete field in the vendor SDK
+
+Static inspection of the vendor host library found a separate PI type-7 MMI
+decoder. For its 279-family layout, subtype `09` at inner offset 10 carries a
+charger-state byte at offset 11; value `05` is named `TR_CHARGER_COMPLETE`.
+Its all-state decoder also reads a charger-state byte at inner offset 21.
+The analyzed T3 companion has a type-7, 37-byte snapshot producer at
+`0x1fc17216`, but its exact charger field and safe trigger are unconfirmed.
+The candidate trigger path calls external routines with unknown effects, so this
+is not a validated read-only query for the Barracuda.
+
+At the headset's green full-charge LED, a 150-second read-only capture across
+two charging-cable cycles received only PI type-8 `2a 02 01 00` and
+`2a 02 01 01` messages. It received no type-7 MMI message or new battery
+percentage. Earlier passive charging captures at 54–58% also contained no
+type-7 message. Thus no observed dongle field distinguishes charge completion
+from cable presence. A future passive capture spanning the actual LED change
+could test whether a type-7 event appears at that transition; the SDK enum alone
+cannot justify reporting 100% or a full-charge status.
+
+### Why the reported percentage may stop at 99
+
+The analyzed dongle images contain no producer for the `21` (percentage) or
+`2a` (cable) type-8 payloads. The three 4-byte type-8 producers found in the T3
+companion (`0x1fc161e6`, `0x1fc16292`, `0x1fc162c4`) include the `20` link
+notification, whose value comes from `GP + 76499`; none loads `0x21` or `0x2a`.
+The `0x21`/`0x2a` immediates at `0x1ffc21ea`/`0x1ffc22b0` in the patch image are
+indices in a ROM-patch registration table, and the `battchg` string is a
+Bluetooth HFP indicator name. The percentage is therefore most likely computed
+by the headset firmware and relayed by the dongle. The package contains no
+headset image, so that computation could not be inspected.
+
+The vendor SDK's 279/281/327 conversion (`Cust_Image.getBatteryPercent`) maps
+the ten voltage points to 0, 10, …, 90%, not 10..100%. Above the top point it
+returns `-2` (out of range) rather than 100. With this headset's table, 4130 mV
+is 90%, and 3831 mV interpolates to 54%, matching the observed notification.
+The final 90–100% must come from other headset logic. Holding 99% until charge
+termination would fit the observations, but it is unconfirmed.
+
+The separate 2024 generic-dongle image (`Barracuda X USB`, same vendor SDK, not
+T3) contains an external-charger state machine: `EXT_CHG` with `ADPT_IO` and
+`EXT_IO` inputs and states `CHG_ST_IDLE`, `CHG_ST_CHARGE`, `CHG_ST_COMPLETE`.
+This suggests the SDK tracks charge completion as a distinct state, consistent
+with the green LED and `TR_CHARGER_COMPLETE`. The observed `2a 02 01 VV`
+payload carries only 0/1 and has not been seen to encode completion.
+
+### Charge-transition capture (in progress)
+
+On 2026-09-23 at 02:06:41 UTC, a read-only capture of the Barracuda hidraw node
+was started with the headset charging (LED blinking red) after a brief
+discharge. It logs every input report and samples the driver's sysfs status and
+capacity every 30 seconds; it performs no HID writes or audio commands. At
+start the driver exposed `Charging` and a retained 99%. During the first six
+minutes no input report arrived: the brief discharge did not produce a new
+percentage notification, and the 99% remained the last observed value.
+
+The LED transition time was not recorded, so the test should be repeated:
+
+1. Start the capture with the cable connected and the LED blinking red.
+2. Record the wall-clock time the LED turns green.
+3. Compare reports near that time: a new percentage (99 or 100), a type-7
+   message, or a change in the `2a` value.
+4. A few minutes after green, remove the cable and keep capturing to see whether
+   a percentage report follows.
+
+Only a report observed at the LED transition could justify a full-charge status.
+
+These payloads are not connection reports and must never change link state.
 
 ## Practical value of the discoveries
 
-| Discovery | What it enables | Boundary before using it in the app |
+| Discovery | What it enables | Boundary before using it in the driver |
 | --- | --- | --- |
 | Package branch, sizes and image hashes | Reproduce the analysis on the same firmware and avoid mixing the 2024 and T3 images. | The running device's revision is not established. |
 | 8051 bridge and NDS32 companion | Select correct disassemblers and follow USB versus application code separately. | DSP and external ROM code remain unresolved. |
@@ -504,7 +572,7 @@ The production application was not changed during this research.
 | `0x43` diagnostic snapshot | Provide exact field sources for future static tracing and comparison with existing captures. | No RSSI field or dependable link query has been identified. |
 | Tunnel `0x80` and `PI` framing | Build a future offline decoder with lengths and stream reassembly. | Inner header bytes and most message meanings are still unknown. |
 | GET_REPORT flow-control path | Explain the zero-filled startup query and distinguish transport readiness from wireless state. | It cannot solve initial unknown status by itself. |
-| Observed four-byte link notification | Keep the monitor tied to the frame validated by physical transitions. | Other tunneled frames cannot reuse its byte offsets blindly. |
+| Observed four-byte link notification | Keep the driver tied to the frame validated by physical transitions. | Other tunneled frames cannot reuse its byte offsets blindly. |
 | MMI state names and live logging call | Locate a concrete state machine and an internal event producer for further analysis. | Debug transport and host access are unconfirmed. |
 | `bt_link_connected` bitmask updates | Distinguish connection membership from an RSSI/quality measurement. | Individual bit meanings and relation to the wireless link remain unresolved. |
 | Family-6 `0x32` RSSI getter with remote diagnostic routing | Retrieve changing signed RSSI fields from the headset through USB. | Local results are fixed; physical units, freshness and production-safe routing coordination remain unvalidated. |

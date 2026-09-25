@@ -1,6 +1,6 @@
 # Native headset battery through DKMS
 
-The optional `hid-barracuda` driver binds the physical Barracuda X (2022)
+The optional `hid-razer-barracuda` driver binds the physical Barracuda X (2022)
 USB HID interface (`1532:0552`, interface 3). It registers a device-scoped
 Linux `power_supply`, which UPower and KDE can discover. It is an independent,
 experimental driver, not an official Razer driver or an upstream kernel module.
@@ -15,7 +15,7 @@ The Makefile selects LLVM for kernels configured with Clang. From this checkout:
 sudo python3 scripts/install_dkms.py --activate
 ```
 
-This copies only module sources to `/usr/src/hid-barracuda-0.2.1`, builds and
+This copies only module sources to `/usr/src/hid-razer-barracuda-0.3.0`, builds and
 installs for the running kernel, and rebinds only the matching HID interface.
 Without `--activate`, reconnect the dongle to activate the installed driver.
 DKMS rebuilds for subsequent kernels through the distribution's DKMS hooks.
@@ -24,8 +24,12 @@ USB sound card as a headset for UPower/KDE. It does not restart the tray app
 or issue audio commands.
 A changed source tree cannot overwrite an already installed version silently.
 When upgrading an already loaded module, reload it once after installation:
-`sudo modprobe -r hid-barracuda && sudo modprobe hid-barracuda`. This clears
-telemetry until fresh notifications arrive.
+`sudo modprobe -r hid-razer-barracuda && sudo modprobe hid-razer-barracuda`.
+This clears telemetry until fresh notifications arrive.
+
+Before 0.3.0 the module was called `hid-barracuda` (driver `barracuda-battery`).
+Both would claim the dongle, so the installer refuses to run while
+`/usr/src/hid-barracuda-*` exists and prints the commands that remove it.
 
 ## Readings and limitations
 
@@ -34,19 +38,12 @@ two seconds apart. Battery percentage and cable state come from passive,
 validated notifications. Firmware commands are never sent.
 
 On each confirmed link (dongle plug-in, headset power-on, resume), when the
-cable state changes, and every `poll_interval` seconds while linked, the driver
-asks the headset for its battery percentage, cable state and voltage. Both are
-then known without waiting for a change. `poll_interval` defaults to 360 s, like
-`bq27xxx_battery`, with a 30 s minimum; 0 disables periodic refreshes:
-`echo 600 | sudo tee /sys/module/hid_barracuda/parameters/poll_interval`.
-Reading `voltage_now` queries the headset again when the stored reading is
-older than `voltage_max_age` seconds (default 60; 0 uses refreshes only), like
-`bq27xxx_battery`'s 5 s cache. On the tested KDE desktop a background reader
-read it continuously, so a 10 s value produced a remote query every ~11 s. Such a read can take tens of milliseconds, and
-at most one voltage query runs per `voltage_max_age` whatever the number of
-readers. If a refresh is already running, the stored value is returned.
-UPower does not show `voltage_now` for this peripheral; read it from
-`/sys/class/power_supply/barracuda-*/uevent`. The dongle answers these family-8 GETs only on the
+cable state changes, and every 360 seconds while linked, the driver asks the
+headset for its battery percentage, cable state and voltage. Both are then
+known without waiting for a change. The interval is fixed; the module has no
+parameters. Reading a property never sends a query: `voltage_now` is the
+value from the last refresh. UPower does not show `voltage_now` for this
+peripheral; read it from `/sys/class/power_supply/razer-barracuda-*/uevent`. The dongle answers these family-8 GETs only on the
 temporary remote diagnostic route, validated on 2026-09-24 (frame layout from
 [razer-barracuda-2.4-linux](https://github.com/TarikTopalovic/razer-barracuda-2.4-linux);
 see [battery and cable queries](PROTOCOL.md#battery-and-cable-queries)):
@@ -92,7 +89,7 @@ the headset off. Missing cable state means unknown.
 Inspect the native device and desktop view with:
 
 ```bash
-cat /sys/class/power_supply/barracuda-*/uevent
+cat /sys/class/power_supply/razer-barracuda-*/uevent
 upower --enumerate
 upower --dump
 dkms status
@@ -112,9 +109,9 @@ The tray application still handles connection indicators and audio routing.
 Disconnect the dongle, then run:
 
 ```bash
-sudo modprobe -r hid-barracuda
-sudo dkms remove hid-barracuda/0.2.1 --all
-sudo rm -r /usr/src/hid-barracuda-0.2.1
+sudo modprobe -r hid-razer-barracuda
+sudo dkms remove hid-razer-barracuda/0.3.0 --all
+sudo rm -r /usr/src/hid-razer-barracuda-0.3.0
 sudo rm /etc/udev/rules.d/99-barracuda-battery.rules
 sudo udevadm control --reload-rules
 ```
@@ -123,12 +120,20 @@ Reconnect the dongle; the generic HID driver resumes handling its HID interface.
 
 ## Validation
 
-The regular unittest suite compiles and runs the actual stream decoder with
-AddressSanitizer and UndefinedBehaviorSanitizer. Installer tests use temporary
-files and mocked commands, without changing real devices. Compile the module:
+KUnit tests in `hid-razer-barracuda-test.c` exercise the stream decoder, the
+state machine and reply matching. Run them from a kernel tree that contains the
+driver (see [UPSTREAM.md](UPSTREAM.md)), under QEMU with KASAN and UBSAN:
 
 ```bash
-make -C kernel/hid-barracuda
+./tools/testing/kunit/kunit.py run --arch=x86_64 \
+  --kunitconfig=/path/to/this/repo/upstream/.kunitconfig
+```
+
+The Python tests cover the installers with temporary files and mocked
+commands, without changing real devices. Compile the DKMS module with:
+
+```bash
+make -C kernel/hid-razer-barracuda
 ```
 
 Compilation and simulated protocol tests do not establish hardware behavior.
@@ -140,7 +145,7 @@ Physical validation on 2026-09-22 with module 0.1.1 and kernel
 then 68% and discharging after the user unplugged the charging cable.
 KDE Solid reported `HeadsetBattery`, present, chargePercent 68, and Discharging.
 An earlier build also received 68–69% and charging with the cable attached.
-The USB audio interface retained `snd-usb-audio`; the tray process was not restarted.
+The USB audio interface retained `snd-usb-audio`.
 Suspend/resume, full charge, and future kernel versions have not been physically tested.
 
 Version 0.1.2 separates wireless presence from percentage availability. A passive
@@ -160,6 +165,13 @@ does not prove that the cable or charging state is unchanged.
 Version 0.1.3 removes the arbitrary ten-minute expiry and its periodic worker.
 Regression tests cover retained percentage across disconnect and suspend,
 replacement by new telemetry, and clearing on driver state initialization.
+
+Version 0.3.0 renames the module to `hid-razer-barracuda` and prepares it for
+submission to the kernel: a single source file, KUnit tests instead of the
+userspace decoder test, and a `hid_is_usb()` check before the driver uses the
+USB interface. It removes `poll_interval` and `voltage_max_age`: the refresh
+interval is fixed at 360 s, and `voltage_now` no longer queries the headset
+when read. Earlier versions were named `hid-barracuda`.
 
 Version 0.2.1 registers the battery only while linked and sets
 `wireless_status`. Battery registration and UPower notifications run in a work

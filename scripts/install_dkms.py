@@ -6,11 +6,13 @@ from pathlib import Path
 import shutil
 import subprocess
 
-NAME = 'hid-barracuda'
-VERSION = '0.2.1'
-DRIVER = 'barracuda-battery'
-FILES = ('hid-barracuda.c', 'barracuda-protocol.h', 'barracuda-state.h', 'Makefile', 'dkms.conf')
+NAME = 'hid-razer-barracuda'
+VERSION = '0.3.0'
+DRIVER = 'razer-barracuda'
+FILES = ('hid-razer-barracuda.c', 'hid-ids.h', 'Makefile', 'dkms.conf')
 IDENTITY = 'HID_ID=0003:00001532:00000552'
+# Before 0.3.0 the module was hid-barracuda; both would claim the dongle.
+LEGACY = 'hid-barracuda'
 
 
 def run(*command):
@@ -54,6 +56,10 @@ def activate(devices, drivers=Path('/sys/bus/hid/drivers')):
         print(f'Bound {device.name} to {DRIVER}')
 
 
+def legacy_sources(src=Path('/usr/src')):
+    return sorted(path for path in src.glob(f'{LEGACY}-*') if path.is_dir())
+
+
 def install(source, target):
     if target.is_symlink():
         raise RuntimeError(f'Refusing symlink destination: {target}')
@@ -79,6 +85,13 @@ def main():
         parser.error('Run this installer with sudo or pkexec; it writes /usr/src and installs a kernel module')
     if not shutil.which('dkms'):
         parser.error('Install dkms and the headers for your running kernel first')
+    legacy = legacy_sources()
+    if legacy:
+        version = legacy[-1].name[len(LEGACY) + 1:]
+        parser.error(f'Remove the old {LEGACY} module first:\n'
+                     f'  sudo modprobe -r {LEGACY}\n'
+                     f'  sudo dkms remove {LEGACY}/{version} --all\n'
+                     f'  sudo rm -r {legacy[-1]}')
     devices = matching_devices() if args.activate else []
     source = Path(__file__).resolve().parent.parent / 'kernel' / NAME
     install(source, Path('/usr/src') / f'{NAME}-{VERSION}')
@@ -89,7 +102,7 @@ def main():
     run('udevadm', 'trigger', '--subsystem-match=sound', '--sysname-match=card*')
     if args.activate:
         activate(devices)
-    print('DKMS installation complete. No audio commands or monitor restarts were requested.')
+    print('DKMS installation complete. No audio commands were issued.')
     if not devices:
         print('Reconnect the dongle to bind the driver, or activate it when attached.')
 

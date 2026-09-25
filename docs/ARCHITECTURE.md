@@ -4,9 +4,15 @@
 - `barracuda_status/audio_router.py`: `pactl` operations and previous-output state.
 - `barracuda_status/i18n.py`: English source strings and Spanish translations.
 - `barracuda_status/assets/`: original SVG icons shipped in the Python package.
-- `packaging/`: desktop template and udev rule.
+- `barracuda_status/pairing.py`: pairing sequence and the `barracuda-pair` CLI.
+- `packaging/`: desktop template, udev rules and the WirePlumber analog-only rule.
 - `scripts/install.py`: installation for the current user without root.
-- `tests/`: hardware-independent unit tests.
+- `scripts/install_dkms.py`, `scripts/install_snd_usb_audio_quirk.py`: DKMS installers.
+- `kernel/hid-razer-barracuda/`: the out-of-tree HID driver and its KUnit tests,
+  identical to the series in `upstream/` ([docs/UPSTREAM.md](UPSTREAM.md)).
+- `kernel/snd-usb-audio/`: the GPL-2.0 jack-detection patch and DKMS Makefile.
+- `tests/`: hardware-independent unit tests, including the installers and the
+  check that keeps `upstream/` in sync with the sources.
 
 The HID worker opens the matching device read/write, falling back to read-only
 on permission errors, and uses nonblocking reads with `select` timeouts. It sends

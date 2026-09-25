@@ -10,5 +10,8 @@ prune .assets-official
 prune log
 global-exclude __pycache__ *.py[cod] *.exe *.dll *.ico
 
-recursive-include kernel/hid-barracuda *.c *.h Makefile dkms.conf
+recursive-include kernel/hid-razer-barracuda *.c *.h Makefile dkms.conf
+recursive-include kernel/snd-usb-audio *.patch Makefile
+recursive-include upstream *.patch .kunitconfig
+recursive-include packaging *.conf
 global-exclude *.mod.c

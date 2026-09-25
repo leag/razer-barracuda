@@ -25,7 +25,7 @@ def pipewire_wireless_support(paths=SPA_ALSA_PLUGINS):
 
 
 def dongle_wireless_status(usb_devices=USB_DEVICES):
-    """True when a 1532:0552 interface exposes wireless_status (hid-barracuda >= 0.2.1)."""
+    """True when a 1532:0552 interface exposes wireless_status (hid-razer-barracuda, formerly hid-barracuda >= 0.2.1)."""
     try:
         interfaces = list(Path(usb_devices).glob('*/wireless_status'))
     except OSError:

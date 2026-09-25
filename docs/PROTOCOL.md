@@ -1,7 +1,7 @@
 # Barracuda X HID observations
 
 These are empirical observations, not an official Razer protocol specification.
-The monitor supports the Barracuda X (2022) dongle identified as USB `1532:0552`
+They cover the Barracuda X (2022) dongle identified as USB `1532:0552`
 (model observed: `RZ04-04430-100`, product: `Razer Barracuda X 2.4`).
 
 ## USB and HID interfaces
@@ -9,7 +9,9 @@ The monitor supports the Barracuda X (2022) dongle identified as USB `1532:0552`
 The observed composite device has audio-control interface 0, audio-streaming
 interfaces 1 and 2, and HID interface 3. Audio uses `snd-usb-audio`; HID uses
 `usbhid`. HID interrupt endpoints are OUT `0x03` and IN `0x84`, with 64-byte
-packets. The monitor sends only the validated E3 connection query to the OUT endpoint.
+packets. The tray monitor sends only the validated E3 connection query to the OUT
+endpoint; the [DKMS driver](DKMS.md) sends only the validated commands listed in
+this document.
 
 The HID descriptor exposes report ID 1 with 63-byte vendor-defined input/output
 payloads and report ID 2 for media controls. Linux includes the report ID as byte 0
@@ -34,7 +36,7 @@ device's input capabilities. End-to-end playback toggling was also confirmed by
 the user on the physical headset.
 
 The desktop handles this media key and forwards playback control to its selected
-media player. Barracuda Status does not translate or inject media keys. These
+media player. Neither Barracuda Status nor the driver translates or injects media keys. These
 report-ID-2 frames are not wireless-link evidence and are ignored by its link
 parser. Capturing them requires no output command or monitor restart.
 
@@ -71,7 +73,8 @@ A different report also arrives around power transitions:
 Its byte 16 is not the link field described above. Treating all report-ID-1 frames
 as equivalent caused a connected headset to be incorrectly marked disconnected.
 Later firmware and hardware analysis identified this E3 frame: its connection
-value is byte 14, not byte 16. The monitor now validates and accepts this format.
+value is byte 14, not byte 16. Validate bytes 0..5 (`01 80 0C 50 49 0E`) and
+11..13 (`02 00 E3`), then read byte 14 as `00`/`01`.
 
 ## Battery and charging notifications
 
@@ -94,7 +97,19 @@ is wireless-link evidence or an audio-routing trigger.
 
 The initial 54% agreed with the headset's own battery-voltage table and a remote
 voltage query. Connecting the cable produced `01`; removing it produced `00`.
-Behavior at full charge, startup-state queries and update timing are unvalidated.
+At the headset's green full-charge LED on 2026-09-22, the native driver still
+held a previously reported 99%. A read-only capture of a charging-cable cycle
+received `2a 02 01 00` on removal and `2a 02 01 01` on reconnection, but no
+battery-percentage notification during the remainder of the three-minute capture.
+The cable message therefore does not distinguish a completed charge from a
+plugged-in headset that is still charging. The LED state is not reported through this
+validated dongle message. The current 99% must remain a last-observed value;
+neither the LED observation nor the cable message validates synthesizing 100%.
+An additional all-message read-only capture across two cable cycles while the
+LED was green saw only the type-8 cable payloads; no type-7 charger-state message
+or new percentage arrived. Static SDK analysis identifies a possible type-7
+charge-complete field, but it has not been observed through this dongle.
+Startup-state queries and battery update timing remain unvalidated.
 Missing notifications mean unknown/stale telemetry, not 0% or not charging.
 The optional [DKMS driver](DKMS.md) consumes these notifications for native
 battery reporting; the tray monitor still handles link status and routing. See
@@ -107,8 +122,8 @@ Repeated physical power transitions confirmed the observed `00`/`01` link field.
 The dongle may emit no unsolicited report while its state remains unchanged.
 A standard Linux `HIDIOCGINPUT(64)` request returned a zero-filled buffer during
 local testing and did not establish initial link status. The E3 query described below now resolves startup state on the tested device.
-The app starts unknown and waits for a validated response or transition.
-USB presence and audio sink availability are not substitutes for link evidence.
+The monitor and the driver start unknown and wait for a validated response or transition.
+USB presence and audio device availability are not substitutes for link evidence.
 
 ## Read-only diagnostics
 
@@ -166,7 +181,8 @@ power cycle `E3`/`E6` read `e3 01` and `e6 1b` and audio works. Neither the
 dongle nor the host resets USB during pairing (checked in the capture and in the
 Linux kernel log). A post-pairing
 `E6` value alone is not link evidence. The same OTA family also has
-flash erase, write and reboot commands; none are used.
+flash erase, write and reboot commands; neither the monitor nor the driver sends
+them. Pairing runs only through `barracuda-pair` on explicit request.
 
 ## Battery and cable queries
 
@@ -186,21 +202,24 @@ plugged in (2026-09-24). The frame layout came from the Barracuda 2.4
 [razer-barracuda-2.4-linux](https://github.com/TarikTopalovic/razer-barracuda-2.4-linux)
 (`tools/razer_barracuda.py`), which calls `E1 01` an "RF refresh" and does not
 restore it. Here it is the diagnostic-route selector,
-so `E1 00` must follow. The DKMS driver uses these queries; see docs/DKMS.md.
+so `E1 00` must follow. The DKMS driver uses these queries; see [DKMS.md](DKMS.md).
 
 ## Firmware research
 
 See [firmware and protocol findings](FIRMWARE_ANALYSIS.md) for architectures,
 outer command handlers, tunnel framing, GET_REPORT flow control and diagnostics.
-E3/E6 connection queries were checked with the headset on and off. The app uses
-E3 for initial status. An explicitly authorized diagnostic test also confirmed a
+E3/E6 connection queries were checked with the headset on and off. The monitor
+and the driver use E3 for initial status. An explicitly authorized diagnostic test also confirmed a
 USB response to the family-6 RSSI getter (`0x32`). Local dongle queries returned
 fixed values, while temporarily directing diagnostics to the headset returned
 changing signed RSSI fields. Calibration and freshness remain unverified; see
-the firmware findings for routing, restoration and capture details. This getter
-and destination changes are not used by the monitor.
+the firmware findings for routing, restoration and capture details. Neither the
+monitor nor the driver uses this getter.
 
 The powered-on test returned `e3 01` and `e6 1b`; powered-off returned `e3 00`
-and `e6 00`. The monitor sends only E3 on opening the device, with a maximum of
-three attempts two seconds apart, stopping after valid status. Failed writes
-or timeouts leave state unknown and preserve passive monitoring. E6 is not used.
+and `e6 00`. On opening the device or binding it, the monitor and the driver
+send only E3, with a maximum of three
+attempts two seconds apart, stopping after valid status. Failed writes or
+timeouts leave state unknown and passive reading continues. E6 is not link
+evidence; the monitor never sends it and the driver reads it only to check the transport before a battery
+query.

@@ -19,3 +19,23 @@ jobs:
       - run: uv run python -m unittest discover -s tests -v
       - run: uv run python -m compileall -q barracuda_status scripts
       - run: uv build
+  dkms-module:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kernel headers
+        run: sudo apt-get update && sudo apt-get install -y linux-headers-$(uname -r)
+      - run: make -C kernel/hid-razer-barracuda W=1
+  kunit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y bc flex bison libelf-dev libssl-dev qemu-system-x86
+      - name: Apply the series to HID for-next
+        run: |
+          git clone -q --depth 1 -b for-next https://git.kernel.org/pub/scm/linux/kernel/git/hid/hid.git linux
+          git -C linux -c user.name=CI -c user.email=ci@invalid am "$PWD"/upstream/hid/000[12]-*.patch
+      - name: Run KUnit
+        working-directory: linux
+        run: ./tools/testing/kunit/kunit.py run --arch=x86_64 --kunitconfig="$GITHUB_WORKSPACE/upstream/.kunitconfig" --jobs=$(nproc)
