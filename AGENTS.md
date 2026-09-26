@@ -25,6 +25,10 @@ user in their conversation language. Read README.md and docs/PROTOCOL.md first.
 - kernel/snd-usb-audio/: the GPL-2.0 jack patch and the Makefile for the
   downloaded `sound/usb` tree.
 - scripts/install_dkms.py, scripts/install_snd_usb_audio_quirk.py: DKMS installers.
+- packaging/arch/: the split PKGBUILD (`barracuda-status`, `hid-razer-barracuda-dkms`),
+  `build.sh` for local builds and `build-in-container.sh`, which the release
+  workflow runs on `v*` tags (docs/RELEASING.md). tests/test_packaging.py keeps
+  `pkgver` equal to every other version field.
 
 ## Protocol invariants
 

@@ -20,6 +20,11 @@ Do not commit logs, personal paths, credentials or local settings.
 Check `git diff --cached --check` and `git diff --cached` before committing.
 The MIT license covers contributions to project code, docs and original assets.
 
+After changing the driver, installers or packaging files, build the Arch
+packages with `packaging/arch/build.sh` and check them with namcap. After
+changing the driver, run KUnit in a kernel tree as [UPSTREAM.md](docs/UPSTREAM.md)
+describes, and keep the series in `upstream/` in sync with the sources.
+
 Include the problem, resulting behavior and validation in pull requests. Clearly
 separate simulated tests from physical-device observations. Test installation in
 a temporary HOME/XDG directory before changing a real desktop installation.

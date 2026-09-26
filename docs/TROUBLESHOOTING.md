@@ -72,11 +72,20 @@ Use the tray's Quit action before launching another copy. If a local transient
 service is active, stop it with `systemctl --user stop barracuda-status.service`.
 An old `~/.local/bin/barracuda-status.py` copy is independent of this package.
 The installer replaces the desktop entry with the new launcher but does not stop
-that old process or remove old files.
+that old process or remove old files. After switching to the Arch package,
+remove the checkout installer's copies (`~/.local/bin/barracuda-status`,
+`barracuda-pair`, the `barracuda-status` directory under your XDG data
+directory and its desktop entry) and point the autostart entry's `Exec` at
+`barracuda-status`, so only the packaged copy runs.
 
 ## Uninstall
 
-Remove the launcher `~/.local/bin/barracuda-status`, the `barracuda-status` package
+With the Arch packages: `sudo pacman -R barracuda-status hid-razer-barracuda-dkms`,
+then `sudo barracuda-snd-usb-audio-quirk --remove` first if the jack quirk was
+installed, since that DKMS package is not owned by pacman. Saved routing state
+under your XDG state directory and the autostart entry you added remain.
+
+With the checkout installer: remove the launcher `~/.local/bin/barracuda-status`, the `barracuda-status` package
 directory under your XDG data directory, its desktop entry under `applications/`,
 the matching entry under your XDG config `autostart/` directory, and
 `icons/hicolor/scalable/apps/barracuda-status.svg` under your XDG data directory.

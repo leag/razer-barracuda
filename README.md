@@ -43,10 +43,18 @@ sudo pacman -S python uv libpulse
 
 ### Arch Linux and CachyOS
 
-Build and install the packages from a checkout:
+Each [GitHub release](https://github.com/leag/razer-barracuda/releases) carries
+two packages built in a clean Arch container. Download and install them:
 
 ```bash
-sudo pacman -S --needed dkms linux-headers python-build python-installer   # headers for your kernel
+sudo pacman -S --needed dkms linux-headers   # or the headers package for your kernel
+sudo pacman -U barracuda-status-*.pkg.tar.zst hid-razer-barracuda-dkms-*.pkg.tar.zst
+```
+
+To build the same packages from a checkout instead:
+
+```bash
+sudo pacman -S --needed python-build python-installer pacman-contrib
 packaging/arch/build.sh
 sudo pacman -U packaging/arch/barracuda-status-*.pkg.tar.zst packaging/arch/hid-razer-barracuda-dkms-*.pkg.tar.zst
 ```
@@ -57,9 +65,11 @@ every installed kernel through DKMS, the battery udev rule, the dongle's ALSA
 card profile set, and `barracuda-snd-usb-audio-quirk`, the per-kernel installer
 for the [jack detection](#jack-detection-experimental) module. Add
 Barracuda Status to your session's autostart from the desktop settings.
-Reconnect the dongle once after installing the udev rules.
+Reconnect the dongle once after installing the udev rules. Upgrading is
+`pacman -U` with the newer packages; removing is `pacman -R barracuda-status
+hid-razer-barracuda-dkms`.
 
-### From a checkout without packages
+### From a checkout without packages (other distributions)
 
 ```bash
 uv sync --locked

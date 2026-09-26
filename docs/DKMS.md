@@ -9,7 +9,15 @@ USB audio remains managed by `snd-usb-audio`; hidraw and media keys are preserve
 ## Installation
 
 Install DKMS, the headers matching your kernel, and its compiler toolchain.
-The Makefile selects LLVM for kernels configured with Clang. From this checkout:
+The Makefile selects LLVM for kernels configured with Clang.
+
+On Arch Linux and CachyOS, install the `hid-razer-barracuda-dkms` package from
+a [release](https://github.com/leag/razer-barracuda/releases) with `pacman -U`.
+It carries the driver sources, the udev rules, the ALSA card profile set and
+the jack quirk tool; pacman's DKMS hook builds the module for every installed
+kernel, and `pacman -R` removes it. Reconnect the dongle once to activate it.
+
+On other distributions, from this checkout:
 
 ```bash
 sudo python3 scripts/install_dkms.py --activate

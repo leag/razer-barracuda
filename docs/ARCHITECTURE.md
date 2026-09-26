@@ -9,6 +9,8 @@
   its microphone path for the jack quirk.
 - `scripts/install.py`: installation for the current user without root.
 - `scripts/install_dkms.py`, `scripts/install_snd_usb_audio_quirk.py`: DKMS installers.
+- `packaging/arch/`: PKGBUILD and build scripts for the two Arch packages that
+  releases ship ([RELEASING.md](RELEASING.md)).
 - `kernel/hid-razer-barracuda/`: the out-of-tree HID driver and its KUnit tests,
   identical to the series in `upstream/` ([docs/UPSTREAM.md](UPSTREAM.md)).
 - `kernel/snd-usb-audio/`: the GPL-2.0 jack-detection patch and DKMS Makefile.
