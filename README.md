@@ -1,8 +1,13 @@
 # Barracuda Status
 
-A Linux system tray app for **Razer Barracuda X (2022), USB dongle `1532:0552`**.
-Shows the observed wireless link status and switches desktop audio to the headset
-when it connects, restoring the previous output when it disconnects.
+Linux support for the **Razer Barracuda X (2022)** wireless gaming headset and its
+**Razer HyperSpeed Wireless 2.4 GHz USB-C dongle** (the "Razer Barracuda X 2.4"
+USB audio device, `1532:0552`): a system tray app that shows the wireless link
+status and switches desktop audio to the headset when it connects, restoring the
+previous output when it disconnects, plus an optional kernel driver for headset
+battery level, charging state and jack detection, and a pairing tool for the
+dongle's SmartSwitch 2.4 GHz mode. Tested on Arch Linux and CachyOS with KDE
+Plasma and PipeWire.
 
 The interface supports **English (default)** and **Spanish**. Project documentation
 is in English. This is an independent project, not an official Razer application.

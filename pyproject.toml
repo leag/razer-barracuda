@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "barracuda-status"
 version = "0.3.2"
-description = "Linux tray monitor and automatic audio routing for Razer Barracuda X"
+description = "Linux tray monitor, audio routing and battery driver for the Razer Barracuda X (2022) 2.4 GHz wireless dongle"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
