@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="barracuda_status/assets/barracuda-connected.svg" width="128" alt="Barracuda Status">
+</p>
+
 # Barracuda Status
 
 Linux support for the **Razer Barracuda X (2022)** wireless gaming headset and its
