@@ -7,7 +7,7 @@ pkgver=0.3.2
 pkgrel=1
 pkgdesc="Tray monitor, audio routing and HID driver for the Razer Barracuda X (2022) dongle"
 arch=(any)
-url=https://github.com/leag/razer
+url=https://github.com/leag/razer-barracuda
 license=(MIT)
 # Split packages: namcap wants the runtime dependencies here as well.
 makedepends=(python-build python-installer python-setuptools python-wheel
