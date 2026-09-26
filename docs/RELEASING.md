@@ -23,8 +23,28 @@ uv build
 
 The wheel contains the runtime package and original SVG icons. The source archive
 also contains documentation, installer, packaging templates and tests. Check both
-archives for unwanted resources before uploading them. GitHub Actions runs the
-unit suite and builds the package; it does not publish releases automatically.
+archives for unwanted resources before uploading them.
+
+## Releases
+
+A release is the pair of Arch packages. Pushing a tag `vX.Y.Z` that matches
+`pkgver` in `packaging/arch/PKGBUILD` runs `.github/workflows/release.yml`,
+which builds `barracuda-status` and `hid-razer-barracuda-dkms` in an
+`archlinux:base-devel` container with `packaging/arch/build-in-container.sh`,
+checks them with namcap, and creates the GitHub release with the two
+`.pkg.tar.zst` files and the source archive attached, with generated notes.
+
+```bash
+git tag v0.3.2
+git push origin v0.3.2
+```
+
+To reproduce the release build locally with Docker:
+
+```bash
+docker run --rm -v "$PWD":/src archlinux:base-devel /src/packaging/arch/build-in-container.sh
+ls packaging/arch/out
+```
 
 For a ZIP of the tracked source only:
 

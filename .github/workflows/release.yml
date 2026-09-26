@@ -1,0 +1,28 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  arch-packages:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the packages
+        run: |
+          cp -r "$GITHUB_WORKSPACE" /src
+          packaging/arch/build-in-container.sh
+          cp /src/packaging/arch/out/* "$GITHUB_WORKSPACE/packaging/arch/"
+      - name: Check the tag matches the package version
+        run: |
+          pkgver=$(sed -n 's/^pkgver=//p' packaging/arch/PKGBUILD)
+          test "v$pkgver" = "$GITHUB_REF_NAME"
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes \
+            --title "Barracuda Status $GITHUB_REF_NAME" \
+            packaging/arch/*.pkg.tar.zst packaging/arch/*.tar.gz
