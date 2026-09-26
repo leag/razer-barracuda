@@ -23,6 +23,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          pacman -S --noconfirm --needed github-cli >/dev/null
           gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes \
             --title "Barracuda Status $GITHUB_REF_NAME" \
             packaging/arch/*.pkg.tar.zst packaging/arch/*.tar.gz
