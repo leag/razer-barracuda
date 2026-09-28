@@ -35,8 +35,8 @@ sudo pacman -U packaging/arch/barracuda-status-*.pkg.tar.zst packaging/arch/hid-
 ```
 
 `barracuda-status` installs the tray app, `barracuda-pair`, the desktop entry,
-the hidraw udev rule and a WirePlumber 0.5+ rule that displays the Barracuda output
-with the desktop theme's headphones icon in KDE's audio controls. The icon rule
+the hidraw udev rule and a WirePlumber 0.5+ rule that advertises the Barracuda output
+with the desktop theme's headphones icon to audio clients. The icon rule
 matches USB `1532:0552` playback nodes only; it does not change routing, volume,
 profiles or the microphone. `hid-razer-barracuda-dkms` installs the driver for
 every installed kernel through DKMS, the battery udev rule, the dongle's ALSA
@@ -53,6 +53,10 @@ Barracuda Status to your session's autostart from the desktop settings.
 Reconnect the dongle once after installing the udev rules. Upgrading is
 `pacman -U` with the newer packages; removing is `pacman -R barracuda-status
 hid-razer-barracuda-dkms`.
+
+Plasma 6.7.4 uses fixed volume/mute icons in its audio applet and Sound settings,
+regardless of the device's advertised icon. This rule does not change those
+speaker buttons or the tray's volume icon; that would require changes to Plasma.
 
 Installing the package does not restart the user's PipeWire session. After
 installing or upgrading, log out and back in, or restart the user services
