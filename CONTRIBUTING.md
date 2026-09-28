@@ -1,7 +1,7 @@
 # Contributing
 
 Use English for documentation, source comments and source UI strings. Provide a
-Spanish entry in `barracuda_status/i18n.py` for every new user-facing message.
+Spanish entry in `barracuda_pair/i18n.py` for every new user-facing message.
 The CLI defaults to English regardless of the host locale. The plasmoid follows
 the desktop locale, with English fallback; test both English and Spanish.
 
@@ -9,7 +9,7 @@ Keep changes focused. Run:
 
 ```bash
 uv run python -m unittest discover -s tests -v
-uv run python -m compileall -q barracuda_status scripts
+uv run python -m compileall -q barracuda_pair scripts
 ```
 
 Tests must not change real desktop audio or require hardware. QML tests use an

@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 
-from barracuda_status import i18n
+from barracuda_pair import i18n
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -17,7 +17,7 @@ class DistributionTests(unittest.TestCase):
         i18n.set_language('en')
 
     def test_all_cli_strings_have_spanish_translations(self):
-        for path in (ROOT / 'barracuda_status').glob('*.py'):
+        for path in (ROOT / 'barracuda_pair').glob('*.py'):
             for node in ast.walk(ast.parse(path.read_text())):
                 if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
                         and node.func.id == 'tr' and node.args
@@ -33,13 +33,13 @@ class DistributionTests(unittest.TestCase):
 
     def test_default_language_ignores_desktop_locale(self):
         result = subprocess.check_output(
-            [sys.executable, '-c', 'from barracuda_status.i18n import tr; '
+            [sys.executable, '-c', 'from barracuda_pair.i18n import tr; '
              'print(tr("Pairing cancelled"))'], cwd=ROOT,
             env={**os.environ, 'LANG': 'es_ES.UTF-8'}, text=True)
         self.assertEqual(result.strip(), 'Pairing cancelled')
 
     def test_module_needs_no_third_party_packages(self):
-        result = subprocess.run([sys.executable, '-S', '-m', 'barracuda_status', '--help'],
+        result = subprocess.run([sys.executable, '-S', '-m', 'barracuda_pair', '--help'],
                                 cwd=ROOT, check=True, capture_output=True, text=True)
         self.assertIn('barracuda-pair', result.stdout)
 
@@ -58,4 +58,4 @@ class DistributionTests(unittest.TestCase):
             self.assertEqual(list(launcher.parent.iterdir()), [launcher])
             self.assertFalse((home / 'config').exists())
             self.assertFalse((home / 'data/applications').exists())
-            self.assertFalse((home / 'data/barracuda-pair/barracuda_status/app.py').exists())
+            self.assertFalse((home / 'data/barracuda-pair/barracuda_pair/app.py').exists())

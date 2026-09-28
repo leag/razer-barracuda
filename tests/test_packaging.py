@@ -40,7 +40,7 @@ class PackagingTests(unittest.TestCase):
     def test_versions_agree(self):
         pkgver = field(PKGBUILD, r'^pkgver=(\S+)')
         self.assertEqual(field(ROOT / 'pyproject.toml', r'^version = "(.+)"'), pkgver)
-        self.assertEqual(field(ROOT / 'barracuda_status/__init__.py', r'^__version__ = "(.+)"'), pkgver)
+        self.assertEqual(field(ROOT / 'barracuda_pair/__init__.py', r'^__version__ = "(.+)"'), pkgver)
         self.assertEqual(field(ROOT / 'kernel/hid-razer-barracuda/dkms.conf',
                                r'^PACKAGE_VERSION="(.+)"'), pkgver)
         self.assertEqual(field(ROOT / 'scripts/install_dkms.py', r"^VERSION = '(.+)'"), pkgver)
@@ -48,7 +48,7 @@ class PackagingTests(unittest.TestCase):
 
     def test_packaged_files_exist(self):
         text = PKGBUILD.read_text()
-        names = set(re.findall(r'(?:packaging|kernel|scripts|barracuda_status)/[\w./{},-]*[\w}*]', text))
+        names = set(re.findall(r'(?:packaging|kernel|scripts|barracuda_pair)/[\w./{},-]*[\w}*]', text))
         for name in names:
             match = re.match(r'(.*)\{(.*)\}(.*)', name)
             parts = [match.group(1) + p + match.group(3) for p in match.group(2).split(',')] \

@@ -3,7 +3,7 @@ import struct
 import unittest
 from unittest.mock import patch
 
-from barracuda_status import pairing
+from barracuda_pair import pairing
 
 HEADSET = bytes.fromhex("11 22 33 44 55 66")
 OTHER = bytes.fromhex("aa bb cc dd ee ff")

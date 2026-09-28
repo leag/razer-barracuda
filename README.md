@@ -50,7 +50,7 @@ a modification of KDE's stock volume applet. See [usage](docs/USAGE.md).
 uv sync --locked
 uv run barracuda-pair --help
 uv run python -m unittest discover -s tests -v
-uv run python -m compileall -q barracuda_status scripts
+uv run python -m compileall -q barracuda_pair scripts
 ```
 
 Tests use temporary directories and simulated devices; no real audio changes.

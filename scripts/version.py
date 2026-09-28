@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FIELDS = {
     'plasmoid/metadata.json': (r'^        "Version": "[^"]+",$',
                               '        "Version": "{version}",'),
-    'barracuda_status/__init__.py': (r'^__version__ = "[^"]+"$', '__version__ = "{version}"'),
+    'barracuda_pair/__init__.py': (r'^__version__ = "[^"]+"$', '__version__ = "{version}"'),
     'scripts/install_dkms.py': (r"^VERSION = '[^']+'$", "VERSION = '{version}'"),
     'kernel/hid-razer-barracuda/dkms.conf':
         (r'^PACKAGE_VERSION="[^"]+"$', 'PACKAGE_VERSION="{version}"'),

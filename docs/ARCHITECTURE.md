@@ -1,9 +1,9 @@
 # Architecture
 
-- `barracuda_status/pairing.py`: validated pairing and `barracuda-pair` CLI.
-  The internal Python module name is retained, but the distribution is
-  `barracuda-pair`; there is no `barracuda-status` executable.
-- `barracuda_status/i18n.py`: English/Spanish CLI translations.
+- `barracuda_pair/pairing.py`: validated pairing and `barracuda-pair` CLI.
+  Both the Python module (`barracuda_pair`) and distribution (`barracuda-pair`)
+  use the pairing name; there is no `barracuda-status` executable.
+- `barracuda_pair/i18n.py`: English/Spanish CLI translations.
 - `plasmoid/`: native Plasma 6 QML widget. `Server.defaultSink` from
   `org.kde.plasma.private.volume` provides the default output and notifications.
   Pure JavaScript selects the device icon; KDE opens its own Sound settings.

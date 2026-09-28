@@ -18,10 +18,10 @@ classifiers = [
 ]
 
 [project.scripts]
-barracuda-pair = "barracuda_status.pairing:main"
+barracuda-pair = "barracuda_pair.pairing:main"
 
 [tool.setuptools.packages.find]
-include = ["barracuda_status*"]
+include = ["barracuda_pair*"]
 
 [tool.setuptools]
 include-package-data = false

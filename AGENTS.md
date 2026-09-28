@@ -11,8 +11,8 @@ user in their conversation language. Read README.md and docs/PROTOCOL.md first.
 ## Layout
 
 - plasmoid/: read-only Plasma 6 default-output widget and icon selection.
-- barracuda_status/pairing.py: pairing sequence, `barracuda-pair` CLI and hidraw lookup.
-- barracuda_status/i18n.py: explicit UI translations.
+- barracuda_pair/pairing.py: pairing sequence, `barracuda-pair` CLI and hidraw lookup.
+- barracuda_pair/i18n.py: explicit UI translations.
 - tests/: hardware-independent unittest suite.
 - scripts/install.py and packaging/: CLI user installation, udev rules and
   the ALSA card profile set for the jack quirk.
@@ -36,7 +36,7 @@ The driver sends the hardware-validated E3 connection query on binding
 USB 1532:0552: `01 80 06 50 41 0e SS 01 e3`, padded to 64 bytes. Limit to three
 attempts two seconds apart, stopping after a valid status. Failed queries leave the link unknown. The driver never pairs. Pairing runs
 only on explicit user request through `barracuda-pair` in
-barracuda_status/pairing.py, which
+barracuda_pair/pairing.py, which
 replays the captured vendor sequence documented in docs/PROTOCOL.md. The DKMS
 driver may additionally, on each confirmed link, cable change,
 every 360 s while linked, query battery, cable and voltage (E6, E0, `E1 01`, family-8
@@ -84,7 +84,7 @@ describes, and never send patches by email.
 ## Validation
 
 Run `uv run python -m unittest discover -s tests -v` for functional changes.
-Run `uv run python -m compileall -q barracuda_status scripts` for syntax validation.
+Run `uv run python -m compileall -q barracuda_pair scripts` for syntax validation.
 Use fake audio commands and offscreen Qt; tests must not mutate real audio.
 Cover link frames, unknown states, missing outputs and default-device changes
 when affected. Documentation-only edits do not need audio tests.

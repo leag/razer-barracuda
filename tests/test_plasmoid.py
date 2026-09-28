@@ -15,13 +15,13 @@ class PlasmoidTests(unittest.TestCase):
     def test_metadata_and_version(self):
         metadata = json.loads((ROOT / 'plasmoid/metadata.json').read_text())
         self.assertEqual(metadata['KPackageStructure'], 'Plasma/Applet')
-        from barracuda_status import __version__
+        from barracuda_pair import __version__
         self.assertEqual(metadata['KPlugin']['Version'], __version__)
 
     def test_arch_package(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
-            from barracuda_status import __version__
+            from barracuda_pair import __version__
             (base / f'razer-barracuda-{__version__}').symlink_to(ROOT)
             dest = base / 'pkg'
             subprocess.run(['bash', '-c', 'source "$1"; pkgdir="$2"; '
