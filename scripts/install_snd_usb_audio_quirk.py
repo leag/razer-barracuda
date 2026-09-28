@@ -34,6 +34,7 @@ PROFILE_FILES = {
     'razer-barracuda.conf': ACP / 'profile-sets',
     'analog-input-headset-mic-razer-barracuda.conf': ACP / 'paths',
     '89-razer-barracuda-acp.rules': Path('etc/udev/rules.d'),
+    '51-barracuda-headphones.conf': Path('usr/share/wireplumber/wireplumber.conf.d'),
 }
 
 
@@ -44,9 +45,8 @@ def run(*command, cwd=None):
 def pipewire_wireless_support(paths=SPA_ALSA_PLUGINS):
     """Detect the ALSA feature, including distribution backports.
 
-    Keep this standalone installer independent of the tray package. This is the
-    same capability probe used by barracuda_status.audio_router, not a runtime
-    check of the user's audio session or the dongle's current link.
+    This checks the installed plugin, not the user's audio session or the
+    dongle's current link.
     """
     for path in paths:
         try:

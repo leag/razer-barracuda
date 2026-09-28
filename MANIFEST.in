@@ -1,9 +1,8 @@
 include LICENSE README.md CONTRIBUTING.md AGENTS.md uv.lock
 recursive-include docs *.md
-recursive-include packaging *.desktop *.rules
+recursive-include packaging *.rules
 recursive-include scripts *.py
-recursive-include tests *.py
-recursive-include barracuda_status/assets *.svg
+recursive-include tests *.py *.qml
 prune private
 prune .vm
 prune .assets-official
@@ -14,6 +13,7 @@ recursive-include kernel/hid-razer-barracuda *.c *.h Makefile dkms.conf
 recursive-include kernel/snd-usb-audio *.patch Makefile
 recursive-include upstream *.patch .kunitconfig
 recursive-include packaging *.conf
+recursive-include plasmoid *.qml *.js *.json
 include packaging/arch/PKGBUILD packaging/arch/.SRCINFO
 recursive-include packaging/arch *.sh *.hook *.install
 global-exclude *.mod.c

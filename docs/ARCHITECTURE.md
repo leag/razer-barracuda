@@ -1,48 +1,29 @@
 # Architecture
 
-- `barracuda_status/app.py`: Qt tray, icon rendering, HID reader and audio worker.
-- `barracuda_status/audio_router.py`: `pactl` operations and previous-output state.
-- `barracuda_status/i18n.py`: English source strings and Spanish translations.
-- `barracuda_status/assets/`: original SVG icons shipped in the Python package.
-- `barracuda_status/pairing.py`: pairing sequence and the `barracuda-pair` CLI.
-- `packaging/`: desktop template, udev rules, and the ALSA card profile set with
-  its microphone path for the jack quirk.
-- `scripts/install.py`: installation for the current user without root.
-- `scripts/install_dkms.py`, `scripts/install_snd_usb_audio_quirk.py`: DKMS installers.
-- `packaging/arch/`: PKGBUILD and build scripts for the two Arch packages that
-  releases ship ([RELEASING.md](RELEASING.md)).
-- `kernel/hid-razer-barracuda/`: the out-of-tree HID driver and its KUnit tests,
-  identical to the series in `upstream/` ([docs/UPSTREAM.md](UPSTREAM.md)).
-- `kernel/snd-usb-audio/`: the GPL-2.0 jack-detection patch and DKMS Makefile.
-- `tests/`: hardware-independent unit tests, including the installers and the
-  check that keeps `upstream/` in sync with the sources.
+- `barracuda_status/pairing.py`: validated pairing and `barracuda-pair` CLI.
+  The internal Python module name is retained, but the distribution is
+  `barracuda-pair`; there is no `barracuda-status` executable.
+- `barracuda_status/i18n.py`: English/Spanish CLI translations.
+- `plasmoid/`: native Plasma 6 QML widget. `Server.defaultSink` from
+  `org.kde.plasma.private.volume` provides the default output and notifications.
+  Pure JavaScript selects the device icon; KDE opens its own Sound settings.
+- `packaging/`: hidraw and battery udev rules, ALSA profile/path and
+  WirePlumber device-icon rule.
+- `scripts/install.py`: isolated user installation of the pairing CLI.
+- `scripts/install_dkms.py`, `scripts/install_snd_usb_audio_quirk.py`: drivers.
+- `packaging/arch/`: three split packages; see [releasing](RELEASING.md).
+- `kernel/hid-razer-barracuda/`: driver and KUnit tests matching `upstream/`.
+- `kernel/snd-usb-audio/`: jack-detection patch and DKMS Makefile.
+- `tests/`: simulated pairing, installer, packaging and QML checks.
 
-The HID worker opens the matching device read/write, falling back to read-only
-on permission errors, and uses nonblocking reads with `select` timeouts. It sends
-only the validated E3 query, at most three times per open, until a valid state is
-received. It validates E3 and transition reports before emitting state; query
-failure never emits disconnected. Reopening resets the query budget.
-Qt updates the tray on its main thread and sends states to a separate audio worker.
-The audio worker serializes routing commands and retries transient failures.
-Subprocess calls have timeouts. Shutdown requests interruption and joins workers.
+Only the kernel driver monitors wireless state. WirePlumber owns routing.
+The CLI pairs only on explicit request, and the widget is read-only. Neither
+starts workers, stores a previous audio output, or installs autostart entries.
 
-Routing state is persisted by atomic replacement. The saved previous output is not
-a cache of physical headset connectivity. English is selected explicitly by default;
-Spanish is enabled with `--language es`, independent of the desktop locale.
+Device identity and default-output selection are presentation, not link evidence.
+A failed driver query leaves link state unknown. Native battery reporting and
+routing depend on validated driver reports and the audio stack.
 
-The development workstation previously used a transient user unit named
-`barracuda-status.service`. That unit is not part of this distribution. Session
-startup is provided by a desktop autostart entry; avoid running both mechanisms.
-
-## Tray icon design
-
-The four original 32×32 SVGs share the rounded, outlined headset silhouette of
-the unknown-state icon. Connected uses a green check, disconnected an amber minus,
-and missing-adapter a red cross. Unknown uses a gray question mark drawn as paths
-and a circle, with no font dependency. Color and shape both distinguish states.
-
-The check, cross and minus are scaled to 70% around `(16, 21)` to keep them clear
-of the earcups. The question mark retains its original size. Packaged SVGs have
-priority over local SVG files, ensuring
-that installations use the same state designs. The SVGs were visually checked at
-16, 32 and 64 pixels before the final symbol-size adjustment.
+The widget depends on a private KDE API, tested with Plasma 6.7.4. Its source is
+independent of the Python wheel. All package versions, including widget metadata,
+are synchronized by `scripts/version.py`.

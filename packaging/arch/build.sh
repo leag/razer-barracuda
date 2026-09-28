@@ -4,7 +4,7 @@
 cd "$(dirname "$0")/../.."
 rm -rf dist
 uv build --sdist
-cp dist/barracuda_status-*.tar.gz packaging/arch/
+cp dist/barracuda_pair-*.tar.gz packaging/arch/
 cd packaging/arch
 updpkgsums
 makepkg -f "$@"

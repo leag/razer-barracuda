@@ -21,22 +21,23 @@ uv run python -m unittest discover -s tests -v
 uv build
 ```
 
-The wheel contains the runtime package and original SVG icons. The source archive
+The wheel contains only the pairing runtime package, without Qt or tray assets. The source archive
 also contains documentation, installer, packaging templates and tests. Check both
 archives for unwanted resources before uploading them.
 
 ## Releases
 
-A release is the pair of Arch packages. Pushing a tag `vX.Y.Z` that matches
+A release contains three Arch packages. Pushing a tag `vX.Y.Z` that matches
 `pkgver` in `packaging/arch/PKGBUILD` runs `.github/workflows/release.yml`,
-which builds `barracuda-status` and `hid-razer-barracuda-dkms` in an
+which builds `barracuda-pair`, `hid-razer-barracuda-dkms` and
+`plasma6-applets-barracuda` in an
 `archlinux:base-devel` container with `packaging/arch/build-in-container.sh`,
-checks them with namcap, and creates the GitHub release with the two
+checks them with namcap, and creates the GitHub release with the three
 `.pkg.tar.zst` files and the source archive attached, with generated notes.
 
 ```bash
-git tag v0.3.3
-git push origin v0.3.3
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
 To reproduce the release build locally with Docker:
@@ -49,7 +50,7 @@ ls packaging/arch/out
 For a ZIP of the tracked source only:
 
 ```bash
-git archive --format=zip --output=dist/barracuda-status-source.zip HEAD
+git archive --format=zip --output=dist/barracuda-linux-source.zip HEAD
 ```
 
 Use tracked source for release archives. Prepare the next version with one command:
@@ -61,9 +62,9 @@ uv run python scripts/version.py --bump patch
 Use `--bump minor`, `--bump major` or `--set X.Y.Z` as needed; add `--dry-run`
 to preview. `pyproject.toml` is the source of truth. The script delegates the
 version change and lockfile update to `uv version --no-sync`, synchronizes the
-Python, DKMS and Arch version fields (including `.SRCINFO`), and resets Arch
+Python, plasmoid, DKMS and Arch version fields (including `.SRCINFO`), and resets Arch
 `pkgrel` to 1 for a new version. Only stable `X.Y.Z` releases are supported.
-It does not commit, tag, publish, or update an installed monitor.
+It does not commit, tag, publish, or update installed packages.
 
 If you used `uv version` directly, run `uv run python scripts/version.py --sync`
 afterwards. Use `--check` to detect stale distribution metadata. Commit the
@@ -77,7 +78,7 @@ then commit those checksum changes to `main` without moving the published tag.
 ## Arch packages
 
 `packaging/arch/build.sh` creates a Python sdist from the tracked tree for the
-GitHub release, then builds `barracuda-status` and `hid-razer-barracuda-dkms`
+GitHub release, then builds the three packages
 with `makepkg`. The PKGBUILD fetches the matching GitHub tag archive, so it also
 builds from a clean AUR checkout. Regenerate `.SRCINFO` after metadata changes
 with `makepkg --printsrcinfo > .SRCINFO` in `packaging/arch/`. Check the packages

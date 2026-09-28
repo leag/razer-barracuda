@@ -2,7 +2,7 @@
 # Build the Arch packages inside a clean archlinux container, as the release
 # workflow does. Run from anywhere: docker run -v <checkout>:/src archlinux:base-devel /src/packaging/arch/build-in-container.sh
 pacman -Syu --noconfirm --needed git uv python-build python-installer python-setuptools \
-  python-wheel python-pyqt6 libpulse dkms hicolor-icon-theme namcap pacman-contrib >/dev/null
+  python-wheel dkms namcap pacman-contrib >/dev/null
 useradd -m builder
 cp -r /src /home/builder/src
 chown -R builder:builder /home/builder/src

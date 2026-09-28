@@ -1,4 +1,4 @@
-"""Check translation coverage and installation without touching the desktop."""
+"""Check CLI distribution without hardware, Qt or desktop mutations."""
 import ast
 import os
 from pathlib import Path
@@ -6,18 +6,17 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 
-from barracuda_status import app, i18n
+from barracuda_status import i18n
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class DistributionTests(unittest.TestCase):
     def tearDown(self):
         i18n.set_language('en')
 
-    def test_all_ui_strings_have_spanish_translations(self):
+    def test_all_cli_strings_have_spanish_translations(self):
         for path in (ROOT / 'barracuda_status').glob('*.py'):
             for node in ast.walk(ast.parse(path.read_text())):
                 if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
@@ -25,30 +24,24 @@ class DistributionTests(unittest.TestCase):
                         and isinstance(node.args[0], ast.Constant)):
                     self.assertIn(node.args[0].value, i18n.SPANISH)
 
-    def test_both_languages_and_formatting(self):
-        os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-        qt = app.QApplication.instance() or app.QApplication([])
-        for language, label in [('en', 'Connected'), ('es', 'Enlazados')]:
+    def test_languages(self):
+        for language, expected in [('en', 'Pairing cancelled'),
+                                   ('es', 'Emparejamiento cancelado')]:
             i18n.set_language(language)
-            with patch.object(app.HidReader, 'start'), patch.object(app.AudioWorker, 'start'):
-                tray = app.Tray()
-                tray.update_status(True)
-                self.assertEqual(tray.status_action.text(), label)
-                tray.close()
-            self.assertIn('test error', i18n.tr('Could not switch output: {error}', error='test error'))
+            self.assertEqual(i18n.tr('Pairing cancelled'), expected)
+            self.assertIn('error', i18n.tr('Pairing failed: {error}', error='error'))
 
     def test_default_language_ignores_desktop_locale(self):
-        env = {**os.environ, 'LANG': 'es_ES.UTF-8'}
-        result = subprocess.check_output([sys.executable, '-c',
-                    'from barracuda_status.i18n import tr; print(tr("Connected"))'],
-                    cwd=ROOT, env=env, text=True)
-        self.assertEqual(result.strip(), 'Connected')
+        result = subprocess.check_output(
+            [sys.executable, '-c', 'from barracuda_status.i18n import tr; '
+             'print(tr("Pairing cancelled"))'], cwd=ROOT,
+            env={**os.environ, 'LANG': 'es_ES.UTF-8'}, text=True)
+        self.assertEqual(result.strip(), 'Pairing cancelled')
 
-    def test_packaged_icons(self):
-        qt = app.QApplication.instance() or app.QApplication([])
-        with patch.object(app, 'ICON_DIR', Path('/nonexistent')):
-            for emblem in ('emblem-ok', 'emblem-warning', 'emblem-error', 'dialog-question'):
-                self.assertFalse(app.status_icon(emblem).pixmap(32, 32).isNull())
+    def test_module_needs_no_third_party_packages(self):
+        result = subprocess.run([sys.executable, '-S', '-m', 'barracuda_status', '--help'],
+                                cwd=ROOT, check=True, capture_output=True, text=True)
+        self.assertIn('barracuda-pair', result.stdout)
 
     def test_install_in_isolated_home(self):
         with tempfile.TemporaryDirectory(prefix='barracuda test ') as directory:
@@ -56,22 +49,13 @@ class DistributionTests(unittest.TestCase):
             env = {**os.environ, 'HOME': directory, 'XDG_DATA_HOME': str(home / 'data'),
                    'XDG_CONFIG_HOME': str(home / 'config')}
             subprocess.run([sys.executable, str(ROOT / 'scripts/install.py'),
-                            '--autostart', '--language', 'es'], env=env, check=True,
-                           capture_output=True, text=True)
-            launcher = home / '.local/bin/barracuda-status'
+                            '--language', 'es'], env=env, check=True, capture_output=True)
+            launcher = home / '.local/bin/barracuda-pair'
             result = subprocess.run([str(launcher), '--help'], cwd=directory, env=env,
                                     check=True, capture_output=True, text=True)
-            self.assertIn('--language', result.stdout)
-            # The launcher runs `python -c`; help must not show "-c" as the program.
-            self.assertTrue(result.stdout.startswith('usage: barracuda-status'))
-            result = subprocess.run([str(home / '.local/bin/barracuda-pair'), '--help'],
-                                    cwd=directory, env=env, check=True, capture_output=True,
-                                    text=True)
-            self.assertIn('--scan', result.stdout)
             self.assertTrue(result.stdout.startswith('usage: barracuda-pair'))
-            desktop = (home / 'config/autostart/org.razer.BarracudaStatus.desktop').read_text()
-            self.assertIn('--language es', desktop)
-            self.assertIn(f'Exec="{launcher}"', desktop)
-            rule = home / 'config/wireplumber/wireplumber.conf.d/51-barracuda-headphones.conf'
-            self.assertEqual(rule.read_bytes(),
-                             (ROOT / 'packaging/51-barracuda-headphones.conf').read_bytes())
+            self.assertIn('--scan', result.stdout)
+            self.assertEqual(list(launcher.parent.iterdir()), [launcher])
+            self.assertFalse((home / 'config').exists())
+            self.assertFalse((home / 'data/applications').exists())
+            self.assertFalse((home / 'data/barracuda-pair/barracuda_status/app.py').exists())

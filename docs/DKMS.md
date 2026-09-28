@@ -23,12 +23,12 @@ On other distributions, from this checkout:
 sudo python3 scripts/install_dkms.py --activate
 ```
 
-This copies only module sources to `/usr/src/hid-razer-barracuda-0.3.2`, builds and
+This copies only module sources to `/usr/src/hid-razer-barracuda-<version>`, builds and
 installs for the running kernel, and rebinds only the matching HID interface.
 Without `--activate`, reconnect the dongle to activate the installed driver.
 DKMS rebuilds for subsequent kernels through the distribution's DKMS hooks.
 The installer also installs `99-barracuda-battery.rules`, identifying the
-USB sound card as a headset for UPower/KDE. It does not restart the tray app
+USB sound card as a headset for UPower/KDE. It does not restart user applications
 or issue audio commands.
 A changed source tree cannot overwrite an already installed version silently.
 When upgrading an already loaded module, reload it once after installation:
@@ -110,7 +110,8 @@ marked as unknown (which consumers must ignore).
 
 UPower/KDE presentation depends on the desktop version and available readings.
 The battery has device scope and does not represent the computer's own battery.
-The tray application still handles connection indicators and audio routing.
+WirePlumber handles audio routing. The plasmoid displays the default output;
+only the driver monitors physical link state.
 
 ## Removal
 

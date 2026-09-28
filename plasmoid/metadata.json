@@ -1,0 +1,17 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Id": "org.razer.barracuda.output",
+        "Name": "Current Audio Output",
+        "Name[es]": "Salida de audio actual",
+        "Description": "Show the default audio device with its device icon",
+        "Description[es]": "Muestra el dispositivo de audio predeterminado con su icono",
+        "Icon": "audio-headphones",
+        "Category": "Multimedia",
+        "License": "MIT",
+        "Version": "0.4.0",
+        "Website": "https://github.com/leag/razer-barracuda",
+        "Authors": [{"Name": "Barracuda Linux contributors"}]
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

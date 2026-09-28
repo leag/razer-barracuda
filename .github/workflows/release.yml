@@ -26,5 +26,5 @@ jobs:
           pacman -S --noconfirm --needed github-cli >/dev/null
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
-            --title "Barracuda Status $GITHUB_REF_NAME" \
+            --title "Barracuda Linux $GITHUB_REF_NAME" \
             packaging/arch/*.pkg.tar.zst packaging/arch/*.tar.gz

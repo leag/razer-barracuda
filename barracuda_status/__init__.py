@@ -1,3 +1,3 @@
-"""Wireless link monitoring and desktop audio routing for Barracuda X."""
+"""Command-line headset pairing for the Barracuda X dongle."""
 
-__version__ = "0.3.3"
+__version__ = "0.4.0"

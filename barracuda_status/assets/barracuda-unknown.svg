@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <title>Connection unknown</title>
-  <g fill="none" stroke="#aab2bd" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M6 21v-7a10 10 0 0 1 20 0v7M6 16v9h4v-9zm16 0v9h4v-9z"/>
-    <g stroke-width="2.5"><path d="M13 18a3 3 0 0 1 6 0c0 2-3 2-3 4"/><circle cx="16" cy="25" r="1" fill="#aab2bd" stroke="none"/></g>
-  </g>
-</svg>

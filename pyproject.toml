@@ -3,14 +3,14 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "barracuda-status"
-version = "0.3.3"
-description = "Linux tray monitor, audio routing and battery driver for the Razer Barracuda X (2022) 2.4 GHz wireless dongle"
+name = "barracuda-pair"
+version = "0.4.0"
+description = "Linux pairing utility and battery driver for the Razer Barracuda X (2022) 2.4 GHz wireless dongle"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
-dependencies = ["PyQt6>=6.4"]
+dependencies = []
 classifiers = [
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3",
@@ -18,11 +18,10 @@ classifiers = [
 ]
 
 [project.scripts]
-barracuda-status = "barracuda_status.app:main"
 barracuda-pair = "barracuda_status.pairing:main"
 
 [tool.setuptools.packages.find]
 include = ["barracuda_status*"]
 
-[tool.setuptools.package-data]
-barracuda_status = ["assets/*.svg"]
+[tool.setuptools]
+include-package-data = false

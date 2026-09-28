@@ -9,7 +9,7 @@ They cover the Barracuda X (2022) dongle identified as USB `1532:0552`
 The observed composite device has audio-control interface 0, audio-streaming
 interfaces 1 and 2, and HID interface 3. Audio uses `snd-usb-audio`; HID uses
 `usbhid`. HID interrupt endpoints are OUT `0x03` and IN `0x84`, with 64-byte
-packets. The tray monitor sends only the validated E3 connection query to the OUT
+packets. The former tray monitor sent only the validated E3 connection query to the OUT
 endpoint; the [DKMS driver](DKMS.md) sends only the validated commands listed in
 this document.
 
@@ -36,7 +36,7 @@ device's input capabilities. End-to-end playback toggling was also confirmed by
 the user on the physical headset.
 
 The desktop handles this media key and forwards playback control to its selected
-media player. Neither Barracuda Status nor the driver translates or injects media keys. These
+media player. Neither the pairing CLI nor the driver translates or injects media keys. These
 report-ID-2 frames are not wireless-link evidence and are ignored by its link
 parser. Capturing them requires no output command or monitor restart.
 
@@ -112,7 +112,7 @@ charge-complete field, but it has not been observed through this dongle.
 Startup-state queries and battery update timing remain unvalidated.
 Missing notifications mean unknown/stale telemetry, not 0% or not charging.
 The optional [DKMS driver](DKMS.md) consumes these notifications for native
-battery reporting; the tray monitor still handles link status and routing. See
+battery reporting and link status; WirePlumber handles routing. See
 [battery research](FIRMWARE_ANALYSIS.md#battery-voltage-percentage-and-charging-research)
 for query framing, raw values and validation limits.
 
@@ -122,7 +122,7 @@ Repeated physical power transitions confirmed the observed `00`/`01` link field.
 The dongle may emit no unsolicited report while its state remains unchanged.
 A standard Linux `HIDIOCGINPUT(64)` request returned a zero-filled buffer during
 local testing and did not establish initial link status. The E3 query described below now resolves startup state on the tested device.
-The monitor and the driver start unknown and wait for a validated response or transition.
+The driver starts unknown and waits for a validated response or transition.
 USB presence and audio device availability are not substitutes for link evidence.
 
 ## Read-only diagnostics
@@ -190,7 +190,7 @@ power cycle `E3`/`E6` read `e3 01` and `e6 1b` and audio works. Neither the
 dongle nor the host resets USB during pairing (checked in the capture and in the
 Linux kernel log). A post-pairing
 `E6` value alone is not link evidence. The same OTA family also has
-flash erase, write and reboot commands; neither the monitor nor the driver sends
+flash erase, write and reboot commands; neither the pairing CLI nor the driver sends
 them. Pairing runs only through `barracuda-pair` on explicit request.
 
 On 2026-09-25 `barracuda-pair --address` was pointed at a non-Razer Bluetooth
@@ -225,18 +225,17 @@ so `E1 00` must follow. The DKMS driver uses these queries; see [DKMS.md](DKMS.m
 
 See [firmware and protocol findings](FIRMWARE_ANALYSIS.md) for architectures,
 outer command handlers, tunnel framing, GET_REPORT flow control and diagnostics.
-E3/E6 connection queries were checked with the headset on and off. The monitor
-and the driver use E3 for initial status. An explicitly authorized diagnostic test also confirmed a
+E3/E6 connection queries were checked with the headset on and off. The driver uses E3 for initial status. An explicitly authorized diagnostic test also confirmed a
 USB response to the family-6 RSSI getter (`0x32`). Local dongle queries returned
 fixed values, while temporarily directing diagnostics to the headset returned
 changing signed RSSI fields. Calibration and freshness remain unverified; see
 the firmware findings for routing, restoration and capture details. Neither the
-monitor nor the driver uses this getter.
+pairing CLI nor the driver uses this getter.
 
 The powered-on test returned `e3 01` and `e6 1b`; powered-off returned `e3 00`
-and `e6 00`. On opening the device or binding it, the monitor and the driver
-send only E3, with a maximum of three
+and `e6 00`. On opening the device or binding it, the driver
+sends only E3, with a maximum of three
 attempts two seconds apart, stopping after valid status. Failed writes or
 timeouts leave state unknown and passive reading continues. E6 is not link
-evidence; the monitor never sends it and the driver reads it only to check the transport before a battery
+evidence; the driver reads it only to check the transport before a battery
 query.

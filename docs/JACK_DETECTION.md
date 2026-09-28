@@ -4,9 +4,8 @@ The DKMS driver reports the wireless link as `SW_HEADPHONE_INSERT` and
 `SW_MICROPHONE_INSERT`. The official `snd-usb-audio` does not yet turn these into
 ALSA jack controls for `1532:0552`; this needs a two-line quirk like the Sony
 DualSense's. With such a module loaded, PipeWire marks the headset output
-unavailable when the headset is off and switches outputs itself. The tray
-detects this through the card's port availability group and stops changing the
-default output, which would otherwise overwrite the output you configured.
+unavailable when the headset is off; WirePlumber handles output switching.
+Neither the pairing CLI nor the plasmoid changes the default output.
 
 To load such a module, install it as a DKMS package for the running kernel. The
 installer downloads `sound/usb` for the matching upstream stable version (GPL-2.0,
@@ -35,7 +34,7 @@ or restarts audio; reboot to activate the new module.
 
 With a manual checkout installation, rerun the installer after a kernel update.
 If headers are missing or the build fails, the new kernel uses the official module
-and the tray routes outputs itself again.
+and automatic switching may not work. There is no application-level routing fallback.
 The upstream stable `sound/usb` is used, so distribution changes to it (for
 example in CachyOS kernels) are not included.
 
@@ -60,9 +59,8 @@ The DKMS driver sets the standard USB `wireless_status` attribute.
 PipeWire's upstream commit `03f894b` ("alsa-udev: Add wireless device status
 monitoring", March 2026, not in the 1.6 series) hides a USB card while its
 dongle reports `disconnected`. With such a PipeWire, WirePlumber falls back
-and returns without the snd-usb-audio quirk or the profile set. The tray
-detects this, from `wireless_status` in PipeWire's ALSA plugin and on the
-dongle, and leaves output switching to PipeWire.
+and returns without the snd-usb-audio quirk or the profile set.
+The installer detects this capability in PipeWire's ALSA plugin.
 
 Check whether the installed PipeWire supports it:
 

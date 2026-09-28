@@ -1,17 +1,17 @@
 # Maintainer: Luis Atala <luis.atala@gmail.com>
 # Build from the matching GitHub tag; build.sh also creates the Python sdist
 # attached to GitHub releases.
-pkgbase=barracuda-status
-pkgname=(barracuda-status hid-razer-barracuda-dkms)
-pkgver=0.3.3
-pkgrel=1
-pkgdesc="Tray monitor, audio routing and HID driver for the Razer Barracuda X (2022) HyperSpeed 2.4 GHz wireless dongle"
+pkgbase=barracuda-pair
+pkgname=(barracuda-pair hid-razer-barracuda-dkms plasma6-applets-barracuda)
+pkgver=0.4.0
+pkgrel=5
+pkgdesc="Pairing utility and HID driver for the Razer Barracuda X (2022) HyperSpeed 2.4 GHz wireless dongle"
 arch=(any)
 url=https://github.com/leag/razer-barracuda
 license=(MIT GPL-2.0-only)
 # Split packages: namcap wants the runtime dependencies here as well.
 makedepends=(python-build python-installer python-setuptools python-wheel
-             python-pyqt6 libpulse dkms hicolor-icon-theme)
+             dkms)
 source=("razer-barracuda-$pkgver.tar.gz::https://github.com/leag/razer-barracuda/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('bed8d2812993c7d83bf7ba6bc303d91d3045d5e2e6d7fa4c1d6ebadb1638fa3f')
 
@@ -20,24 +20,30 @@ build() {
   python -m build --wheel --no-isolation
 }
 
-package_barracuda-status() {
-  pkgdesc="Tray monitor and automatic audio routing for the Razer Barracuda X (2022)"
-  depends=(python python-pyqt6 libpulse pipewire-alsa hicolor-icon-theme)
+package_barracuda-pair() {
+  pkgdesc="Command-line pairing utility for the Razer Barracuda X (2022)"
+  depends=(python)
   optdepends=('hid-razer-barracuda-dkms: native battery reporting and jack detection')
   cd "razer-barracuda-$pkgver"
   python -m installer --destdir="$pkgdir" dist/*.whl
-  install -Dm644 packaging/org.razer.BarracudaStatus.desktop -t "$pkgdir/usr/share/applications"
-  install -Dm644 barracuda_status/assets/barracuda-connected.svg \
-    "$pkgdir/usr/share/icons/hicolor/scalable/apps/barracuda-status.svg"
   install -Dm644 packaging/99-razer-barracuda.rules -t "$pkgdir/usr/lib/udev/rules.d"
-  install -Dm644 packaging/51-barracuda-headphones.conf \
-    -t "$pkgdir/usr/share/wireplumber/wireplumber.conf.d"
+  install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
+}
+
+package_plasma6-applets-barracuda() {
+  pkgdesc="Plasma 6 widget showing the current audio output device"
+  depends=(plasma-workspace plasma-pa breeze-icons)
+  cd "razer-barracuda-$pkgver"
+  local target="$pkgdir/usr/share/plasma/plasmoids/org.razer.barracuda.output"
+  install -Dm644 plasmoid/metadata.json -t "$target"
+  install -Dm644 plasmoid/contents/ui/main.qml -t "$target/contents/ui"
+  install -Dm644 plasmoid/contents/code/output.js -t "$target/contents/code"
   install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
 }
 
 package_hid-razer-barracuda-dkms() {
   pkgdesc="DKMS HID driver for the Razer Barracuda X (2022) dongle, with the snd-usb-audio jack quirk tool"
-  depends=(dkms python git)
+  depends=(dkms python git pipewire-alsa)
   optdepends=('linux-headers: build the modules for the linux kernel')
   install=hid-razer-barracuda-dkms.install
   cd "razer-barracuda-$pkgver"
@@ -49,6 +55,8 @@ package_hid-razer-barracuda-dkms() {
     -t "$pkgdir/usr/share/alsa-card-profile/mixer/profile-sets"
   install -Dm644 packaging/analog-input-headset-mic-razer-barracuda.conf \
     -t "$pkgdir/usr/share/alsa-card-profile/mixer/paths"
+  install -Dm644 packaging/51-barracuda-headphones.conf \
+    -t "$pkgdir/usr/share/wireplumber/wireplumber.conf.d"
   # Build the jack quirk on the target machine for each exact kernel release.
   install -Dm644 packaging/arch/71-barracuda-quirk.hook -t "$pkgdir/usr/share/libalpm/hooks"
   local share="$pkgdir/usr/share/hid-razer-barracuda"

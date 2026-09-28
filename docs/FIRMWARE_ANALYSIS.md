@@ -7,12 +7,13 @@ to the analyzed build and must not be assumed valid for other revisions.
 
 ## Current application and driver behavior and validation
 
-The tray app and the driver send the E3 connection query when opening or binding
+The driver sends the E3 connection query when binding
 the dongle, at most three
 times two seconds apart, stopping after a valid status. Failed queries leave
 status unknown and passive reading continues. The battery queries documented in
-[DKMS.md](DKMS.md) are the driver's only other commands; the app sends nothing else. No firmware, pairing,
-memory-write or restart commands are used.
+[DKMS.md](DKMS.md) are the driver's only other commands. No firmware, pairing,
+memory-write or restart commands are used by the driver. The separate CLI pairs
+only on explicit request; see [the pairing sequence](PROTOCOL.md#pairing).
 
 | Query | Headset on | Headset off |
 | --- | --- | --- |
@@ -20,7 +21,7 @@ memory-write or restart commands are used.
 | E6 | `1b` | `00` |
 
 Both queries returned in approximately 7–8 ms during hardware validation,
-without requiring a new power transition during each capture. Both use E3;
+without requiring a new power transition during each capture. The driver uses E3;
 individual E6 bit meanings remain unresolved. Startup was also checked after
 installation. USB replug and alternate Bluetooth-mode semantics still require
 broader hardware validation. The USB RSSI getter returns changing signed values

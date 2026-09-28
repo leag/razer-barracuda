@@ -1,7 +1,7 @@
-pkgbase = barracuda-status
-	pkgdesc = Tray monitor, audio routing and HID driver for the Razer Barracuda X (2022) HyperSpeed 2.4 GHz wireless dongle
-	pkgver = 0.3.3
-	pkgrel = 1
+pkgbase = barracuda-pair
+	pkgdesc = Pairing utility and HID driver for the Razer Barracuda X (2022) HyperSpeed 2.4 GHz wireless dongle
+	pkgver = 0.4.0
+	pkgrel = 5
 	url = https://github.com/leag/razer-barracuda
 	arch = any
 	license = MIT
@@ -10,20 +10,13 @@ pkgbase = barracuda-status
 	makedepends = python-installer
 	makedepends = python-setuptools
 	makedepends = python-wheel
-	makedepends = python-pyqt6
-	makedepends = libpulse
 	makedepends = dkms
-	makedepends = hicolor-icon-theme
-	source = razer-barracuda-0.3.3.tar.gz::https://github.com/leag/razer-barracuda/archive/refs/tags/v0.3.3.tar.gz
+	source = razer-barracuda-0.4.0.tar.gz::https://github.com/leag/razer-barracuda/archive/refs/tags/v0.4.0.tar.gz
 	sha256sums = bed8d2812993c7d83bf7ba6bc303d91d3045d5e2e6d7fa4c1d6ebadb1638fa3f
 
-pkgname = barracuda-status
-	pkgdesc = Tray monitor and automatic audio routing for the Razer Barracuda X (2022)
+pkgname = barracuda-pair
+	pkgdesc = Command-line pairing utility for the Razer Barracuda X (2022)
 	depends = python
-	depends = python-pyqt6
-	depends = libpulse
-	depends = pipewire-alsa
-	depends = hicolor-icon-theme
 	optdepends = hid-razer-barracuda-dkms: native battery reporting and jack detection
 
 pkgname = hid-razer-barracuda-dkms
@@ -32,4 +25,11 @@ pkgname = hid-razer-barracuda-dkms
 	depends = dkms
 	depends = python
 	depends = git
+	depends = pipewire-alsa
 	optdepends = linux-headers: build the modules for the linux kernel
+
+pkgname = plasma6-applets-barracuda
+	pkgdesc = Plasma 6 widget showing the current audio output device
+	depends = plasma-workspace
+	depends = plasma-pa
+	depends = breeze-icons

@@ -193,9 +193,7 @@ class SndUsbAudioQuirkTests(unittest.TestCase):
 
 
 class PipeWireSupportTests(unittest.TestCase):
-    def test_probe_matches_tray_for_supported_missing_and_old_plugins(self):
-        from barracuda_status.audio_router import pipewire_wireless_support, SPA_ALSA_PLUGINS
-        self.assertEqual(installer.SPA_ALSA_PLUGINS, SPA_ALSA_PLUGINS)
+    def test_probe_for_supported_missing_and_old_plugins(self):
         with tempfile.TemporaryDirectory() as directory:
             plugin = Path(directory) / 'libspa-alsa.so'
             paths = (plugin,)
@@ -204,8 +202,6 @@ class PipeWireSupportTests(unittest.TestCase):
                                       (b'ELF\x00%s/wireless_status\x00', True)):
                 plugin.write_bytes(content)
                 self.assertEqual(installer.pipewire_wireless_support(paths), expected)
-                self.assertEqual(installer.pipewire_wireless_support(paths),
-                                 pipewire_wireless_support(paths))
             with mock.patch.object(Path, 'read_bytes', side_effect=PermissionError):
                 self.assertFalse(installer.pipewire_wireless_support(paths))
 

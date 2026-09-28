@@ -7,7 +7,7 @@ import shutil
 import subprocess
 
 NAME = 'hid-razer-barracuda'
-VERSION = '0.3.3'
+VERSION = '0.4.0'
 DRIVER = 'razer-barracuda'
 FILES = ('hid-razer-barracuda.c', 'hid-ids.h', 'Makefile', 'dkms.conf')
 IDENTITY = 'HID_ID=0003:00001532:00000552'

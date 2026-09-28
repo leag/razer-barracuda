@@ -2,7 +2,8 @@
 
 Use English for documentation, source comments and source UI strings. Provide a
 Spanish entry in `barracuda_status/i18n.py` for every new user-facing message.
-English must remain the default regardless of the host locale.
+The CLI defaults to English regardless of the host locale. The plasmoid follows
+the desktop locale, with English fallback; test both English and Spanish.
 
 Keep changes focused. Run:
 
@@ -11,8 +12,8 @@ uv run python -m unittest discover -s tests -v
 uv run python -m compileall -q barracuda_status scripts
 ```
 
-Tests must not change real desktop audio, require hardware or start real tray
-workers. Add regression coverage for changed protocol or routing behavior.
+Tests must not change real desktop audio or require hardware. QML tests use an
+offscreen platform and mocked sinks. Add coverage for changed protocol or widget behavior.
 Read [protocol observations](docs/PROTOCOL.md) before modifying the HID parser.
 Do not send unverified commands to the dongle.
 

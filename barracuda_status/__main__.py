@@ -1,3 +1,3 @@
-from .app import main
+from .pairing import main
 
 raise SystemExit(main())
