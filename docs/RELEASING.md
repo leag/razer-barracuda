@@ -52,10 +52,27 @@ For a ZIP of the tracked source only:
 git archive --format=zip --output=dist/barracuda-status-source.zip HEAD
 ```
 
-Use tracked source for release archives. For a new release update the version
-in `pyproject.toml`, `barracuda_status/__init__.py`, `packaging/arch/PKGBUILD`,
-`kernel/hid-razer-barracuda/dkms.conf` and `scripts/install_dkms.py` (the tests
-check they agree), then run `uv lock` and commit the updated lockfile.
+Use tracked source for release archives. Prepare the next version with one command:
+
+```bash
+uv run python scripts/version.py --bump patch
+```
+
+Use `--bump minor`, `--bump major` or `--set X.Y.Z` as needed; add `--dry-run`
+to preview. `pyproject.toml` is the source of truth. The script delegates the
+version change and lockfile update to `uv version --no-sync`, synchronizes the
+Python, DKMS and Arch version fields (including `.SRCINFO`), and resets Arch
+`pkgrel` to 1 for a new version. Only stable `X.Y.Z` releases are supported.
+It does not commit, tag, publish, or update an installed monitor.
+
+If you used `uv version` directly, run `uv run python scripts/version.py --sync`
+afterwards. Use `--check` to detect stale distribution metadata. Commit the
+version changes and lockfile before creating the matching `vX.Y.Z` tag.
+
+The new tag archive does not exist during the version bump, so its checksum is
+refreshed after the tag is pushed. The release build runs `updpkgsums` automatically.
+Also run `updpkgsums` and regenerate `.SRCINFO` in `packaging/arch/` afterwards,
+then commit those checksum changes to `main` without moving the published tag.
 
 ## Arch packages
 

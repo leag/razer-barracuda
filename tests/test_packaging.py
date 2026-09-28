@@ -44,6 +44,7 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(field(ROOT / 'kernel/hid-razer-barracuda/dkms.conf',
                                r'^PACKAGE_VERSION="(.+)"'), pkgver)
         self.assertEqual(field(ROOT / 'scripts/install_dkms.py', r"^VERSION = '(.+)'"), pkgver)
+        self.assertEqual(field(ROOT / 'packaging/arch/.SRCINFO', r'^\tpkgver = (\S+)'), pkgver)
 
     def test_packaged_files_exist(self):
         text = PKGBUILD.read_text()
