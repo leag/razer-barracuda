@@ -12,7 +12,7 @@ pkgbase = barracuda-pair
 	makedepends = python-wheel
 	makedepends = dkms
 	source = razer-barracuda-0.4.0.tar.gz::https://github.com/leag/razer-barracuda/archive/refs/tags/v0.4.0.tar.gz
-	sha256sums = bed8d2812993c7d83bf7ba6bc303d91d3045d5e2e6d7fa4c1d6ebadb1638fa3f
+	sha256sums = 16fa34e09c26df4e83e8f86769a8b25a869ec5743dc9ab61853df9e9f08fe55c
 
 pkgname = barracuda-pair
 	pkgdesc = Command-line pairing utility for the Razer Barracuda X (2022)
