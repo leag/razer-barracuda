@@ -15,7 +15,7 @@ pkgbase = barracuda-status
 	makedepends = dkms
 	makedepends = hicolor-icon-theme
 	source = razer-barracuda-0.3.3.tar.gz::https://github.com/leag/razer-barracuda/archive/refs/tags/v0.3.3.tar.gz
-	sha256sums = c3f39db631841d99a1b8d15b75651c38f3500079dccc74f9e0d4c9511f0ec984
+	sha256sums = bed8d2812993c7d83bf7ba6bc303d91d3045d5e2e6d7fa4c1d6ebadb1638fa3f
 
 pkgname = barracuda-status
 	pkgdesc = Tray monitor and automatic audio routing for the Razer Barracuda X (2022)
