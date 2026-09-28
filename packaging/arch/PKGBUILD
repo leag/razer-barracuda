@@ -3,7 +3,7 @@
 # attached to GitHub releases.
 pkgbase=barracuda-status
 pkgname=(barracuda-status hid-razer-barracuda-dkms)
-pkgver=0.3.2
+pkgver=0.3.3
 pkgrel=1
 pkgdesc="Tray monitor, audio routing and HID driver for the Razer Barracuda X (2022) HyperSpeed 2.4 GHz wireless dongle"
 arch=(any)

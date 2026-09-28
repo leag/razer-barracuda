@@ -14,4 +14,6 @@ recursive-include kernel/hid-razer-barracuda *.c *.h Makefile dkms.conf
 recursive-include kernel/snd-usb-audio *.patch Makefile
 recursive-include upstream *.patch .kunitconfig
 recursive-include packaging *.conf
+include packaging/arch/PKGBUILD packaging/arch/.SRCINFO
+recursive-include packaging/arch *.sh *.hook *.install
 global-exclude *.mod.c

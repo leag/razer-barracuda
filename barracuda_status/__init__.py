@@ -1,3 +1,3 @@
 """Wireless link monitoring and desktop audio routing for Barracuda X."""
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"

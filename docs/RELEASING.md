@@ -35,8 +35,8 @@ checks them with namcap, and creates the GitHub release with the two
 `.pkg.tar.zst` files and the source archive attached, with generated notes.
 
 ```bash
-git tag v0.3.2
-git push origin v0.3.2
+git tag v0.3.3
+git push origin v0.3.3
 ```
 
 To reproduce the release build locally with Docker:
