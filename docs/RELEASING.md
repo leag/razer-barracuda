@@ -59,6 +59,9 @@ check they agree), then run `uv lock` and commit the updated lockfile.
 
 ## Arch packages
 
-`packaging/arch/build.sh` builds `barracuda-status` and
-`hid-razer-barracuda-dkms` from an sdist of the tracked tree with `makepkg`.
-Check them with `namcap PKGBUILD *.pkg.tar.zst` before publishing.
+`packaging/arch/build.sh` creates a Python sdist from the tracked tree for the
+GitHub release, then builds `barracuda-status` and `hid-razer-barracuda-dkms`
+with `makepkg`. The PKGBUILD fetches the matching GitHub tag archive, so it also
+builds from a clean AUR checkout. Regenerate `.SRCINFO` after metadata changes
+with `makepkg --printsrcinfo > .SRCINFO` in `packaging/arch/`. Check the packages
+with `namcap PKGBUILD *.pkg.tar.zst` before publishing.

@@ -1,0 +1,33 @@
+pkgbase = barracuda-status
+	pkgdesc = Tray monitor, audio routing and HID driver for the Razer Barracuda X (2022) HyperSpeed 2.4 GHz wireless dongle
+	pkgver = 0.3.2
+	pkgrel = 1
+	url = https://github.com/leag/razer-barracuda
+	arch = any
+	license = MIT
+	license = GPL-2.0-only
+	makedepends = python-build
+	makedepends = python-installer
+	makedepends = python-setuptools
+	makedepends = python-wheel
+	makedepends = python-pyqt6
+	makedepends = libpulse
+	makedepends = dkms
+	makedepends = hicolor-icon-theme
+	source = razer-barracuda-0.3.2.tar.gz::https://github.com/leag/razer-barracuda/archive/refs/tags/v0.3.2.tar.gz
+	sha256sums = c3f39db631841d99a1b8d15b75651c38f3500079dccc74f9e0d4c9511f0ec984
+
+pkgname = barracuda-status
+	pkgdesc = Tray monitor and automatic audio routing for the Razer Barracuda X (2022)
+	depends = python
+	depends = python-pyqt6
+	depends = libpulse
+	depends = hicolor-icon-theme
+	optdepends = hid-razer-barracuda-dkms: native battery reporting and jack detection
+
+pkgname = hid-razer-barracuda-dkms
+	pkgdesc = DKMS HID driver for the Razer Barracuda X (2022) dongle, with the snd-usb-audio jack quirk tool
+	depends = dkms
+	depends = python
+	optdepends = git: needed by barracuda-snd-usb-audio-quirk to fetch sound/usb
+	optdepends = linux-headers: build the modules for the linux kernel

@@ -1,5 +1,6 @@
 #!/bin/sh -e
-# Build the Arch packages from the tracked source tree.
+# Create the Python sdist from this checkout and build packages from the
+# matching GitHub tag configured in PKGBUILD.
 cd "$(dirname "$0")/../.."
 rm -rf dist
 uv build --sdist
