@@ -32,6 +32,9 @@ def main():
     icon = data / 'icons/hicolor/scalable/apps/barracuda-status.svg'
     icon.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(root / 'barracuda_status/assets/barracuda-connected.svg', icon)
+    wireplumber = config / 'wireplumber/wireplumber.conf.d'
+    wireplumber.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(root / 'packaging/51-barracuda-headphones.conf', wireplumber)
     # Desktop Exec is not shell syntax. Quote its reserved characters separately.
     command = str(binary).replace('%', '%%')
     for character in ('\\', '"', '`', '$'):

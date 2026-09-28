@@ -72,4 +72,6 @@ class DistributionTests(unittest.TestCase):
             desktop = (home / 'config/autostart/org.razer.BarracudaStatus.desktop').read_text()
             self.assertIn('--language es', desktop)
             self.assertIn(f'Exec="{launcher}"', desktop)
-            self.assertFalse((home / 'config/wireplumber').exists())
+            rule = home / 'config/wireplumber/wireplumber.conf.d/51-barracuda-headphones.conf'
+            self.assertEqual(rule.read_bytes(),
+                             (ROOT / 'packaging/51-barracuda-headphones.conf').read_bytes())

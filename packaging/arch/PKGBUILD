@@ -30,6 +30,8 @@ package_barracuda-status() {
   install -Dm644 barracuda_status/assets/barracuda-connected.svg \
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/barracuda-status.svg"
   install -Dm644 packaging/99-razer-barracuda.rules -t "$pkgdir/usr/lib/udev/rules.d"
+  install -Dm644 packaging/51-barracuda-headphones.conf \
+    -t "$pkgdir/usr/share/wireplumber/wireplumber.conf.d"
   install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
 }
 

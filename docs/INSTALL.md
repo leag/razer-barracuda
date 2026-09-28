@@ -34,8 +34,11 @@ packaging/arch/build.sh
 sudo pacman -U packaging/arch/barracuda-status-*.pkg.tar.zst packaging/arch/hid-razer-barracuda-dkms-*.pkg.tar.zst
 ```
 
-`barracuda-status` installs the tray app, `barracuda-pair`, the desktop entry
-and the hidraw udev rule. `hid-razer-barracuda-dkms` installs the driver for
+`barracuda-status` installs the tray app, `barracuda-pair`, the desktop entry,
+the hidraw udev rule and a WirePlumber 0.5+ rule that displays the Barracuda output
+with the desktop theme's headphones icon in KDE's audio controls. The icon rule
+matches USB `1532:0552` playback nodes only; it does not change routing, volume,
+profiles or the microphone. `hid-razer-barracuda-dkms` installs the driver for
 every installed kernel through DKMS, the battery udev rule, the dongle's ALSA
 card profile set, and automatically builds the [jack detection](JACK_DETECTION.md)
 module for each installed kernel with headers. A pacman hook repeats this after
@@ -79,6 +82,10 @@ virtual environment. Reinstall after moving the checkout.
 The installer copies the package to your user data directory and creates a launcher
 in `~/.local/bin`. It uses the Python interpreter that ran the installer, so keep
 that interpreter available. It does not restart an existing instance.
+It also installs the headphones icon rule under
+`$XDG_CONFIG_HOME/wireplumber/wireplumber.conf.d` (default `~/.config/...`).
+The rule applies when WirePlumber next creates the output, such as after logging
+in again or reconnecting the dongle after a WirePlumber restart.
 `--autostart` creates a KDE/session autostart entry, not a permanent systemd unit.
 Run only one instance to avoid competing audio changes. Stop an older instance
 before launching an updated copy.
