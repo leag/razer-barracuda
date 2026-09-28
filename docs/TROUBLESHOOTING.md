@@ -26,6 +26,36 @@ The card must expose an output with vendor `0x1532` and product `0x0552`.
 The previous output must still exist to restore it. A manual default-output change
 is respected. ALSA-direct applications are outside the scope of `pactl` routing.
 
+## Playback pauses when the headset turns off
+
+With jack detection enabled, the headset output becomes unavailable when the
+wireless link drops. WirePlumber's `linking.pause-playback` setting is enabled by
+default and pauses media players through MPRIS when their output sink is removed.
+The tray app does not send playback commands; it leaves this routing to PipeWire
+when jack detection is available.
+
+Check the setting and disable the automatic pause for the current session:
+
+```bash
+wpctl settings linking.pause-playback
+wpctl settings linking.pause-playback false
+```
+
+To keep the setting disabled across WirePlumber restarts, save it:
+
+```bash
+wpctl settings --save linking.pause-playback false
+```
+
+Reset the saved value to WirePlumber's default (`true`) with:
+
+```bash
+wpctl settings --reset linking.pause-playback
+```
+
+This setting applies to any removed output sink, not only the Barracuda. With
+automatic pausing disabled, playback may continue through the fallback output.
+
 ## Analog versus digital profiles
 
 These are audio-server profile names. The USB transport is digital even when the
