@@ -22,7 +22,7 @@ build() {
 
 package_barracuda-status() {
   pkgdesc="Tray monitor and automatic audio routing for the Razer Barracuda X (2022)"
-  depends=(python python-pyqt6 libpulse hicolor-icon-theme)
+  depends=(python python-pyqt6 libpulse pipewire-alsa hicolor-icon-theme)
   optdepends=('hid-razer-barracuda-dkms: native battery reporting and jack detection')
   cd "razer-barracuda-$pkgver"
   python -m installer --destdir="$pkgdir" dist/*.whl
@@ -35,9 +35,9 @@ package_barracuda-status() {
 
 package_hid-razer-barracuda-dkms() {
   pkgdesc="DKMS HID driver for the Razer Barracuda X (2022) dongle, with the snd-usb-audio jack quirk tool"
-  depends=(dkms python)
-  optdepends=('git: needed by barracuda-snd-usb-audio-quirk to fetch sound/usb'
-              'linux-headers: build the modules for the linux kernel')
+  depends=(dkms python git)
+  optdepends=('linux-headers: build the modules for the linux kernel')
+  install=hid-razer-barracuda-dkms.install
   cd "razer-barracuda-$pkgver"
   local src="$pkgdir/usr/src/hid-razer-barracuda-$pkgver"
   install -Dm644 kernel/hid-razer-barracuda/{hid-razer-barracuda.c,hid-ids.h,Makefile,dkms.conf} -t "$src"
@@ -47,7 +47,8 @@ package_hid-razer-barracuda-dkms() {
     -t "$pkgdir/usr/share/alsa-card-profile/mixer/profile-sets"
   install -Dm644 packaging/analog-input-headset-mic-razer-barracuda.conf \
     -t "$pkgdir/usr/share/alsa-card-profile/mixer/paths"
-  # The jack quirk is built per exact kernel from downloaded sources, so it is a tool.
+  # Build the jack quirk on the target machine for each exact kernel release.
+  install -Dm644 packaging/arch/71-barracuda-quirk.hook -t "$pkgdir/usr/share/libalpm/hooks"
   local share="$pkgdir/usr/share/hid-razer-barracuda"
   install -Dm644 kernel/snd-usb-audio/*.patch kernel/snd-usb-audio/Makefile -t "$share/kernel/snd-usb-audio"
   install -Dm755 scripts/install_snd_usb_audio_quirk.py -t "$share/scripts"

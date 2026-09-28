@@ -1,6 +1,8 @@
 """Keep the Arch PKGBUILD in step with the versions and files in the tree."""
 from pathlib import Path
 import re
+import subprocess
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,6 +14,29 @@ def field(path, pattern):
 
 
 class PackagingTests(unittest.TestCase):
+    def test_driver_package_stages_automatic_quirk(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            version = field(PKGBUILD, r'^pkgver=(\S+)')
+            (root / f'razer-barracuda-{version}').symlink_to(ROOT, target_is_directory=True)
+            destination = root / 'package'
+            subprocess.run(['bash', '-c',
+                            'source "$1"; pkgdir="$2"; pkgname=hid-razer-barracuda-dkms; '
+                            'package_hid-razer-barracuda-dkms',
+                            'bash', str(PKGBUILD), str(destination)], cwd=root, check=True)
+            hook = destination / 'usr/share/libalpm/hooks/71-barracuda-quirk.hook'
+            self.assertIn('Target = usr/lib/modules/*/build/Makefile', hook.read_text())
+            self.assertIn('When = PostTransaction', hook.read_text())
+            self.assertIn('--all-kernels', hook.read_text())
+            launcher = destination / 'usr/bin/barracuda-snd-usb-audio-quirk'
+            self.assertIn('--no-profile-set', launcher.read_text())
+            self.assertTrue(launcher.stat().st_mode & 0o111)
+            self.assertTrue((destination / 'usr/share/hid-razer-barracuda/scripts/'
+                             'install_snd_usb_audio_quirk.py').is_file())
+            for path in destination.rglob('*'):
+                self.assertNotIn('.git', path.parts)
+                self.assertNotIn('sound/usb', str(path.relative_to(destination)))
+
     def test_versions_agree(self):
         pkgver = field(PKGBUILD, r'^pkgver=(\S+)')
         self.assertEqual(field(ROOT / 'pyproject.toml', r'^version = "(.+)"'), pkgver)

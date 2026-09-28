@@ -33,9 +33,16 @@ sudo pacman -S --needed dkms linux-headers   # or the headers package for your k
 sudo pacman -U barracuda-status-*.pkg.tar.zst hid-razer-barracuda-dkms-*.pkg.tar.zst
 ```
 
+The `barracuda-status` package depends on `pipewire-alsa` for PipeWire audio
+integration. Package installation does not restart an active user audio
+session; restart the user PipeWire/WirePlumber services or log in again, then
+reconnect the dongle.
+
 Reconnect the dongle once, add Barracuda Status to your session's autostart, and
-select the Barracuda as output and input. For jack detection, also run
-`sudo barracuda-snd-usb-audio-quirk` and reboot; see
+select the Barracuda as output and input. The driver package automatically builds
+the jack quirk for installed kernels with headers unless PipeWire's ALSA plugin
+already supports USB `wireless_status`; internet access is required for the build.
+Reboot to load it; see
 [jack detection](docs/JACK_DETECTION.md).
 
 Other distributions, building the packages yourself, and running from a checkout:

@@ -18,11 +18,24 @@ sudo python3 scripts/install_snd_usb_audio_quirk.py          # then reboot
 sudo python3 scripts/install_snd_usb_audio_quirk.py --remove
 ```
 
-With the Arch package, run `sudo barracuda-snd-usb-audio-quirk` instead; the
-package already provides the profile set described below.
+The Arch driver package installs this automatically for all kernels with headers,
+including on kernel header upgrades. It requires internet access to download sources.
+Automatic installation (`--all-kernels`) first checks the installed PipeWire ALSA
+plugin for `wireless_status` support and skips the quirk when present. This checks
+the capability rather than a version threshold, so distribution backports work
+too. Missing or unreadable plugins retain the quirk fallback. The pacman hook also
+rechecks when the ALSA plugin is upgraded, including downgrades without support.
+Use `--all-kernels --force` to override the check; explicit single-kernel installs
+remain available. This check does not require a plugged-in dongle or running audio
+session. Native switching still needs the HID driver to expose `wireless_status`.
+To retry a failed hook, run `sudo barracuda-snd-usb-audio-quirk --all-kernels`.
+The package already provides the profile set described below. Removing it also
+removes the quirk builds created by the hook. Installation never reloads modules
+or restarts audio; reboot to activate the new module.
 
-After a kernel update the package does not build, the official module loads,
-and the tray routes outputs itself again. Rerun the installer for the new kernel.
+With a manual checkout installation, rerun the installer after a kernel update.
+If headers are missing or the build fails, the new kernel uses the official module
+and the tray routes outputs itself again.
 The upstream stable `sound/usb` is used, so distribution changes to it (for
 example in CachyOS kernels) are not included.
 
@@ -60,7 +73,11 @@ grep -c wireless_status /usr/lib/spa-0.2/alsa/libspa-alsa.so
 Once it does and switching works with the headset off and on, the quirk and
 the profile set can be removed:
 
+The automatic check leaves previously installed quirk builds in place. For builds
+managed by the Arch hook, remove them with
+`sudo barracuda-snd-usb-audio-quirk --all-kernels --remove` and reboot. The ALSA
+profile files remain owned by the package. For a manual checkout installation:
+
 ```bash
 sudo python3 scripts/install_snd_usb_audio_quirk.py --remove   # then reboot
 ```
-

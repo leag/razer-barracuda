@@ -1,0 +1,3 @@
+pre_remove() {
+  barracuda-snd-usb-audio-quirk --all-kernels --remove
+}

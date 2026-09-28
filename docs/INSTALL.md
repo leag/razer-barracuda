@@ -7,10 +7,11 @@
 - PipeWire with PulseAudio compatibility, or PulseAudio, and `pactl`.
 - Read/write access to the dongle's HID device (read-only access supports passive monitoring).
 
-On Arch/CachyOS, install the dependencies:
+On Arch/CachyOS, install the dependencies (the package also declares
+`pipewire-alsa` for the PipeWire ALSA integration):
 
 ```bash
-sudo pacman -S python uv libpulse
+sudo pacman -S python uv libpulse pipewire-alsa
 ```
 
 ## Install
@@ -36,12 +37,24 @@ sudo pacman -U packaging/arch/barracuda-status-*.pkg.tar.zst packaging/arch/hid-
 `barracuda-status` installs the tray app, `barracuda-pair`, the desktop entry
 and the hidraw udev rule. `hid-razer-barracuda-dkms` installs the driver for
 every installed kernel through DKMS, the battery udev rule, the dongle's ALSA
-card profile set, and `barracuda-snd-usb-audio-quirk`, the per-kernel installer
-for the [jack detection](JACK_DETECTION.md) module. Add
+card profile set, and automatically builds the [jack detection](JACK_DETECTION.md)
+module for each installed kernel with headers. A pacman hook repeats this after
+kernel header, PipeWire ALSA plugin or driver package upgrades. It skips the build
+when the installed PipeWire ALSA plugin supports USB `wireless_status`, including
+distribution backports. Otherwise it downloads matching upstream sources,
+so internet access is required during installation. Reboot to load the module.
+If a download or build fails, pacman reports the hook failure; retry with
+`sudo barracuda-snd-usb-audio-quirk --all-kernels`.
+Removing the driver package removes the quirk builds managed by its hook. Add
 Barracuda Status to your session's autostart from the desktop settings.
 Reconnect the dongle once after installing the udev rules. Upgrading is
 `pacman -U` with the newer packages; removing is `pacman -R barracuda-status
 hid-razer-barracuda-dkms`.
+
+Installing the package does not restart the user's PipeWire session. After
+installing or upgrading, log out and back in, or restart the user services
+with `systemctl --user restart pipewire pipewire-pulse wireplumber` when no
+audio playback is active. Then reconnect the dongle and select its output once.
 
 ### From a checkout without packages (other distributions)
 

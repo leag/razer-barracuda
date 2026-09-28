@@ -1,0 +1,18 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = hid-razer-barracuda-dkms
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/lib/modules/*/build/Makefile
+Target = usr/lib/spa-0.2/alsa/libspa-alsa.so
+
+[Action]
+Description = Checking PipeWire support and installing the Barracuda jack quirk if needed...
+When = PostTransaction
+Depends = hid-razer-barracuda-dkms
+Exec = /usr/bin/barracuda-snd-usb-audio-quirk --all-kernels

@@ -22,12 +22,14 @@ pkgname = barracuda-status
 	depends = python
 	depends = python-pyqt6
 	depends = libpulse
+	depends = pipewire-alsa
 	depends = hicolor-icon-theme
 	optdepends = hid-razer-barracuda-dkms: native battery reporting and jack detection
 
 pkgname = hid-razer-barracuda-dkms
 	pkgdesc = DKMS HID driver for the Razer Barracuda X (2022) dongle, with the snd-usb-audio jack quirk tool
+	install = hid-razer-barracuda-dkms.install
 	depends = dkms
 	depends = python
-	optdepends = git: needed by barracuda-snd-usb-audio-quirk to fetch sound/usb
+	depends = git
 	optdepends = linux-headers: build the modules for the linux kernel
