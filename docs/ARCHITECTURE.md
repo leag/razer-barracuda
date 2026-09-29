@@ -3,10 +3,19 @@
 - `barracuda_pair/pairing.py`: validated pairing and `barracuda-pair` CLI.
   Both the Python module (`barracuda_pair`) and distribution (`barracuda-pair`)
   use the pairing name; there is no `barracuda-status` executable.
+- `barracuda_pair/audio.py`: optional JSON helper for explicit software-effect
+  configuration and live EQ controls; it never opens HID. The presets are in
+  `audio_presets.py`, with their MIT attribution preserved.
 - `barracuda_pair/i18n.py`: English/Spanish CLI translations.
 - `plasmoid/`: native Plasma 6 QML widget. `Server.defaultSink` from
   `org.kde.plasma.private.volume` provides the default output and notifications.
-  Pure JavaScript selects the device icon; KDE opens its own Sound settings.
+  Pure JavaScript selects the device icon and formats volume/mute information.
+  The expanded view summarizes any default output using native Plasma controls.
+  KDE opens its own Sound settings as a secondary action. Explicit pairing uses
+  Plasma5Support's executable engine to run the existing CLI with `--yes` only
+  after native UI confirmation. The widget shows activity and the final result;
+  no command runs when it loads. The powermanagement data engine supplies the
+  Barracuda battery published by the driver through UPower/Solid, without HID reads.
   The compact view loads KDE's detailed headset/speaker SVGs with Qt Quick
   `Image`, avoiding theme recoloring and small symbolic variants. Other device
   icons use Kirigami's theme lookup. The package depends on `breeze-icons`
@@ -21,8 +30,10 @@
 - `tests/`: simulated pairing, installer, packaging and QML checks.
 
 Only the kernel driver monitors wireless state. WirePlumber owns routing.
-The CLI pairs only on explicit request, and the widget is read-only. Neither
-starts workers, stores a previous audio output, or installs autostart entries.
+The CLI pairs only on explicit request. The summary reads audio state; the optional
+effects tab invokes finite helper commands only on user actions. There are no
+background Python workers, saved previous outputs, or autostart entries.
+See [audio effects](AUDIO_EFFECTS.md) for configuration ownership and activation.
 
 Device identity and default-output selection are presentation, not link evidence.
 A failed driver query leaves link state unknown. Native battery reporting and

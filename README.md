@@ -9,8 +9,8 @@ Linux support for the Razer Barracuda X (2022), USB `1532:0552`.
   the default output's device icon. Barracuda uses KDE Breeze's detailed headset
   icon, including the microphone.
 
-WirePlumber manages audio switching; the Python utility and widget do not route
-audio. This is an independent project, not an official Razer application.
+WirePlumber manages audio switching. Optional [audio effects](docs/AUDIO_EFFECTS.md)
+use its smart-filter policy; effects and system tuning require explicit activation. This is an independent project, not an official Razer application.
 
 ## Install
 
@@ -29,13 +29,17 @@ barracuda-pair --language es
 ```
 
 Pairing requires explicit confirmation. After pairing, power-cycle the headset.
-There is no graphical pairing interface or autostart service.
+The widget offers native pairing confirmation and displays the result. There is no autostart service.
 
 ## Plasma widget
 
 Add **Current Audio Output** (**Salida de audio actual**) from Plasma's widget
 picker. The panel icon follows the default audio device; hover shows its name
-and mute state. Click opens KDE Sound settings. This is a separate widget, not
+and volume/mute state. Click opens a summary for any default output, with secondary
+actions for KDE Sound settings and native Barracuda pairing. It also shows the
+Barracuda battery reported by KDE. The **Equalizer**, **Microphone** and **System** tabs offer optional output
+and microphone EQ, profiles, sidetone and persistent PipeWire/WirePlumber tuning.
+Pairing requires `barracuda-pair` on `PATH`. This is a separate widget, not
 a modification of KDE's stock volume applet. See [usage](docs/USAGE.md).
 The detailed artwork comes from the installed `breeze-icons` package, not from
 bundled project icons. After a widget update, Plasma may need to be

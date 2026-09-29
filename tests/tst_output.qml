@@ -4,6 +4,60 @@ import "../plasmoid/contents/code/output.js" as Output
 
 TestCase {
     name: "OutputIcon"
+    function test_volume_and_status() {
+        compare(Output.volumePercent(null), null);
+        compare(Output.volumePercent({name: "auto_null", volume: 65536}), null);
+        compare(Output.volumePercent({name: "HDMI"}), null);
+        compare(Output.volumePercent({volume: NaN}), null);
+        compare(Output.volumePercent({volume: -1}), null);
+        compare(Output.volumePercent({volume: 0}), 0);
+        compare(Output.volumePercent({volume: 32768}), 50);
+        compare(Output.volumePercent({volume: 98304}), 150);
+        compare(Output.status(null, "en_US"), "No audio output");
+        compare(Output.status(null, "es_CL"), "Sin salida de audio");
+        compare(Output.status({volume: 32768, muted: true}, "es_CL"), "Silenciado · Volumen: 50%");
+        compare(Output.status({volume: 0, muted: false}, "en_US"), "Volume: 0%");
+        compare(Output.status({}, "en_US"), "Volume unavailable");
+        compare(Output.status({}, "es_CL"), "Volumen no disponible");
+    }
+    function test_pairing_command_after_ui_confirmation() {
+        compare(Output.pairingCommand("es_CL"),
+                "barracuda-pair --yes --timeout 60 --language es");
+        compare(Output.pairingCommand("en_US"),
+                "barracuda-pair --yes --timeout 60 --language en");
+        compare(Output.pairingCommand("de_DE; echo unsafe"), Output.pairingCommand("en_US"));
+    }
+    function test_battery_identity_and_unknown_states() {
+        const data = {Battery0: {Product: "Logitech mouse", Type: "Mouse", "Is Power Supply": false,
+                                 "Plugged in": true, Percent: 90, State: "Discharging"},
+                      Battery1: {Product: "Razer Barracuda X (2022)", Type: "Headset", "Is Power Supply": false,
+                                 "Plugged in": true, Percent: 65, State: "Discharging"}};
+        compare(Output.battery(data, ["Battery0"]), null);
+        compare(Output.battery(data, ["Battery0", "Battery1"]).percent, 65);
+        compare(Output.battery(data, []), null);
+        data.Battery1["Plugged in"] = false;
+        compare(Output.battery(data, ["Battery1"]), null);
+        data.Battery1["Plugged in"] = true;
+        data.Battery1.Percent = 101;
+        compare(Output.battery(data, ["Battery1"]), null);
+        data.Battery1.Percent = 0;
+        data.Battery1.State = "Unknown";
+        compare(Output.battery(data, ["Battery1"]), null);
+        data.Battery1.State = "Discharging";
+        compare(Output.battery(data, ["Battery1"]).percent, 0);
+        compare(Output.batteryText(null, "es_CL"), "Batería no disponible");
+        compare(Output.batteryText(null, "en_US"), "Battery unavailable");
+        compare(Output.batteryText({percent: 65, state: "Charging"}, "es_CL"), "65% · Cargando");
+        compare(Output.batteryText({percent: 99, state: "Unknown"}, "en_US"), "99% · Charge state unknown");
+        compare(Output.batteryText({percent: 100, state: "FullyCharged"}, "en_US"), "100% · Fully charged");
+    }
+    function test_battery_discovery_subscription() {
+        compare(Output.batterySources([]), ["Battery"]);
+        compare(Output.batterySources(["Battery", "AC Adapter", "Power Profiles"]), ["Battery"]);
+        compare(Output.batterySources(["Battery", "Battery0", "Battery1", "AC Adapter"]),
+                ["Battery", "Battery0", "Battery1"]);
+        compare(Output.batterySources(["Battery", "Battery0"]), ["Battery", "Battery0"]);
+    }
     function test_missing() {
         compare(Output.icon(null), "audio-card");
         compare(Output.icon({name: "auto_null"}), "audio-card");

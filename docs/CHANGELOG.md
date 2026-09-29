@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add native output summaries, Barracuda battery updates and confirmed pairing
+  to the Plasma widget, with compact artwork and explicit volume/battery labels.
+- Add an optional native audio-effects page: output/mic EQ, saved profiles and
+  favorites, software sidetone, opt-in microphone controls, and persistent
+  PipeWire/WirePlumber tuning through the finite `barracuda-audio` helper.
+  Preserve the MIT attribution for the reference project's preset curves.
+  Hardware controls from USB 1532:053c are not sent to USB 1532:0552.
+- Separate audio controls into tabs with collapsible frequency bands and profile
+  management; scrolling over sliders leaves their values unchanged.
+- Request 128-frame processing at 48 kHz for software sidetone to reduce its
+  processing delay without forcing the session quantum.
+
 - Rename the internal Python package from `barracuda_status` to `barracuda_pair`;
   update imports, entry point, installers, tests, CI and version synchronization.
   The public command remains `barracuda-pair`.

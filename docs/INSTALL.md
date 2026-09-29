@@ -113,3 +113,12 @@ The widget uses KDE's private volume QML API, tested with Plasma 6.7.4. It may n
 adjustment for future Plasma releases. It does not require the pairing CLI or
 driver to show other sound devices; the driver is needed for Barracuda's native
 wireless availability/battery integration.
+The optional **Pair Barracuda…** action requires `barracuda-pair`
+on the desktop session's `PATH`. The user CLI installer does not add its
+`~/.local/bin` directory to `PATH`; add it to your session environment if needed.
+
+## Optional audio controls
+
+`python scripts/install.py --audio-controls` also installs `barracuda-audio` without
+enabling effects or restarting audio. The Python wheel includes both CLIs.
+See [audio effects](AUDIO_EFFECTS.md) for dependencies and persistent configuration.

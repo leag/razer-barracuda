@@ -18,6 +18,9 @@ pkgname = barracuda-pair
 	pkgdesc = Command-line pairing utility for the Razer Barracuda X (2022)
 	depends = python
 	optdepends = hid-razer-barracuda-dkms: native battery reporting and jack detection
+	optdepends = pipewire: optional software equalizers and monitoring
+	optdepends = wireplumber: optional smart filter routing
+	optdepends = libpulse: optional microphone controls
 
 pkgname = hid-razer-barracuda-dkms
 	pkgdesc = DKMS HID driver for the Razer Barracuda X (2022) dongle, with the snd-usb-audio jack quirk tool
@@ -32,4 +35,6 @@ pkgname = plasma6-applets-barracuda
 	pkgdesc = Plasma 6 widget showing the current audio output device
 	depends = plasma-workspace
 	depends = plasma-pa
+	depends = plasma5support
 	depends = breeze-icons
+	optdepends = barracuda-pair: pairing and optional audio effects from the widget

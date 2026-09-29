@@ -66,11 +66,26 @@ Item {
     property string deviceName: "Test"
     property bool hasOutput: false
     property var sink: null
+    property bool expanded: false
     function openSettings() {}
     COMPONENT
     TestCase {
         name: "PanelRendering"
         when: windowShown
+        function test_hover_and_keyboard_focus() {
+            mouseMove(button, button.width / 2, button.height / 2)
+            tryCompare(button, "hovered", true)
+            verify(!button.background.visible)
+            mouseClick(button)
+            verify(root.expanded)
+            mouseClick(button)
+            verify(!root.expanded)
+            button.forceActiveFocus(Qt.TabFocusReason)
+            tryCompare(button, "visualFocus", true)
+            verify(button.background.visible)
+            button.focus = false
+            verify(!button.background.visible)
+        }
         function test_sizes_and_icons() {
             for (const direction of [PlasmaCore.Types.Horizontal, PlasmaCore.Types.Vertical]) {
                 root.formFactor = direction
@@ -79,6 +94,11 @@ Item {
                     button.height = size
                     compare(button.contentItem.width, size)
                     compare(button.contentItem.height, size)
+                    const artwork = button.contentItem.children[0]
+                    compare(artwork.width, Math.min(size, Kirigami.Units.iconSizes.medium))
+                    compare(artwork.height, artwork.width)
+                    compare(artwork.x, (size - artwork.width) / 2)
+                    compare(artwork.y, (size - artwork.height) / 2)
                     verify(button.implicitWidth > 0)
                     verify(button.implicitHeight > 0)
                 }
@@ -103,3 +123,28 @@ Item {
                 capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertNotIn('Binding loop', result.stdout + result.stderr)
+
+    @unittest.skipUnless(Path(RUNNER).is_file()
+                         and Path('/usr/lib/qt6/qml/org/kde/plasma/components/ToolButton.qml').is_file(),
+                         'Qt 6 and Plasma components required')
+    def test_generic_summary(self):
+        result = subprocess.run(
+            [RUNNER, '-input', str(ROOT / 'tests/tst_summary.qml')],
+            env={**os.environ, 'QT_QPA_PLATFORM': 'offscreen',
+                 'PULSE_SERVER': 'unix:/nonexistent/barracuda-test'},
+            capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn('Binding loop', result.stdout + result.stderr)
+
+    @unittest.skipUnless(Path(RUNNER).is_file()
+                         and Path('/usr/lib/qt6/qml/org/kde/plasma/components/ToolButton.qml').is_file(),
+                         'Qt 6 and Plasma components required')
+    def test_audio_settings(self):
+        result = subprocess.run(
+            [RUNNER, '-input', str(ROOT / 'tests/tst_audio.qml')],
+            env={**os.environ, 'QT_QPA_PLATFORM': 'offscreen',
+                 'PULSE_SERVER': 'unix:/nonexistent/barracuda-test'},
+            capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        for warning in ('Binding loop', 'TypeError', 'ReferenceError', 'Unable to assign'):
+            self.assertNotIn(warning, result.stdout + result.stderr)

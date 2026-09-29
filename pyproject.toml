@@ -9,7 +9,7 @@ description = "Linux pairing utility and battery driver for the Razer Barracuda 
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "LICENSES/*.txt"]
 dependencies = []
 classifiers = [
   "Operating System :: POSIX :: Linux",
@@ -19,6 +19,7 @@ classifiers = [
 
 [project.scripts]
 barracuda-pair = "barracuda_pair.pairing:main"
+barracuda-audio = "barracuda_pair.audio:main"
 
 [tool.setuptools.packages.find]
 include = ["barracuda_pair*"]

@@ -23,20 +23,25 @@ build() {
 package_barracuda-pair() {
   pkgdesc="Command-line pairing utility for the Razer Barracuda X (2022)"
   depends=(python)
-  optdepends=('hid-razer-barracuda-dkms: native battery reporting and jack detection')
+  optdepends=('hid-razer-barracuda-dkms: native battery reporting and jack detection'
+              'pipewire: optional software equalizers and monitoring'
+              'wireplumber: optional smart filter routing'
+              'libpulse: optional microphone controls')
   cd "razer-barracuda-$pkgver"
   python -m installer --destdir="$pkgdir" dist/*.whl
   install -Dm644 packaging/99-razer-barracuda.rules -t "$pkgdir/usr/lib/udev/rules.d"
   install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
+  install -Dm644 LICENSES/TarikTopalovic-MIT.txt -t "$pkgdir/usr/share/licenses/$pkgname"
 }
 
 package_plasma6-applets-barracuda() {
   pkgdesc="Plasma 6 widget showing the current audio output device"
-  depends=(plasma-workspace plasma-pa breeze-icons)
+  depends=(plasma-workspace plasma-pa plasma5support breeze-icons)
+  optdepends=('barracuda-pair: pairing and optional audio effects from the widget')
   cd "razer-barracuda-$pkgver"
   local target="$pkgdir/usr/share/plasma/plasmoids/org.razer.barracuda.output"
   install -Dm644 plasmoid/metadata.json -t "$target"
-  install -Dm644 plasmoid/contents/ui/main.qml -t "$target/contents/ui"
+  install -Dm644 plasmoid/contents/ui/*.qml -t "$target/contents/ui"
   install -Dm644 plasmoid/contents/code/output.js -t "$target/contents/code"
   install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
 }
