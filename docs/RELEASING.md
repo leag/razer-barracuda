@@ -10,7 +10,8 @@ git remote add origin <your-repository-url>
 git push -u origin main
 ```
 
-No remote URL is assumed by this project. Review the tracked files with
+The distribution metadata points to `leag/razer-barracuda`; forks must update
+those URLs before publishing their own packages. Review the tracked files with
 `git ls-files` before pushing. Do not add ignored files manually.
 
 ## Build release artifacts
@@ -23,7 +24,9 @@ uv build
 
 The wheel contains only the pairing runtime package, without Qt or tray assets. The source archive
 also contains documentation, installer, packaging templates and tests. Check both
-archives for unwanted resources before uploading them.
+archives for unwanted resources before uploading them. The wheel uses the
+`barracuda_pair` module; the sdist also carries the QML widget and its tests.
+KDE Breeze artwork is an external runtime dependency, not a bundled asset.
 
 ## Releases
 
@@ -36,8 +39,9 @@ checks them with namcap, and creates the GitHub release with the three
 `.pkg.tar.zst` files and the source archive attached, with generated notes.
 
 ```bash
-git tag v0.4.0
-git push origin v0.4.0
+# After bumping, testing and committing the new version:
+git tag -a vX.Y.Z -m "Barracuda Linux X.Y.Z"
+git push --atomic origin main vX.Y.Z
 ```
 
 To reproduce the release build locally with Docker:
@@ -83,3 +87,9 @@ with `makepkg`. The PKGBUILD fetches the matching GitHub tag archive, so it also
 builds from a clean AUR checkout. Regenerate `.SRCINFO` after metadata changes
 with `makepkg --printsrcinfo > .SRCINFO` in `packaging/arch/`. Check the packages
 with `namcap PKGBUILD *.pkg.tar.zst` before publishing.
+
+Changing `pkgrel` alone does not publish new source: PKGBUILD still fetches the
+existing `v$pkgver` tag. For source changes such as the module rename or headset
+icon, bump the project version and publish a new tag. Do not move an existing
+release tag. Locally built `0.4.0-6` packages do not imply a GitHub release.
+The release/checksum follow-up does not update installed copies or restart Plasma.

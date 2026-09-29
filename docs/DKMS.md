@@ -15,7 +15,10 @@ On Arch Linux and CachyOS, install the `hid-razer-barracuda-dkms` package from
 a [release](https://github.com/leag/razer-barracuda/releases) with `pacman -U`.
 It carries the driver sources, the udev rules, the ALSA card profile set and
 the jack quirk tool; pacman's DKMS hook builds the module for every installed
-kernel, and `pacman -R` removes it. Reconnect the dongle once to activate it.
+kernel with headers, and `pacman -R` removes it. The package also carries the
+WirePlumber device-icon rule and automatically installs the jack quirk when
+needed; see [installation](INSTALL.md) and [jack detection](JACK_DETECTION.md).
+Reboot after upgrading to load the newly installed modules.
 
 On other distributions, from this checkout:
 
@@ -31,7 +34,8 @@ The installer also installs `99-barracuda-battery.rules`, identifying the
 USB sound card as a headset for UPower/KDE. It does not restart user applications
 or issue audio commands.
 A changed source tree cannot overwrite an already installed version silently.
-When upgrading an already loaded module, reload it once after installation:
+An already loaded module is not replaced by installing new files. Prefer a reboot.
+If deliberately testing a reload, reload it once after installation:
 `sudo modprobe -r hid-razer-barracuda && sudo modprobe hid-razer-barracuda`.
 This clears telemetry until fresh notifications arrive.
 
@@ -115,17 +119,29 @@ only the driver monitors physical link state.
 
 ## Removal
 
-Disconnect the dongle, then run:
+For an Arch package installation, use the package manager rather than deleting
+package-owned sources:
+
+```bash
+sudo pacman -R hid-razer-barracuda-dkms
+```
+
+This also removes jack-quirk builds managed by its hook. Reboot afterwards;
+removing files does not unload the running module.
+
+For a manual checkout installation, disconnect the dongle and inspect
+`dkms status`. Replace `VERSION` below with the exact installed version:
 
 ```bash
 sudo modprobe -r hid-razer-barracuda
-sudo dkms remove hid-razer-barracuda/0.3.2 --all
-sudo rm -r /usr/src/hid-razer-barracuda-0.3.2
+sudo dkms remove 'hid-razer-barracuda/VERSION' --all
 sudo rm /etc/udev/rules.d/99-barracuda-battery.rules
 sudo udevadm control --reload-rules
 ```
 
 Reconnect the dongle; the generic HID driver resumes handling its HID interface.
+Review any remaining `/usr/src/hid-razer-barracuda-VERSION` directory before
+removing it; do not remove another installation's sources.
 
 ## Validation
 
@@ -142,7 +158,7 @@ The Python tests cover the installers with temporary files and mocked
 commands, without changing real devices. Compile the DKMS module with:
 
 ```bash
-make -C kernel/hid-razer-barracuda
+make -C kernel/hid-razer-barracuda W=1
 ```
 
 Compilation and simulated protocol tests do not establish hardware behavior.
@@ -204,9 +220,10 @@ Version 0.2.0 adds a "Headset Jack" input device reporting the confirmed
 wireless link as `SW_HEADPHONE_INSERT` and `SW_MICROPHONE_INSERT`. It follows
 hid-playstation, whose events snd-usb-audio's DualSense quirk turns into ALSA
 jack controls because that UAC1 device has no jack detection. No such quirk
-exists for 1532:0552 yet, so PipeWire does not use these switches; they are a
+was installed for 1532:0552 in that version, so PipeWire did not use these switches; they were a
 standard link signal for other consumers. Only confirmed 0/1 transitions are
-reported; an unknown link keeps the last value.
+reported; an unknown link keeps the last value. The current package includes
+the quirk described in [jack detection](JACK_DETECTION.md).
 
 Version 0.1.9 sets the `voltage_max_age` default to 60 s after measuring that
 background readers turned 10 s into a query every ~11 s.

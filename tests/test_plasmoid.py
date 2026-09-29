@@ -44,7 +44,7 @@ class PlasmoidTests(unittest.TestCase):
 
     @unittest.skipUnless(Path(RUNNER).is_file()
                          and Path('/usr/lib/qt6/qml/org/kde/plasma/components/ToolButton.qml').is_file()
-                         and Path('/usr/share/icons/breeze/devices/64/audio-headphones.svg').is_file(),
+                         and Path('/usr/share/icons/breeze/devices/64/audio-headset.svg').is_file(),
                          'Plasma components and Breeze icons required')
     def test_panel_geometry_and_artwork(self):
         source = (ROOT / 'plasmoid/contents/ui/main.qml').read_text()
@@ -61,8 +61,8 @@ import org.kde.plasma.core as PlasmaCore
 Item {
     id: root
     property int formFactor: PlasmaCore.Types.Horizontal
-    property string deviceIcon: "audio-headphones"
-    property string deviceArtwork: "file:///usr/share/icons/breeze/devices/64/audio-headphones.svg"
+    property string deviceIcon: "audio-headset"
+    property string deviceArtwork: "file:///usr/share/icons/breeze/devices/64/audio-headset.svg"
     property string deviceName: "Test"
     property bool hasOutput: false
     property var sink: null
@@ -84,7 +84,7 @@ Item {
                 }
             }
             const picture = button.contentItem.children[0]
-            for (const icon of ["audio-headphones", "audio-speakers"]) {
+            for (const icon of ["audio-headset", "audio-speakers"]) {
                 root.deviceArtwork = "file:///usr/share/icons/breeze/devices/64/" + icon + ".svg"
                 tryCompare(picture, "status", Image.Ready)
                 verify(picture.visible)

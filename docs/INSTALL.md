@@ -12,6 +12,10 @@ The split package now produces:
 This layout starts with v0.4.0. Release builds fetch the matching GitHub tag, not
 uncommitted checkout changes. See [releasing](RELEASING.md) before building
 with `packaging/arch/build.sh`.
+Download release assets from [GitHub releases](https://github.com/leag/razer-barracuda/releases).
+Use a directory containing only the selected package versions when running the
+wildcard installation command below. Checkout changes after a tag are not included
+in that tag's packages; see [change history](CHANGELOG.md).
 
 Install the resulting packages together with headers for your kernel:
 
@@ -37,6 +41,30 @@ Reconnect the dongle after installing udev rules. Log in again for the WirePlumb
 icon rule. Select the Barracuda output once; WirePlumber handles subsequent
 availability changes. See [jack detection](JACK_DETECTION.md).
 
+## Building Arch packages locally
+
+From a clean checkout of the release you intend to build, install the build
+tools and run the helper as your ordinary user:
+
+```bash
+sudo pacman -S --needed base-devel git uv python-build python-installer python-setuptools python-wheel dkms pacman-contrib namcap
+packaging/arch/build.sh
+namcap packaging/arch/PKGBUILD packaging/arch/*.pkg.tar.zst
+```
+
+Install the header package matching your kernel as well: `linux-headers` in the
+example above is for Arch's standard `linux` kernel, not every CachyOS kernel.
+Review build and package-check results before installing the three matching
+archives with `pacman -U`. Do not mix older archives left in the output directory.
+
+The helper clears the generated `dist/` directory, creates a Python source
+archive, and refreshes PKGBUILD checksums. **The Arch package source is still the
+GitHub tag configured in PKGBUILD**, not that local Python archive. This command
+does not package uncommitted or post-tag changes; a local package-release number
+alone does not change the source. Use the checkout installation instructions
+below to try unreleased CLI/widget changes, and the
+[release guide](RELEASING.md) for tagged/container builds.
+
 ## Pairing CLI from a checkout
 
 No third-party Python runtime dependencies are needed:
@@ -60,7 +88,8 @@ HID permissions remain separate.
 
 ## Plasma widget from a checkout
 
-Requires Plasma 6 and the distribution's `plasma-pa` package:
+Requires Plasma 6, `plasma-pa`, and Breeze icons installed under
+`/usr/share/icons/breeze/devices/64/` (Arch package `breeze-icons`):
 
 ```bash
 kpackagetool6 --type Plasma/Applet --install plasmoid
@@ -68,8 +97,17 @@ kpackagetool6 --type Plasma/Applet --install plasmoid
 
 For an existing user installation use `--upgrade plasmoid` instead.
 Add **Current Audio Output** from the panel's **Add Widgets** menu. Installing
-does not alter your panel layout. Remove and re-add an existing widget after
-upgrading its QML. Do not install both a user copy and the Arch widget package.
+does not alter your panel layout. Plasma can cache QML even after removing and
+re-adding a widget; follow the [reload instructions](TROUBLESHOOTING.md#widget-update-not-visible)
+after upgrading. Do not install both a user copy and the Arch widget package.
+
+To preview without installing or adding it to the panel, run from the repository:
+
+```bash
+plasmawindowed "$PWD/plasmoid"
+```
+
+Close the preview when done. It does not need to run for the panel widget to work.
 
 The widget uses KDE's private volume QML API, tested with Plasma 6.7.4. It may need
 adjustment for future Plasma releases. It does not require the pairing CLI or

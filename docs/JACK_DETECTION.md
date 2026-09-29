@@ -40,15 +40,18 @@ example in CachyOS kernels) are not included.
 
 The installer also installs an ALSA card profile set for the dongle
 (`packaging/razer-barracuda.conf`, selected by a udev rule). PipeWire's default
-set gives the card S/PDIF and AC3 profiles, which play the same stereo stream
-but have no jack-aware port, and a microphone port bound to no jack because the
+set gives the card S/PDIF and AC3 profiles backed by the same playback PCM
+but without a jack-aware port (AC3 playback was not validated), and a microphone port bound to no jack because the
 stock headset-mic path expects a differently named mixer element. The
 Barracuda set offers only the analog profiles and one microphone port that
 follows the `Headset Mic Jack`, so both the output and the microphone become
 unavailable while the headset is off. It applies after the reboot.
+See [analog versus digital profiles](TROUBLESHOOTING.md#analog-versus-digital-profiles)
+for the ACP/ALSA mapping details and the microphone-path correction.
 
 Select the Barracuda once as your output and input. WirePlumber falls back to
-other devices while the headset is off and returns to them when it reconnects.
+other devices while the headset is off and can return to the headset when it
+reconnects, according to the user's WirePlumber policy and saved selection.
 Earlier versions used a WirePlumber rule (`51-barracuda-analog-only.conf`) for
 the profiles; remove it from `~/.config/wireplumber/wireplumber.conf.d/`, since
 it overrides the profile set.
@@ -68,8 +71,8 @@ Check whether the installed PipeWire supports it:
 grep -c wireless_status /usr/lib/spa-0.2/alsa/libspa-alsa.so
 ```
 
-Once it does and switching works with the headset off and on, the quirk and
-the profile set can be removed:
+Once it does and switching works with the headset off and on, the quirk may no
+longer be needed. Do not manually delete profile files owned by an Arch package.
 
 The automatic check leaves previously installed quirk builds in place. For builds
 managed by the Arch hook, remove them with
@@ -79,3 +82,7 @@ profile files remain owned by the package. For a manual checkout installation:
 ```bash
 sudo python3 scripts/install_snd_usb_audio_quirk.py --remove   # then reboot
 ```
+
+The custom ALSA profile set removes irrelevant S/PDIF/AC3 profiles and fixes the
+microphone jack mapping. It is independent of the plasmoid's headset artwork.
+Neither the icon nor the selected default output proves the wireless link is up.

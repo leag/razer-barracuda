@@ -11,6 +11,10 @@ generated with `git format-patch` against the HID tree's `for-next` branch
 | `upstream/hid/0002-*.patch` | Battery, cable and voltage queries over the remote diagnostic route | linux-input |
 | `upstream/alsa/0001-*.patch` | snd-usb-audio jack quirk | linux-sound, once the HID driver is accepted |
 
+The pairing CLI and Plasma widget are userspace components, not part of this
+kernel submission. Module/package renames or widget artwork changes do not by
+themselves change the HID/ALSA patch series or its validation history.
+
 `scripts/get_maintainer.pl` lists Jiri Kosina and Benjamin Tissoires for the
 HID patches, and Jaroslav Kysela and Takashi Iwai for the ALSA patch.
 

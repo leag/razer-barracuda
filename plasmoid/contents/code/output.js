@@ -9,13 +9,13 @@ function icon(sink) {
     if (/(^| )USB1532:0552( |$)/i.test(components)
             || (String(props["device.vendor.id"]).toLowerCase() === "0x1532"
                 && String(props["device.product.id"]).toLowerCase() === "0x0552"))
-        return "audio-headphones";
+        return "audio-headset";
     if (sink.formFactor === "headphone" || sink.formFactor === "headset")
-        return "audio-headphones";
+        return "audio-headset";
     var ports = sink.ports || [];
     var port = ports[sink.activePortIndex];
     if (port && /headphone|headset/.test(port.name))
-        return "audio-headphones";
+        return "audio-headset";
     return sink.iconName || "audio-speakers";
 }
 
@@ -27,7 +27,7 @@ function text(english, spanish, locale) {
 // Files remain owned by breeze-icons; no theme artwork is copied into this package.
 function artwork(iconName) {
     if (/^audio-(headphones|headset)(-|$)/.test(iconName))
-        return "file:///usr/share/icons/breeze/devices/64/audio-headphones.svg";
+        return "file:///usr/share/icons/breeze/devices/64/audio-headset.svg";
     if (/^audio-speakers(-|$)/.test(iconName))
         return "file:///usr/share/icons/breeze/devices/64/audio-speakers.svg";
     return iconName;

@@ -11,6 +11,7 @@ user in their conversation language. Read README.md and docs/PROTOCOL.md first.
 ## Layout
 
 - plasmoid/: read-only Plasma 6 default-output widget and icon selection.
+  Detailed headset/speaker artwork is loaded from the installed KDE Breeze theme.
 - barracuda_pair/pairing.py: pairing sequence, `barracuda-pair` CLI and hidraw lookup.
 - barracuda_pair/i18n.py: explicit UI translations.
 - tests/: hardware-independent unittest suite.
@@ -99,13 +100,16 @@ private files. Distinguish unit tests, compiled builds, live routing and physica
 ## Distribution and local deployment
 
 Never force-add ignored files. Keep build artifacts, captures and vendor-derived
-files out of the tree. Public icons are original SVGs.
+files out of the tree. Do not bundle theme icons: the plasmoid uses the
+`breeze-icons` dependency and its detailed `audio-headset.svg`/`audio-speakers.svg`.
 Keep all public docs in English, and ensure default English and Spanish strings
 are tested. Do not introduce personal absolute paths into tracked files.
 
 Repository edits do not update an installed copy automatically. The user installer
 copies only the pairing modules and creates the CLI launcher. It does not create
 desktop/autostart entries. Installing the plasmoid does not modify panel layouts.
+Plasma may cache QML across widget removal/re-addition. An authorized shell
+restart can refresh it without restarting audio; inspect logs for binding errors.
 A legacy local barracuda-status.service may exist as a transient user service;
 it is not a permanent unit supplied by this project. Avoid duplicate instances.
 Do not turn session autostart into a permanent service as a side effect.

@@ -38,7 +38,7 @@ the user on the physical headset.
 The desktop handles this media key and forwards playback control to its selected
 media player. Neither the pairing CLI nor the driver translates or injects media keys. These
 report-ID-2 frames are not wireless-link evidence and are ignored by its link
-parser. Capturing them requires no output command or monitor restart.
+parser. Capturing them requires no output command or driver reload.
 
 This validation covers single short presses only. Descriptor entries for other
 media controls do not establish which button gestures generate them.
@@ -109,7 +109,8 @@ An additional all-message read-only capture across two cable cycles while the
 LED was green saw only the type-8 cable payloads; no type-7 charger-state message
 or new percentage arrived. Static SDK analysis identifies a possible type-7
 charge-complete field, but it has not been observed through this dongle.
-Startup-state queries and battery update timing remain unvalidated.
+These passive captures did not validate startup queries or battery update timing.
+Later query validation and the current refresh policy are documented in [DKMS.md](DKMS.md).
 Missing notifications mean unknown/stale telemetry, not 0% or not charging.
 The optional [DKMS driver](DKMS.md) consumes these notifications for native
 battery reporting and link status; WirePlumber handles routing. See

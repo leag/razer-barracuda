@@ -7,6 +7,10 @@
 - `plasmoid/`: native Plasma 6 QML widget. `Server.defaultSink` from
   `org.kde.plasma.private.volume` provides the default output and notifications.
   Pure JavaScript selects the device icon; KDE opens its own Sound settings.
+  The compact view loads KDE's detailed headset/speaker SVGs with Qt Quick
+  `Image`, avoiding theme recoloring and small symbolic variants. Other device
+  icons use Kirigami's theme lookup. The package depends on `breeze-icons`
+  rather than bundling artwork.
 - `packaging/`: hidraw and battery udev rules, ALSA profile/path and
   WirePlumber device-icon rule.
 - `scripts/install.py`: isolated user installation of the pairing CLI.
@@ -27,3 +31,8 @@ routing depend on validated driver reports and the audio stack.
 The widget depends on a private KDE API, tested with Plasma 6.7.4. Its source is
 independent of the Python wheel. All package versions, including widget metadata,
 are synchronized by `scripts/version.py`.
+
+The published v0.4.0 Python wheel used the internal `barracuda_status` module;
+the checkout now uses `barracuda_pair`. The command remains `barracuda-pair`.
+There is no compatibility import alias. Installation and release artifacts are
+separate from working-tree edits; see [change history](CHANGELOG.md).

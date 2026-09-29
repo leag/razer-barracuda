@@ -5,6 +5,12 @@ These are reverse-engineering observations for Barracuda X (2022), USB
 8051/MCS-51 code; its companion uses Andes NDS32. Addresses below are specific
 to the analyzed build and must not be assumed valid for other revisions.
 
+References to the monitor in historical experiments describe the former tray
+application. The current userspace components are the `barracuda-pair` CLI
+(`barracuda_pair` module) and a read-only Plasma output widget. The widget
+sends no HID commands. UI/package changes do not alter these recorded captures
+or authorize additional queries; see [architecture](ARCHITECTURE.md).
+
 ## Current application and driver behavior and validation
 
 The driver sends the E3 connection query when binding
