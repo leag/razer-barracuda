@@ -1,7 +1,7 @@
 # Native headset controls and Linux audio tuning
 
 The widget opens native headset controls directly. Secondary controls are
-collapsed under **More headset settings**; there is no System tab. Software output EQ,
+collapsed under **More settings**; there is no System tab. Software output EQ,
 microphone EQ and sidetone are removed. Native sidetone is not exposed because
 its audible effect and gain semantics remain unresolved.
 

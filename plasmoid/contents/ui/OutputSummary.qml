@@ -29,6 +29,7 @@ ColumnLayout {
     }
     property var battery: null
     readonly property bool batteryAvailable: battery !== null
+    readonly property bool showBattery: batteryAvailable || Output.barracuda(sink)
     onBatteryAvailableChanged: {
         if (batteryAvailable)
             confirmingPairing = false;
@@ -39,6 +40,7 @@ ColumnLayout {
     readonly property string deviceArtwork: Output.artwork(deviceIcon)
     readonly property string statusText: (Output.bluetooth(sink) ? "Bluetooth · " : "")
         + Output.status(sink, localeName)
+    signal helpRequested()
     signal effectsRequested()
     signal settingsRequested()
     signal pairingRequested()
@@ -98,6 +100,13 @@ ColumnLayout {
                         summary.confirmingPowerOff = true;
                     }
                 }
+                PC3.MenuSeparator {}
+                PC3.MenuItem {
+                    objectName: "helpMenuItem"
+                    text: summary.label("Help", "Ayuda")
+                    icon.name: "help-contents"
+                    onTriggered: summary.helpRequested()
+                }
             }
         }
     }
@@ -155,11 +164,20 @@ ColumnLayout {
         opacity: 0.7
     }
 
+    Kirigami.Separator {
+        visible: summary.showBattery
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+    }
+
     RowLayout {
         Layout.fillWidth: true
         Layout.leftMargin: Kirigami.Units.largeSpacing
         Layout.rightMargin: Kirigami.Units.largeSpacing
         spacing: Kirigami.Units.gridUnit
+        objectName: "headsetBatteryRow"
+        visible: summary.showBattery
 
         WorkspaceComponents.BatteryIcon {
             objectName: "headsetBatteryIcon"
@@ -182,7 +200,7 @@ ColumnLayout {
                 PC3.Label {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
-                    text: summary.label("Battery", "Batería")
+                    text: summary.label("Barracuda battery", "Batería del Barracuda")
                     textFormat: Text.PlainText
                     wrapMode: Text.Wrap
                 }
@@ -212,7 +230,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.leftMargin: Kirigami.Units.largeSpacing
         Layout.rightMargin: Kirigami.Units.largeSpacing
-        visible: !summary.batteryAvailable
+        visible: summary.showBattery && !summary.batteryAvailable
         text: summary.label("No battery reading is available. This does not determine whether the headset is connected.",
                             "No hay una lectura de batería disponible. Esto no indica si los auriculares están conectados.")
         wrapMode: Text.Wrap
@@ -315,19 +333,24 @@ ColumnLayout {
 
     Kirigami.Separator { Layout.fillWidth: true }
 
-    RowLayout {
+    GridLayout {
+        objectName: "outputActions"
         Layout.fillWidth: true
         Layout.margins: Kirigami.Units.largeSpacing
+        columns: width < Kirigami.Units.gridUnit * 20 ? 1 : 2
+        columnSpacing: Kirigami.Units.smallSpacing
+        rowSpacing: Kirigami.Units.smallSpacing
         PC3.ToolButton {
+            Layout.fillWidth: true
             objectName: "soundSettingsButton"
             icon.name: "configure"
             text: summary.label("Sound settings…", "Ajustes de sonido…")
             onClicked: summary.settingsRequested()
         }
-        Item { Layout.fillWidth: true }
         PC3.Button {
+            Layout.fillWidth: true
             objectName: "configureEffectsButton"
-            text: summary.label("Audio effects…", "Efectos de audio…")
+            text: summary.label("Headset settings…", "Ajustes del auricular…")
             onClicked: summary.effectsRequested()
         }
     }

@@ -18,8 +18,8 @@ This is an independent project, not an official Razer application.
 See [installation](docs/INSTALL.md) for package builds and checkout installation.
 The new package layout starts with v0.4.0; older releases contain the former
 tray application.
-The documentation describes this checkout. The Python module rename and headset
-icon change are newer than the v0.4.0 tag; see [change history](docs/CHANGELOG.md).
+See [change history](docs/CHANGELOG.md) for the native headset controls and widget
+refinements introduced in v0.5.0.
 
 ## Pairing
 
@@ -37,10 +37,10 @@ The widget offers native pairing confirmation and displays the result. There is 
 Add **Current Audio Output** (**Salida de audio actual**) from Plasma's widget
 picker. The panel icon follows the default audio device; hover shows its name
 and volume/mute state. Click opens a compact summary of the default output and the Barracuda battery
-reported by KDE. Sound settings and **Audio effects…** open their controls;
+reported by KDE. Sound settings and **Headset settings…** open their controls;
 **More actions** contains native Barracuda pairing and an explicit headset power-off action. The effects view has
 native headset EQ, with Gaming, Do Not Disturb, idle shutdown and Bluetooth
-Quick Connect under **More headset settings**. Session tuning is not exposed in the widget. Native effects support both the
+Quick Connect under **More settings**. Session tuning is not exposed in the widget. Native effects support both the
 USB dongle and the paired Bluetooth headset.
 Software EQ and sidetone are removed; existing filters have an explicit cleanup action.
 Pairing requires `barracuda-pair` on `PATH`. Power-off requires `barracuda-power`,

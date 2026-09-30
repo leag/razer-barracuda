@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import org.kde.kirigami as Kirigami
 import org.kde.plasma.core as PlasmaCore
 import QtTest
 import "../plasmoid/contents/ui"
@@ -76,6 +77,106 @@ Item {
     TestCase {
         name: "OutputSummary"
         when: windowShown
+        function test_help_navigation_and_translation() {
+            summary.visible = false
+            panel.visible = true
+            panel.activeView = true
+            const audioRequests = fakeAudio.requests.length
+            const headsetRequests = fakeHeadset.requests.length
+            for (const locale of ["en_US", "es_CL"]) {
+                panel.localeName = locale
+                compare(findChild(panel, "configureEffectsButton").text,
+                    locale === "en_US" ? "Headset settings…" : "Ajustes del auricular…")
+                const action = findChild(panel, "helpMenuItem")
+                compare(action.text, locale === "en_US" ? "Help" : "Ayuda")
+                action.triggered()
+                verify(panel.helpOpen)
+                verify(findChild(panel, "outputHelp").visible)
+                compare(findChild(panel, "outputHelp").localeName, locale)
+                const body = findChild(findChild(panel, "outputHelp"), "helpBody")
+                compare(body.textFormat, Text.RichText)
+                verify(body.text.includes("<b>"))
+                verify(body.text.includes("<p>"))
+                verify(!findChild(panel, "outputOverview").activeView)
+                compare(fakeAudio.requests.length, audioRequests)
+                compare(fakeHeadset.requests.length, headsetRequests)
+                wait(20)
+                mouseClick(findChild(panel, "backToOutput"))
+                verify(!panel.helpOpen)
+            }
+            panel.effectsOpen = true
+            wait(20)
+            mouseClick(findChild(panel, "effectsHelpButton"))
+            verify(panel.helpOpen)
+            verify(findChild(panel, "outputHelp").visible)
+            panel.activeView = false
+            verify(!panel.helpOpen)
+            verify(!panel.effectsOpen)
+            panel.activeView = true
+            panel.localeName = "en_US"
+            panel.visible = false
+            summary.visible = true
+        }
+        function test_action_layout_adapts_to_width() {
+            const actions = findChild(summary, "outputActions")
+            const settings = findChild(summary, "soundSettingsButton")
+            const effects = findChild(summary, "configureEffectsButton")
+            const originalWidth = summary.parent.width
+            for (const locale of ["en_US", "es_CL"]) {
+                summary.localeName = locale
+                summary.parent.width = 300
+                tryCompare(actions, "columns", 1)
+                tryVerify(() => effects.y > settings.y)
+                verify(settings.width <= actions.width)
+                verify(effects.width <= actions.width)
+                summary.parent.width = 500
+                tryCompare(actions, "columns", 2)
+                tryVerify(() => effects.x > settings.x)
+            }
+            summary.parent.width = originalWidth
+            summary.localeName = "en_US"
+        }
+        function test_effects_height_tracks_available_controls() {
+            sizedPanel.activeView = true
+            sizedPanel.effectsOpen = true
+            fakeHeadset.response = {state: {preset: null, bands: null}, errors: {preset: "unknown-link"}}
+            sizeDialog.visible = true
+            wait(50)
+            const unavailableHeight = sizeDialog.height
+            const settings = findChild(sizedPanel, "headsetSettings")
+            verify(unavailableHeight < 24 * Kirigami.Units.gridUnit)
+            fakeHeadset.response = {state: {preset: 255, bands: [0,0,0,0,0,0,0,0,0,0], gaming: false}}
+            fakeHeadset.loaded(fakeHeadset.response)
+            tryVerify(() => sizeDialog.height > unavailableHeight)
+            fakeHeadset.response = {state: {preset: null, bands: null}, errors: {preset: "unknown-link"}}
+            tryCompare(sizeDialog, "height", unavailableHeight)
+            verify(settings.contentHeight > 0)
+            fakeHeadset.response = null
+            sizedPanel.effectsOpen = false
+            sizeDialog.visible = false
+        }
+        function test_popup_height_tracks_battery_visibility() {
+            sizedPanel.activeView = true
+            sizedPanel.effectsOpen = false
+            sizedPanel.helpOpen = false
+            sizedPanel.sink = {name: "speakers", description: "Speakers", volume: 32768, muted: false}
+            sizedPanel.battery = null
+            sizeDialog.visible = true
+            wait(50)
+            const overview = findChild(sizedPanel, "outputOverview")
+            const compactHeight = sizeDialog.height
+            const compactContent = overview.implicitHeight
+            verify(!overview.showBattery)
+            sizedPanel.battery = {percent: 65, state: "Discharging"}
+            tryVerify(() => sizeDialog.height > compactHeight)
+            verify(overview.implicitHeight > compactContent)
+            sizedPanel.battery = null
+            tryCompare(sizeDialog, "height", compactHeight)
+            tryCompare(overview, "implicitHeight", compactContent)
+            verify(overview.height >= overview.implicitHeight - 1)
+            sizedPanel.sink = null
+            sizeDialog.visible = false
+        }
         function test_popup_shrinks_after_effects() {
             sizeDialog.visible = true
             wait(50)
@@ -189,6 +290,7 @@ Item {
         function test_settings_and_unknown_battery() {
             summary.localeName = "en_US"
             summary.battery = null
+            summary.sink = {name: "barracuda", properties: {"device.vendor.id": "0x1532", "device.product.id": "0x0552"}}
             const hint = findChild(summary, "batteryUnavailableHint")
             verify(hint.visible)
             verify(hint.text.includes("does not determine"))
@@ -204,6 +306,15 @@ Item {
             verify(!hint.visible)
             summary.battery = null
             summary.localeName = "en_US"
+            summary.sink = null
+            verify(!hint.visible)
+            verify(!findChild(summary, "headsetBatteryRow").visible)
+            summary.sink = {name: "speakers", description: "Speakers"}
+            verify(!findChild(summary, "headsetBatteryRow").visible)
+            summary.battery = {percent: 65, state: "Discharging"}
+            verify(findChild(summary, "headsetBatteryRow").visible)
+            summary.battery = null
+            summary.sink = null
         }
         function test_native_battery_presentation() {
             const icon = findChild(summary, "headsetBatteryIcon")

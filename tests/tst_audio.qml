@@ -60,15 +60,16 @@ Item {
             fakeHeadset.response = result;
             fakeHeadset.loaded(result);
             wait(20);
-            const active = findChild(nativeSettings, "nativePreset7");
-            verify(active.font.bold);
-            verify(!active.enabled);
-            const movie = findChild(nativeSettings, "nativePreset9");
-            movie.clicked();
+            const selector = findChild(nativeSettings, "nativeProfileSelector");
+            compare(selector.currentIndex, 1);
+            compare(selector.currentText, "Game");
+            compare(findChild(nativeSettings, "toggleHeadsetOptions").text, "More settings");
+            verify(!selector.wheelEnabled);
+            selector.activated(3);
             compare(fakeHeadset.requests[0].feature, "preset");
             compare(fakeHeadset.requests[0].value, 9);
             compare(nativeSettings.state.preset, 7);
-            verify(active.font.bold);
+            compare(selector.currentIndex, 1);
             verify(!findChild(nativeSettings, "nativeDnd").enabled);
             verify(!nativeSettings.showOptions);
             findChild(nativeSettings, "toggleHeadsetOptions").clicked();
@@ -86,13 +87,76 @@ Item {
             compare(nativeSettings.state.gaming, false);
             verify(findChild(nativeSettings, "nativeGamingHint").text.includes("Bluetooth"));
             fakeHeadset.busy = true;
-            verify(!movie.enabled);
+            verify(!selector.enabled);
             fakeHeadset.busy = false;
             nativeSettings.localeName = "es_CL";
-            verify(findChild(nativeSettings, "nativeAppliedProfile").text.includes("Aplicado: Juegos"));
+            tryCompare(selector, "currentText", "Juegos");
+            compare(findChild(nativeSettings, "toggleHeadsetOptions").text, "Más ajustes");
             fakeHeadset.response = null;
             verify(!findChild(nativeSettings, "nativeGaming").enabled);
-            verify(!active.font.bold);
+            compare(selector.currentIndex, 1);
+            verify(!selector.enabled);
+            nativeSettings.applyingPreset = false;
+            nativeSettings.visible = false;
+        }
+        function test_repeated_errors_share_one_notice() {
+            nativeSettings.localeName = "en_US";
+            fakeHeadset.response = {state: {preset: null}, errors: {
+                preset: "unknown-link", bands: "unknown-link", gaming: "unknown-link",
+                dnd: "unknown-link", standby: "unknown-link", devices: "unknown-link"}};
+            compare(nativeSettings.settingsError, "unknown-link");
+            verify(findChild(nativeSettings, "nativeSettingsError").text.startsWith("unknown-link\n"));
+            verify(!findChild(nativeSettings, "toggleHeadsetOptions").visible);
+            fakeHeadset.response = {state: {preset: null}, errors: {preset: "unknown-link", bands: "timeout"}};
+            verify(nativeSettings.settingsError.includes("Equalizer: unknown-link"));
+            verify(nativeSettings.settingsError.includes("Custom EQ: timeout"));
+            nativeSettings.localeName = "es_CL";
+            verify(nativeSettings.settingsError.includes("Ecualizador:"));
+            fakeHeadset.response = null;
+            nativeSettings.localeName = "en_US";
+        }
+        function test_profile_confirmation_failure_and_custom_bands() {
+            nativeSettings.visible = true;
+            nativeSettings.localeName = "en_US";
+            fakeHeadset.requests = [];
+            const selector = findChild(nativeSettings, "nativeProfileSelector");
+            const custom = findChild(nativeSettings, "nativeCustomBands");
+            const result = {ok: true, state: {preset: 8, bands: [0,0,0,0,0,0,0,0,0,0]}};
+            fakeHeadset.response = result;
+            fakeHeadset.loaded(result);
+            compare(selector.currentIndex, 2);
+            verify(!custom.visible);
+            selector.currentIndex = 4;
+            selector.activated(4);
+            fakeHeadset.busy = true;
+            compare(selector.currentIndex, 2);
+            verify(!selector.enabled);
+            verify(!custom.visible);
+            verify(findChild(nativeSettings, "nativeProfileStatus").text.includes("Applying"));
+            const confirmed = {ok: true, sent: "preset", state: {preset: 255, bands: result.state.bands}};
+            fakeHeadset.response = confirmed;
+            fakeHeadset.loaded(confirmed);
+            fakeHeadset.busy = false;
+            compare(selector.currentIndex, 4);
+            verify(custom.visible);
+            findChild(nativeSettings, "resetNativeBands").clicked();
+            verify(!nativeSettings.bandsDirty);
+            nativeSettings.bands = [1,0,0,0,0,0,0,0,0,0];
+            nativeSettings.bandsDirty = true;
+            findChild(nativeSettings, "applyNativeBands").clicked();
+            compare(fakeHeadset.requests[1].feature, "bands");
+            compare(fakeHeadset.requests[1].value[0], 1);
+            selector.activated(0);
+            fakeHeadset.busy = true;
+            fakeHeadset.response = null;
+            fakeHeadset.error = "Change could not be confirmed";
+            fakeHeadset.busy = false;
+            compare(selector.currentIndex, 4);
+            verify(!selector.enabled);
+            verify(findChild(nativeSettings, "nativeProfileStatus").text.includes("Last confirmed"));
+            verify(!custom.visible);
+            nativeSettings.bandsDirty = false;
+            fakeHeadset.error = "";
             nativeSettings.visible = false;
         }
         function test_native_error_clears_confirmed_state() {

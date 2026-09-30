@@ -1,7 +1,7 @@
 pkgbase = barracuda-pair
 	pkgdesc = Pairing utility and HID driver for the Razer Barracuda X (2022) HyperSpeed 2.4 GHz wireless dongle
-	pkgver = 0.4.0
-	pkgrel = 6
+	pkgver = 0.5.0
+	pkgrel = 1
 	url = https://github.com/leag/razer-barracuda
 	arch = any
 	license = MIT
@@ -11,7 +11,7 @@ pkgbase = barracuda-pair
 	makedepends = python-setuptools
 	makedepends = python-wheel
 	makedepends = dkms
-	source = razer-barracuda-0.4.0.tar.gz::https://github.com/leag/razer-barracuda/archive/refs/tags/v0.4.0.tar.gz
+	source = razer-barracuda-0.5.0.tar.gz::https://github.com/leag/razer-barracuda/archive/refs/tags/v0.5.0.tar.gz
 	sha256sums = 16fa34e09c26df4e83e8f86769a8b25a869ec5743dc9ab61853df9e9f08fe55c
 
 pkgname = barracuda-pair

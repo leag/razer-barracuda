@@ -112,6 +112,16 @@ function status(sink, locale) {
 }
 
 // Device identity is presentation only, never evidence of a wireless link.
+function barracuda(sink) {
+    if (!available(sink))
+        return false;
+    const props = sink.properties || {};
+    return /(^| )USB1532:0552( |$)/i.test(String(props["alsa.components"] || ""))
+        || (String(props["device.vendor.id"]).toLowerCase() === "0x1532"
+            && String(props["device.product.id"]).toLowerCase() === "0x0552")
+        || (bluetooth(sink) && /^Razer Barracuda X(?: \(BT\))?$/.test(String(sink.description || "")));
+}
+
 function icon(sink) {
     if (!sink || sink.name === "auto_null")
         return "audio-card";

@@ -92,10 +92,17 @@ To keep playback going when an output disappears, see
 This is a separate audio-policy preference for all outputs in your WirePlumber
 session, not a widget option.
 
-## Optional audio effects
+Choose **More actions → Help** for explanations of the widget and headset
+controls, including Do Not Disturb. Help is also available from the headset settings
+view and follows the desktop language (English or Spanish). Opening Help does
+not query or change headset settings.
 
-Choose **Audio effects…** to open the native headset EQ directly. The applied
-preset is bold. Custom bands have their own disclosure; **More headset settings**
+## Headset settings
+
+Choose **Headset settings…** to open the native headset EQ directly. The applied
+preset is shown in the **Profile** selector. Selecting a profile applies it
+immediately; the selector updates after headset confirmation. Choose **Custom**
+to reveal its bands, then use **Apply changes** to save adjustments. **More settings**
 contains Gaming, DND, idle shutdown and Bluetooth Quick Connect. Unknown or failed
 values disable their controls; click Refresh to read again. Session buffer and
 sample-rate tuning are no longer exposed in the plasmoid. Software EQ and
@@ -112,7 +119,7 @@ Linux and the desktop forward it to the selected media player; neither the CLI
 nor widget intercepts it. Only single-press play/pause has been validated.
 
 The compact overview shows the current output and a battery row. Sound settings
-and **Audio effects…** are at the bottom; pairing is under **More actions**.
+and **Headset settings…** are at the bottom; pairing is under **More actions**.
 Pairing displays an inline confirmation and progress message. **Back** returns
 from effects to the overview while preserving pending edits.
 The effects editor marks unsaved changes above its Apply button; preset names

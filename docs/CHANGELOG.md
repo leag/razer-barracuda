@@ -1,29 +1,24 @@
 # Change history
 
-## Unreleased
+## v0.5.0
 
-- Add native output summaries, Barracuda battery updates and confirmed pairing
-  to the Plasma widget, with compact artwork and explicit volume/battery labels.
-- Add an optional native audio-effects page: output/mic EQ, saved profiles and
-  favorites, software sidetone, opt-in microphone controls, and persistent
-  PipeWire/WirePlumber tuning through the finite `barracuda-audio` helper.
-  Preserve the MIT attribution for the reference project's preset curves.
-  Hardware controls from USB 1532:053c are not sent to USB 1532:0552.
-- Separate audio controls into tabs with collapsible frequency bands and profile
-  management; scrolling over sliders leaves their values unchanged.
-- Request 128-frame processing at 48 kHz for software sidetone to reduce its
-  processing delay without forcing the session quantum.
-
+- Add native headset EQ, Gaming, Do Not Disturb, idle shutdown and Bluetooth
+  Quick Connect through explicit USB and Bluetooth helpers. Keep unknown settings
+  distinct from confirmed values and restore the USB diagnostic route after use.
+- Add confirmed pairing and explicit headset power-off actions to the Plasma widget.
+- Replace EQ preset buttons with a readback-confirmed Profile selector. Show custom
+  bands under Custom, with explicit Apply changes.
+- Rename Audio effects to Headset settings and add formatted English/Spanish Help
+  with control explanations and step-by-step instructions.
+- Fit overview and headset settings heights to visible content, consolidate repeated
+  errors, and adapt footer actions to narrow layouts. Hide the battery section when
+  neither a Barracuda reading nor an identified Barracuda output is available.
+- Remove software EQ and sidetone from the widget; retain explicit legacy-filter
+  cleanup. Session tuning is not exposed in the widget.
 - Rename the internal Python package from `barracuda_status` to `barracuda_pair`;
-  update imports, entry point, installers, tests, CI and version synchronization.
-  The public command remains `barracuda-pair`.
-- Use KDE Breeze's detailed `audio-headset.svg` (with microphone) instead of
-  `audio-headphones.svg` for the widget's headset presentation and picker icon.
-  Artwork remains owned by `breeze-icons`, not bundled in this repository.
-- Update installation, Plasma reload, troubleshooting and release instructions.
-
-The headset change has been built locally as `0.4.0-6`. It is not part of the
-published v0.4.0 tag; a new source release is required to distribute these changes.
+  the public pairing command remains `barracuda-pair`.
+- Use KDE Breeze's detailed headset artwork, including its microphone. Icons remain
+  an external dependency and are not bundled.
 
 ## v0.4.0
 

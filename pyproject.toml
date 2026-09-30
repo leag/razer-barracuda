@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "barracuda-pair"
-version = "0.4.0"
+version = "0.5.0"
 description = "Linux pairing utility and battery driver for the Razer Barracuda X (2022) 2.4 GHz wireless dongle"
 readme = "README.md"
 requires-python = ">=3.10"
