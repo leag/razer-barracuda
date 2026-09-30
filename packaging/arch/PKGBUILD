@@ -13,7 +13,7 @@ license=(MIT GPL-2.0-only)
 makedepends=(python-build python-installer python-setuptools python-wheel
              dkms)
 source=("razer-barracuda-$pkgver.tar.gz::https://github.com/leag/razer-barracuda/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('16fa34e09c26df4e83e8f86769a8b25a869ec5743dc9ab61853df9e9f08fe55c')
+sha256sums=('2f9113982b21bef4707a2e03e44461735772f8439819fe1535a866aabf63c9df')
 
 build() {
   cd "razer-barracuda-$pkgver"
