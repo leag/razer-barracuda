@@ -3,9 +3,10 @@
 - `barracuda_pair/pairing.py`: validated pairing and `barracuda-pair` CLI.
   Both the Python module (`barracuda_pair`) and distribution (`barracuda-pair`)
   use the pairing name; there is no `barracuda-status` executable.
-- `barracuda_pair/audio.py`: optional JSON helper for explicit software-effect
-  configuration and live EQ controls; it never opens HID. The presets are in
-  `audio_presets.py`, with their MIT attribution preserved.
+- `barracuda_pair/audio.py`: JSON helper for explicit Linux audio tuning and
+  removal of legacy software EQ/sidetone; it never opens HID.
+- `barracuda_pair/headset.py`: finite native settings requests through the
+  driver's bounded, serialized sysfs mailbox. No raw HID fallback or monitor.
 - `barracuda_pair/i18n.py`: English/Spanish CLI translations.
 - `plasmoid/`: native Plasma 6 QML widget. `Server.defaultSink` from
   `org.kde.plasma.private.volume` provides the default output and notifications.
@@ -47,3 +48,12 @@ The published v0.4.0 Python wheel used the internal `barracuda_status` module;
 the checkout now uses `barracuda_pair`. The command remains `barracuda-pair`.
 There is no compatibility import alias. Installation and release artifacts are
 separate from working-tree edits; see [change history](CHANGELOG.md).
+
+## Explicit power control
+
+`barracuda-power` requests a single power-off operation through the matching
+HID driver's write-only sysfs attribute. The driver validates the link and
+serializes route selection, the one-shot MMI command and restoration with its
+battery worker. The CLI shares a per-user XDG lock with pairing and provides no
+raw-HID fallback. The plasmoid launches it only after explicit confirmation and
+continues to obtain battery/link evidence from the existing native interfaces.

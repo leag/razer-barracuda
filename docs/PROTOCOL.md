@@ -202,6 +202,43 @@ connected normally on its next power-on, so a failed connect does not replace
 the stored pairing. The dongle discovers generic Bluetooth audio devices but
 does not link with them.
 
+## Explicit headset power-off diagnostic
+
+An explicitly authorized physical test confirmed headset power-off through the
+1532:0552 dongle. The command is now exposed only as an explicit `barracuda-power --off` request
+and plasmoid action through the serialized driver interface. Neither userspace
+nor the driver sends it automatically.
+
+Static evidence comes from `AW_HID_OTA.AW_POWER_OFF(true)` in the analyzed vendor
+library: it selects the headset route and sends MMI command `02`, named
+`APP_MMI_POWER_OFF_PRESS` in `MMI_Commands_279`. `DeviceObj.send_MMI_command`
+encodes it as family `07`, payload `08 00 02`. No firmware reboot, pairing-data
+clear or factory-reset command is involved.
+
+The test required E0 reporting local route `00`, validated E3 link `01`, and
+E6 `1b` with diagnostic-transport bit `08` already set. It then selected `E1 01`,
+replayed the library's already-validated READ_MAX_LEN setup for 240-byte reads,
+verified E0 `01`, and sent exactly one power-off report:
+
+```text
+01 80 08 50 41 07 47 03 08 00 02 <zero padding to 64 bytes>
+```
+
+`47` is the test's host sequence, not a fixed command byte. About 70 ms later,
+the dongle emitted validated E3 `00`, followed by a validated link-transition
+report with state `00` about 164 ms after the command. No correlated family-7
+acknowledgment arrived during the two-second wait. The user confirmed that the
+headset physically powered off; link loss alone would not have established that.
+
+Cleanup sent `E1 00`, verified E0 `00`, and queried E3, which still returned
+`00`. The dongle remained available. The headset must be powered on with its
+physical button. The test did not establish remote power-on, reboot behavior,
+charging-cable behavior or support on other models or firmware revisions.
+The explicit power-off action must not treat an acknowledgment timeout alone as
+proof of failure or synthesize a disconnected state; it must restore the local route and
+use validated link reports for link status. Raw diagnostic captures remain
+outside the tracked repository.
+
 ## Battery and cable queries
 
 Family 8 is the SDK's `customer_data_command` channel: `PA 08 SEQ LEN DATA`.
@@ -240,3 +277,40 @@ attempts two seconds apart, stopping after valid status. Failed writes or
 timeouts leave state unknown and passive reading continues. E6 is not link
 evidence; the driver reads it only to check the transport before a battery
 query.
+
+## Serialized power-control interface
+
+HID patch 3 adds the write-only `headset_poweroff` sysfs attribute. Writing `1`
+requires both a previously validated link and a fresh E3 `01`, then uses E6,
+E0, E1 remote selection, the validated READ_MAX_LEN setup, exactly one family-7
+`08 00 02`, and E1 local restoration/E0 verification. The entire transaction
+shares the battery worker's route mutex. Busy requests return `EBUSY`; unknown
+or disconnected links do not send the power-off command. The normal waits are
+interruptible; route cleanup uses bounded waits even after signal interruption.
+Missing power-off acknowledgment alone does not cause failure or a resend.
+Only validated link frames update connectivity. The sysfs ABI and fake-device
+KUnit tests do not establish live validation of this new driver entry point.
+
+## Explicit native settings interface
+
+HID patch 4 exposes `headset_settings`, a serialized family-8 mailbox. A write
+contains an eight-digit hexadecimal userspace token, a space, and the payload
+in hexadecimal. A read returns that token and the cached response payload; it
+never sends a query. Only a successful transaction publishes a result. The
+helper checks the token to detect another caller replacing the cached reply.
+
+The driver allows GETs `13`, `14`, `15`, `27`, `2c`, `2d` and their SETs
+`93`, `94`, `95`, `a7`, `ac`, `ad`, with explicit length and value bounds.
+They control the EQ preset, gaming mode, ten custom EQ bands, DND, standby and
+Quick Connect. Requests require a confirmed link and a fresh E3 response,
+share the battery/power-off route mutex, and restore the local route on exit.
+Settings are never queried automatically. Unsolicited op-02 notifications are
+not accepted as replies. The helper verifies SET results with a GET, without
+automatic setter retries. Quick Connect requires a known address and gaming
+mode disabled; acknowledging the request does not confirm a completed switch.
+
+These controls were explicitly requested for the local utility. Physical EQ
+testing confirmed Default/Game changes through raw HID. The new driver mailbox
+has build and simulated-test validation, rather than physical validation of all
+six setters. See [native settings and limitations](AUDIO_EFFECTS.md). Firmware,
+reset, language and experimental sidetone commands remain excluded.

@@ -58,7 +58,11 @@ Plasma5Support.DataSource {
             error = label("Configuration saved, but the live update failed. Apply it with an audio restart.",
                           "Configuración guardada, pero falló la actualización en vivo. Aplícala reiniciando el audio.")
                 + "\n" + (result.detail || "");
-        if (operation === "save")
+        if (operation === "save_apply" || operation === "remove_eq" || operation === "remove_effects")
+            message = result.state.pending_restart
+                ? label("Saved. Apply and restart audio to finish activating the changes.", "Guardado. Aplica y reinicia el audio para terminar de activar los cambios.")
+                : label("Changes applied and saved.", "Cambios aplicados y guardados.");
+        else if (operation === "save")
             message = result.state.pending_restart
                 ? label("Saved. Apply and restart audio to activate these changes.", "Guardado. Aplica y reinicia el audio para activar estos cambios.")
                 : label("Saved.", "Guardado.");

@@ -1,0 +1,318 @@
+From 49e3d2e8e9cb7bb975923a8125e6399fd8e7f097 Mon Sep 17 00:00:00 2001
+From: Luis Atala <luis.atala@gmail.com>
+Date: Tue, 29 Sep 2026 17:25:48 -0300
+Subject: [PATCH] HID: razer-barracuda: serialize explicit headset power-off
+
+Expose a write-only headset_poweroff attribute. A write of 1 checks a
+confirmed link and existing diagnostic transport, sends the validated MMI
+command once and restores the local route under the battery query mutex.
+An acknowledgment timeout after sending is not a failure or link evidence.
+Power-on remains a physical action. Signal interruption still restores
+the route before the write returns.
+
+Assisted-by: LLM [OpenAI Codex]
+---
+ .../testing/sysfs-driver-hid-razer-barracuda  | 16 ++++
+ MAINTAINERS                                   |  1 +
+ drivers/hid/hid-razer-barracuda-test.c        | 63 +++++++++++++
+ drivers/hid/hid-razer-barracuda.c             | 92 +++++++++++++++++--
+ 4 files changed, 165 insertions(+), 7 deletions(-)
+ create mode 100644 Documentation/ABI/testing/sysfs-driver-hid-razer-barracuda
+
+diff --git a/Documentation/ABI/testing/sysfs-driver-hid-razer-barracuda b/Documentation/ABI/testing/sysfs-driver-hid-razer-barracuda
+new file mode 100644
+index 000000000..d7de28e7c
+--- /dev/null
++++ b/Documentation/ABI/testing/sysfs-driver-hid-razer-barracuda
+@@ -0,0 +1,16 @@
++What:           /sys/bus/hid/devices/.../headset_poweroff
++Date:           September 2026
++Contact:        Luis Atala <luis.atala@gmail.com>
++Description:
++                Write 1 to request power-off of the connected Barracuda X
++                (2022) headset. The operation is serialized with battery
++                queries, requires a validated link and existing diagnostic
++                transport, and restores the local route before returning.
++                A successful write means the request was sent, not that
++                physical shutdown has been confirmed. No acknowledgment is
++                required after shutdown; the command is never retried.
++                Link status still comes only from validated device reports.
++                The headset must be powered on with its physical button.
++                Concurrent operations may return EBUSY. Other input is
++                rejected. This attribute is write-only and root-owned;
++                administrators may grant access through local policy.
+diff --git a/MAINTAINERS b/MAINTAINERS
+index e06a07999..945add40e 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -11647,6 +11647,7 @@ HID RAZER BARRACUDA X DRIVER
+ M:	Luis Atala <luis.atala@gmail.com>
+ L:	linux-input@vger.kernel.org
+ S:	Maintained
++F:	Documentation/ABI/testing/sysfs-driver-hid-razer-barracuda
+ F:	drivers/hid/hid-razer-barracuda*
+ 
+ HID SENSOR HUB DRIVERS
+diff --git a/drivers/hid/hid-razer-barracuda-test.c b/drivers/hid/hid-razer-barracuda-test.c
+index 95182c585..787520b24 100644
+--- a/drivers/hid/hid-razer-barracuda-test.c
++++ b/drivers/hid/hid-razer-barracuda-test.c
+@@ -394,6 +394,66 @@ static void barracuda_test_match_reply(struct kunit *test)
+ 	KUNIT_EXPECT_EQ(test, b->reply_value, 4200);
+ }
+ 
++static void barracuda_test_poweroff(struct kunit *test)
++{
++	static const u8 payload[] = { 0x08, 0x00, 0x02 };
++	static const u8 expected[] = {
++		0x01, 0x80, 0x08, 0x50, 0x41, 0x07, 0x60,
++		0x03, 0x08, 0x00, 0x02,
++	};
++	u8 report[BARRACUDA_REPORT_SIZE];
++	unsigned int i;
++
++	barracuda_fill(report, BARRACUDA_FAMILY_MMI, 0x60,
++		       payload, sizeof(payload));
++	KUNIT_EXPECT_MEMEQ(test, report, expected, sizeof(expected));
++	for (i = sizeof(expected); i < sizeof(report); i++)
++		KUNIT_EXPECT_EQ(test, report[i], 0);
++}
++
++static void barracuda_test_poweroff_guards(struct kunit *test)
++{
++	struct barracuda *b = barracuda_test_alloc(test);
++	struct hid_device *hdev;
++	struct device *dev;
++
++	hdev = kunit_kzalloc(test, sizeof(*hdev), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, hdev);
++	hid_set_drvdata(hdev, b);
++	dev = &hdev->dev;
++	KUNIT_EXPECT_EQ(test, headset_poweroff_store(dev, NULL, "0", 1), -EINVAL);
++	KUNIT_EXPECT_EQ(test, headset_poweroff_store(dev, NULL, "1", 1), -ENOTCONN);
++	b->state.linked = 0;
++	KUNIT_EXPECT_EQ(test, headset_poweroff_store(dev, NULL, "1", 1), -ENOTCONN);
++	b->state.linked = 1;
++	b->stopping = true;
++	KUNIT_EXPECT_EQ(test, headset_poweroff_store(dev, NULL, "1", 1), -ENOTCONN);
++	mutex_lock(&b->route_lock);
++	KUNIT_EXPECT_EQ(test, headset_poweroff_store(dev, NULL, "1", 1), -EBUSY);
++	mutex_unlock(&b->route_lock);
++}
++
++static void barracuda_test_read_length_ack(struct kunit *test)
++{
++	struct barracuda *b = barracuda_test_alloc(test);
++	u8 reply[] = {
++		0x50, 0x49, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
++		0x07, 0x00, 0x06, 0xe0, 0x00, 0xf0, 0x00, 0x00, 0x00,
++	};
++
++	b->want_family = BARRACUDA_FAMILY_DIAG;
++	b->want_seq = 0x60;
++	b->read_length = true;
++	b->waiting = true;
++	barracuda_test_chunk(b, reply, sizeof(reply));
++	KUNIT_EXPECT_FALSE(test, b->waiting);
++	KUNIT_EXPECT_EQ(test, b->reply_value, 0);
++	b->waiting = true;
++	reply[13] = 0;
++	barracuda_test_chunk(b, reply, sizeof(reply));
++	KUNIT_EXPECT_EQ(test, b->reply_value, -EPROTO);
++}
++
+ static struct kunit_case barracuda_test_cases[] = {
+ 	KUNIT_CASE(barracuda_test_split),
+ 	KUNIT_CASE(barracuda_test_values),
+@@ -409,6 +469,9 @@ static struct kunit_case barracuda_test_cases[] = {
+ 	KUNIT_CASE(barracuda_test_voltage),
+ 	KUNIT_CASE(barracuda_test_ack),
+ 	KUNIT_CASE(barracuda_test_match_reply),
++	KUNIT_CASE(barracuda_test_poweroff),
++	KUNIT_CASE(barracuda_test_poweroff_guards),
++	KUNIT_CASE(barracuda_test_read_length_ack),
+ 	{}
+ };
+ 
+diff --git a/drivers/hid/hid-razer-barracuda.c b/drivers/hid/hid-razer-barracuda.c
+index 6cae76c17..86fdabacf 100644
+--- a/drivers/hid/hid-razer-barracuda.c
++++ b/drivers/hid/hid-razer-barracuda.c
+@@ -45,6 +45,7 @@
+ 
+ #define BARRACUDA_FAMILY_ACK		0x01
+ #define BARRACUDA_FAMILY_DIAG		0x06
++#define BARRACUDA_FAMILY_MMI		0x07
+ #define BARRACUDA_FAMILY_CUSTOMER	0x08
+ #define BARRACUDA_FAMILY_LINK		0x0e
+ 
+@@ -129,6 +130,7 @@ struct barracuda {
+ 	 */
+ 	bool waiting;
+ 	bool acked;
++	bool read_length;
+ 	u8 want_family;
+ 	u8 want_seq;
+ 	u8 want_command;
+@@ -138,6 +140,7 @@ struct barracuda {
+ 
+ 	/* Serializes query sequences and protects seq. */
+ 	struct mutex route_lock;
++	bool restoring_route;
+ 	u8 seq;
+ 
+ 	/* Serializes battery registration; battery exists only while linked. */
+@@ -331,6 +334,10 @@ static void barracuda_match_reply(struct barracuda *b, const u8 *p,
+ 		}
+ 		if (ret == -2) {
+ 			ret = -EPROTO;
++		} else if (b->read_length) {
++			ret = ret == 4 && result[0] == 0xf0 &&
++			      !result[1] && !result[2] && !result[3] ?
++			      0 : -EPROTO;
+ 		} else if (b->want_family == BARRACUDA_FAMILY_DIAG) {
+ 			ret = barracuda_voltage_mv(result, ret);
+ 			if (ret < 0)
+@@ -508,9 +515,10 @@ static void barracuda_link_query(struct work_struct *work)
+ static int barracuda_request(struct barracuda *b, u8 family, const u8 *payload,
+ 			     u8 len, u8 reply_command, u8 reply_param)
+ {
++	struct completion *done = &b->reply_done;
+ 	unsigned long flags;
+ 	u8 *buf;
+-	int ret;
++	int ret, waited = 0;
+ 
+ 	lockdep_assert_held(&b->route_lock);
+ 
+@@ -524,6 +532,8 @@ static int barracuda_request(struct barracuda *b, u8 family, const u8 *payload,
+ 	barracuda_fill(buf, family, b->seq, payload, len);
+ 
+ 	spin_lock_irqsave(&b->lock, flags);
++	b->read_length = family == BARRACUDA_FAMILY_DIAG &&
++			 payload[0] == 0x25;
+ 	b->want_family = family;
+ 	b->want_seq = b->seq;
+ 	b->want_command = reply_command;
+@@ -536,13 +546,19 @@ static int barracuda_request(struct barracuda *b, u8 family, const u8 *payload,
+ 
+ 	ret = hid_hw_output_report(b->hdev, buf, BARRACUDA_REPORT_SIZE);
+ 	kfree(buf);
+-	if (ret == BARRACUDA_REPORT_SIZE)
+-		wait_for_completion_timeout(&b->reply_done,
+-					    BARRACUDA_REPLY_TIMEOUT);
++	if (ret == BARRACUDA_REPORT_SIZE) {
++		if (b->restoring_route)
++			waited = wait_for_completion_timeout(done,
++							     BARRACUDA_REPLY_TIMEOUT);
++		else
++			waited = wait_for_completion_interruptible_timeout(done,
++									   BARRACUDA_REPLY_TIMEOUT);
++	}
+ 
+ 	spin_lock_irqsave(&b->lock, flags);
+ 	b->waiting = false;
+-	ret = ret == BARRACUDA_REPORT_SIZE ? b->reply_value : -EIO;
++	ret = ret == BARRACUDA_REPORT_SIZE ?
++		(waited < 0 ? waited : b->reply_value) : -EIO;
+ 	spin_unlock_irqrestore(&b->lock, flags);
+ 	return ret;
+ }
+@@ -607,9 +623,14 @@ static bool barracuda_route_end(struct barracuda *b, bool selected)
+ 
+ 	if (!selected)
+ 		return true;
+-	for (attempt = 0; attempt < 2; attempt++)
+-		if (!barracuda_set_route(b, BARRACUDA_ROUTE_LOCAL))
++	b->restoring_route = true;
++	for (attempt = 0; attempt < 2; attempt++) {
++		if (!barracuda_set_route(b, BARRACUDA_ROUTE_LOCAL)) {
++			b->restoring_route = false;
+ 			return true;
++		}
++	}
++	b->restoring_route = false;
+ 	spin_lock_irqsave(&b->lock, flags);
+ 	b->route_failed = true;
+ 	spin_unlock_irqrestore(&b->lock, flags);
+@@ -686,6 +707,59 @@ static void barracuda_refresh(struct work_struct *work)
+ 				   BARRACUDA_POLL_INTERVAL);
+ }
+ 
++/* Only an explicit sysfs write sends this one-shot headset command. */
++static ssize_t headset_poweroff_store(struct device *dev,
++				      struct device_attribute *attr,
++				      const char *buf, size_t count)
++{
++	static const u8 read_length[] = {
++		0x25, 0x34, 0x12, 0x5a, 0x5a, 0x01, 0x00,
++		0x00, 0x00, 0xf0, 0x00, 0x00, 0x00,
++	};
++	static const u8 poweroff[] = { 0x08, 0x00, 0x02 };
++	struct barracuda *b = hid_get_drvdata(to_hid_device(dev));
++	bool selected = false;
++	int ret;
++
++	if (!sysfs_streq(buf, "1"))
++		return -EINVAL;
++	if (!mutex_trylock(&b->route_lock))
++		return -EBUSY;
++	if (!barracuda_refresh_wanted(b)) {
++		ret = -ENOTCONN;
++		goto out;
++	}
++	ret = barracuda_get(b, BARRACUDA_CMD_GET_LINK);
++	if (ret != 1) {
++		ret = ret < 0 ? ret : -ENOTCONN;
++		goto out;
++	}
++	ret = barracuda_route_begin(b, &selected);
++	if (ret)
++		goto out;
++	ret = barracuda_request(b, BARRACUDA_FAMILY_DIAG, read_length,
++				sizeof(read_length), 0, 0);
++	if (ret)
++		goto out;
++	ret = barracuda_request(b, BARRACUDA_FAMILY_MMI, poweroff,
++				sizeof(poweroff), 0, 0);
++	/* Once sent, neither timeout nor a signal may restart shutdown. */
++	if (ret == -ETIMEDOUT || ret == -ERESTARTSYS)
++		ret = 0;
++out:
++	if (!barracuda_route_end(b, selected))
++		ret = -EIO;
++	mutex_unlock(&b->route_lock);
++	return ret ? ret : count;
++}
++static DEVICE_ATTR_WO(headset_poweroff);
++
++static struct attribute *barracuda_attrs[] = {
++	&dev_attr_headset_poweroff.attr,
++	NULL,
++};
++ATTRIBUTE_GROUPS(barracuda);
++
+ static const enum power_supply_property barracuda_properties[] = {
+ 	POWER_SUPPLY_PROP_PRESENT,
+ 	POWER_SUPPLY_PROP_STATUS,
+@@ -923,6 +997,9 @@ static void barracuda_stop(struct barracuda *b)
+ 	b->stopping = true;
+ 	spin_unlock_irqrestore(&b->lock, flags);
+ 	cancel_delayed_work_sync(&b->refresh_work);
++	/* Wait for an explicit power-off to finish restoring the route. */
++	mutex_lock(&b->route_lock);
++	mutex_unlock(&b->route_lock);
+ 
+ 	spin_lock_irqsave(&b->lock, flags);
+ 	b->stopped = true;
+@@ -996,6 +1073,7 @@ static struct hid_driver barracuda_driver = {
+ 	.suspend = pm_ptr(barracuda_suspend),
+ 	.resume = pm_ptr(barracuda_resume),
+ 	.reset_resume = pm_ptr(barracuda_resume),
++	.driver.dev_groups = barracuda_groups,
+ };
+ module_hid_driver(barracuda_driver);
+ 
+-- 
+2.55.0
+

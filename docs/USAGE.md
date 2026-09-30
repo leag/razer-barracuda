@@ -59,7 +59,7 @@ matches the Barracuda model and headset battery type, excluding computer and mou
 batteries. It sends no battery queries. Unknown charging state remains unknown;
 a connected cable does not by itself prove that charging has completed.
 
-**Pair Barracuda…** opens a native confirmation inside the widget. Connect the
+**More actions → Pair Barracuda…** opens a native confirmation inside the widget. Connect the
 Barracuda dongle, put the headset in pairing mode, and choose **Pair** to confirm
 replacing the current pairing, or **Cancel** to leave it unchanged. Only after
 confirmation does the widget run `barracuda-pair --yes --timeout 60`, in the desktop
@@ -77,7 +77,7 @@ specific to Barracuda X (2022), not a generic Bluetooth pairing interface.
 The icon describes the default device, not proof of a physical wireless link.
 It does not show which output each individual application uses. Selecting another
 default in KDE updates the widget. The summary does not poll or write audio state;
-only the explicitly launched pairing CLI accesses HID. Keep KDE's volume widget if you want its volume and device controls;
+only explicitly launched pairing accesses raw HID; power-off uses the serialized driver interface. Keep KDE's volume widget if you want its volume and device controls;
 this widget does not replace those controls.
 
 The WirePlumber rule still advertises `audio-headphones` to other audio clients.
@@ -94,13 +94,70 @@ session, not a widget option.
 
 ## Optional audio effects
 
-The **Equalizer**, **Microphone** and **System** tabs provide output/microphone EQ, profiles and favorites,
-software sidetone and persistent latency/stability options. Effects start disabled.
+Choose **Audio effects…** to open the native headset EQ directly. The applied
+preset is bold. Custom bands have their own disclosure; **More headset settings**
+contains Gaming, DND, idle shutdown and Bluetooth Quick Connect. Unknown or failed
+values disable their controls; click Refresh to read again. Session buffer and
+sample-rate tuning are no longer exposed in the plasmoid. Software EQ and
+sidetone are removed.
+If legacy filters are enabled or loaded, use the explicit cleanup button; it
+briefly restarts audio before native EQ can be used.
 See [audio effects](AUDIO_EFFECTS.md) for activation, dependencies and how to revert.
-Software microphone mute/volume controls are optional and hidden by default.
+Use KDE Sound settings for microphone mute and volume.
 
 ## Play/pause
 
 A short press of the headset's power/play button sends a standard HID media key.
 Linux and the desktop forward it to the selected media player; neither the CLI
 nor widget intercepts it. Only single-press play/pause has been validated.
+
+The compact overview shows the current output and a battery row. Sound settings
+and **Audio effects…** are at the bottom; pairing is under **More actions**.
+Pairing displays an inline confirmation and progress message. **Back** returns
+from effects to the overview while preserving pending edits.
+The effects editor marks unsaved changes above its Apply button; preset names
+follow the desktop language (English or Spanish).
+
+The headset battery uses Plasma's native BatteryIcon component, a percentage and
+a state label for charging, full charge or an unknown charge state. A normal
+discharging state needs no extra label. Missing telemetry shows Unknown.
+Charging does not imply a full battery, and unavailable telemetry does not
+establish wireless link state.
+
+## Headset power-off
+
+Choose **More actions → Turn off headset…**, then **Turn off**. The action always
+addresses the Barracuda headset, independently of the desktop's default output.
+The CLI equivalent is:
+
+```bash
+barracuda-power --off
+barracuda-power --off --language es
+```
+
+`--yes` skips the interactive prompt for callers that already confirmed the
+action. Power-on requires the headset's physical button. Success means the
+power-off request was sent; it does not synthesize a disconnected state or claim
+physical shutdown was observed. An acknowledgment may be lost as the radio turns
+off, so the command is never automatically repeated.
+
+This requires the driver from all three HID patches and
+`packaging/99-barracuda-power.rules`. The rule grants the `audio` group write
+access to the driver's `headset_poweroff` attribute on the matching HID device.
+Installing the driver and rule requires administrator access once; normal use
+requires no sudo for members of that group. An older driver produces an explicit
+update message; the CLI never falls back to unsynchronized raw HID writes.
+Closing the popup does not cancel a started request. Pairing and power actions
+from the same user share an XDG state lock. Driver battery queries and power-off
+share the kernel route mutex; a busy operation can be retried manually.
+
+The battery indicator also accepts the `Razer Barracuda X (BT)` battery
+reported by KDE/UPower. If both transports report a battery, the current audio
+output determines which reading is preferred. Bluetooth charge state may be
+unknown even when the percentage is available. Missing battery data is not
+connection evidence.
+
+Native effects also work when the Barracuda is the Bluetooth output. The helper
+uses the paired headset's discovered serial service and confirms changes by
+reading them back. It does not require the USB dongle for Bluetooth controls.
+See [Bluetooth controls](BLUETOOTH_CONTROLS.md) for validation and dependencies.

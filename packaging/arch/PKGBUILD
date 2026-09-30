@@ -54,7 +54,7 @@ package_hid-razer-barracuda-dkms() {
   cd "razer-barracuda-$pkgver"
   local src="$pkgdir/usr/src/hid-razer-barracuda-$pkgver"
   install -Dm644 kernel/hid-razer-barracuda/{hid-razer-barracuda.c,hid-ids.h,Makefile,dkms.conf} -t "$src"
-  install -Dm644 packaging/99-barracuda-battery.rules packaging/89-razer-barracuda-acp.rules \
+  install -Dm644 packaging/99-barracuda-battery.rules packaging/99-barracuda-power.rules packaging/89-razer-barracuda-acp.rules \
     -t "$pkgdir/usr/lib/udev/rules.d"
   install -Dm644 packaging/razer-barracuda.conf \
     -t "$pkgdir/usr/share/alsa-card-profile/mixer/profile-sets"

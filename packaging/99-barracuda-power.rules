@@ -1,0 +1,5 @@
+# The serialized power-off sysfs action is available to the audio group.
+# The driver creates its attribute before the bind event. Never grant access
+# to other devices or to arbitrary sysfs attributes.
+ACTION=="bind", SUBSYSTEM=="hid", DRIVER=="razer-barracuda", ENV{HID_ID}=="0003:00001532:00000552", TEST=="headset_poweroff", RUN+="/usr/bin/chgrp audio /sys%p/headset_poweroff", RUN+="/usr/bin/chmod 0220 /sys%p/headset_poweroff"
+ACTION=="bind", SUBSYSTEM=="hid", DRIVER=="razer-barracuda", ENV{HID_ID}=="0003:00001532:00000552", TEST=="headset_settings", RUN+="/usr/bin/chgrp audio /sys%p/headset_settings", RUN+="/usr/bin/chmod 0660 /sys%p/headset_settings"

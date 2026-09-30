@@ -98,6 +98,8 @@ def main():
     run('dkms', 'install', '-m', NAME, '-v', VERSION, '-k', os.uname().release)
     rule = source.parent.parent / 'packaging/99-barracuda-battery.rules'
     shutil.copyfile(rule, '/etc/udev/rules.d/99-barracuda-battery.rules')
+    power_rule = source.parent.parent / 'packaging/99-barracuda-power.rules'
+    shutil.copyfile(power_rule, '/etc/udev/rules.d/99-barracuda-power.rules')
     run('udevadm', 'control', '--reload-rules')
     run('udevadm', 'trigger', '--subsystem-match=sound', '--sysname-match=card*')
     if args.activate:

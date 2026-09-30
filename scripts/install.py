@@ -19,7 +19,7 @@ def main():
     target = data / 'barracuda-pair'
     package = target / 'barracuda_pair'
     package.mkdir(parents=True, exist_ok=True)
-    for name in ('__init__.py', '__main__.py', 'pairing.py', 'i18n.py'):
+    for name in ('__init__.py', '__main__.py', 'pairing.py', 'i18n.py', 'control.py', 'headset.py', 'bluetooth.py'):
         shutil.copy2(root / 'barracuda_pair' / name, package / name)
     binary = Path.home() / '.local/bin/barracuda-pair'
     binary.parent.mkdir(parents=True, exist_ok=True)
@@ -28,9 +28,22 @@ def main():
     binary.write_text('#!/bin/sh\nexec ' + shlex.quote(sys.executable) + ' -c ' +
                       shlex.quote(code) + ' --language ' + args.language + ' "$@"\n')
     binary.chmod(0o755)
+    power_binary = binary.with_name('barracuda-power')
+    power_code = ('import sys; sys.path.insert(0, ' + repr(str(target)) +
+                  '); from barracuda_pair.control import main; raise SystemExit(main())')
+    power_binary.write_text('#!/bin/sh\nexec ' + shlex.quote(sys.executable) + ' -c ' +
+                            shlex.quote(power_code) + ' --language ' + args.language + ' "$@"\n')
+    power_binary.chmod(0o755)
+    headset_binary = binary.with_name('barracuda-headset')
+    headset_code = ('import sys; sys.path.insert(0, ' + repr(str(target)) +
+                    '); from barracuda_pair.headset import main; raise SystemExit(main())')
+    headset_binary.write_text('#!/bin/sh\nexec ' + shlex.quote(sys.executable) + ' -c ' +
+                              shlex.quote(headset_code) + ' "$@"\n')
+    headset_binary.chmod(0o755)
     if args.audio_controls:
-        for name in ('audio.py', 'audio_presets.py'):
+        for name in ('audio.py',):
             shutil.copy2(root / 'barracuda_pair' / name, package / name)
+        (package / 'audio_presets.py').unlink(missing_ok=True)
         license_dir = target / 'LICENSES'
         license_dir.mkdir(exist_ok=True)
         shutil.copy2(root / 'LICENSES/TarikTopalovic-MIT.txt', license_dir)

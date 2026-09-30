@@ -21,6 +21,8 @@ TestCase {
         compare(Output.status({}, "es_CL"), "Volumen no disponible");
     }
     function test_pairing_command_after_ui_confirmation() {
+        compare(Output.powerOffCommand("es_CL"), "barracuda-power --off --yes --language es");
+        compare(Output.powerOffCommand("en_US; echo unsafe"), "barracuda-power --off --yes --language en");
         compare(Output.pairingCommand("es_CL"),
                 "barracuda-pair --yes --timeout 60 --language es");
         compare(Output.pairingCommand("en_US"),
@@ -50,6 +52,42 @@ TestCase {
         compare(Output.batteryText({percent: 65, state: "Charging"}, "es_CL"), "65% · Cargando");
         compare(Output.batteryText({percent: 99, state: "Unknown"}, "en_US"), "99% · Charge state unknown");
         compare(Output.batteryText({percent: 100, state: "FullyCharged"}, "en_US"), "100% · Fully charged");
+    }
+    function test_bluetooth_command_target() {
+        const sink = {name: "bluez_output.01_02_03_04_05_06.1", properties: {"device.api": "bluez5"}};
+        compare(Output.bluetoothAddress(sink), "01:02:03:04:05:06");
+        const command = Output.headsetCommand({op: "set", feature: "gaming", value: true}, sink);
+        verify(command.includes('"transport":"bluetooth"'));
+        verify(command.includes('"address":"01:02:03:04:05:06"'));
+        verify(!Output.headsetCommand({op: "status"}, null).includes('"transport"'));
+    }
+    function test_bluetooth_battery_and_transport_changes() {
+        const data = {
+            Battery0: {Product: "Razer Barracuda X (2022)", Type: "Headset", "Is Power Supply": false,
+                       "Plugged in": true, Percent: 65, State: "Discharging"},
+            Battery1: {Product: "Razer Barracuda X (BT)", Type: "Headset", "Is Power Supply": false,
+                       "Plugged in": true, Percent: 60, State: "NoCharge"}
+        };
+        const sources = ["Battery0", "Battery1"];
+        const bt = {name: "bluez_output.example.1", properties: {"device.api": "bluez5"}};
+        compare(Output.battery(data, sources, bt).percent, 60);
+        bt.description = "Razer Barracuda X (BT)";
+        compare(Output.icon(bt), "audio-headset");
+        compare(Output.deviceName(bt, "es_CL"), "Razer Barracuda X");
+        verify(Output.bluetooth(bt));
+        verify(!Output.bluetooth({name: "alsa_output.example"}));
+        compare(Output.battery(data, sources, {name: "alsa_output.example"}).percent, 65);
+        compare(Output.battery(data, ["Battery1"]).percent, 60);
+        compare(Output.batteryText(Output.battery(data, ["Battery1"]), "es_CL"),
+                "60% · Estado de carga desconocido");
+        data.Battery1["Plugged in"] = false;
+        compare(Output.battery(data, ["Battery1"], bt), null);
+        data.Battery1["Plugged in"] = true;
+        data.Battery1.Percent = 101;
+        compare(Output.battery(data, ["Battery1"], bt), null);
+        data.Battery1.Product = "Other Bluetooth headset";
+        data.Battery1.Percent = 60;
+        compare(Output.battery(data, ["Battery1"], bt), null);
     }
     function test_battery_discovery_subscription() {
         compare(Output.batterySources([]), ["Battery"]);

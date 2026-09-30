@@ -55,7 +55,14 @@ class DistributionTests(unittest.TestCase):
                                     check=True, capture_output=True, text=True)
             self.assertTrue(result.stdout.startswith('usage: barracuda-pair'))
             self.assertIn('--scan', result.stdout)
-            self.assertEqual(list(launcher.parent.iterdir()), [launcher])
+            self.assertEqual(set(launcher.parent.iterdir()),
+                             {launcher, launcher.with_name('barracuda-power'), launcher.with_name('barracuda-headset')})
+            native = subprocess.run([str(launcher.with_name('barracuda-headset')), '--help'],
+                                    cwd=directory, env=env, check=True, capture_output=True, text=True)
+            self.assertIn('--request', native.stdout)
+            power = subprocess.run([str(launcher.with_name('barracuda-power')), '--help'],
+                                   cwd=directory, env=env, check=True, capture_output=True, text=True)
+            self.assertIn('--off', power.stdout)
             self.assertFalse((home / 'config').exists())
             self.assertFalse((home / 'data/applications').exists())
             self.assertFalse((home / 'data/barracuda-pair/barracuda_pair/app.py').exists())

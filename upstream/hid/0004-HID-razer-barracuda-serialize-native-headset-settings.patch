@@ -1,0 +1,307 @@
+From f9bd0bf51823dda92c08ed342d413fe01f073f43 Mon Sep 17 00:00:00 2001
+From: Luis Atala <luis.atala@gmail.com>
+Date: Tue, 29 Sep 2026 22:17:15 -0300
+Subject: [PATCH] HID: razer-barracuda: serialize native headset settings
+
+Expose a bounded settings mailbox sharing the battery route mutex. Only
+explicit writes query or change headset settings; reads return a token and
+the last successful reply. Validate lengths, values and matching replies,
+and restore routing before returning, including interruption and errors.
+
+Assisted-by: LLM [OpenAI Codex]
+---
+ .../testing/sysfs-driver-hid-razer-barracuda  |  19 +++
+ drivers/hid/hid-razer-barracuda-test.c        |  55 +++++++
+ drivers/hid/hid-razer-barracuda.c             | 152 +++++++++++++++++-
+ 3 files changed, 225 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/ABI/testing/sysfs-driver-hid-razer-barracuda b/Documentation/ABI/testing/sysfs-driver-hid-razer-barracuda
+index d7de28e..3ca5c4d 100644
+--- a/Documentation/ABI/testing/sysfs-driver-hid-razer-barracuda
++++ b/Documentation/ABI/testing/sysfs-driver-hid-razer-barracuda
+@@ -14,3 +14,22 @@ Description:
+                 Concurrent operations may return EBUSY. Other input is
+                 rejected. This attribute is write-only and root-owned;
+                 administrators may grant access through local policy.
++
++What:           /sys/bus/hid/devices/.../headset_settings
++Date:           September 2026
++Contact:        Luis Atala <luis.atala@gmail.com>
++Description:
++                Explicit Barracuda X headset settings mailbox. A write contains
++                an eight-digit hexadecimal transaction token, one space and a
++                hexadecimal family-8 payload, optionally followed by a newline.
++                Only preset (13/93), Gaming (14/94), custom bands (15/95), DND
++                (27/a7), idle timeout (2c/ac) and known Bluetooth device selection
++                (2d/ad) are allowed. Setter values and lengths are bounded.
++                A read returns the last successful token and hexadecimal result;
++                it never queries hardware. The token correlates write and read.
++                Writers must serialize their write/read pair, and verify the token.
++                The driver checks a confirmed wireless link, serializes the
++                transaction with battery queries, and restores the local route
++                before the write returns. Errors do not imply disconnection.
++                Firmware/storage/reset commands and arbitrary HID writes are
++                not supported. Writes may change persistent headset settings.
+diff --git a/drivers/hid/hid-razer-barracuda-test.c b/drivers/hid/hid-razer-barracuda-test.c
+index 787520b..34a1dce 100644
+--- a/drivers/hid/hid-razer-barracuda-test.c
++++ b/drivers/hid/hid-razer-barracuda-test.c
+@@ -454,7 +454,62 @@ static void barracuda_test_read_length_ack(struct kunit *test)
+ 	KUNIT_EXPECT_EQ(test, b->reply_value, -EPROTO);
+ }
+ 
++static void barracuda_test_settings_allowlist(struct kunit *test)
++{
++	u8 eq[] = { 0x93, 0, 1, 7 };
++	u8 bands[] = { 0x95, 0, 10, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 };
++	u8 firmware[] = { 0x22, 0, 1, 0 };
++	u8 idle[] = { 0xac, 0, 1, 15 };
++
++	KUNIT_EXPECT_TRUE(test, barracuda_setting_valid(eq, sizeof(eq)));
++	eq[3] = 3;
++	KUNIT_EXPECT_FALSE(test, barracuda_setting_valid(eq, sizeof(eq)));
++	KUNIT_EXPECT_FALSE(test, barracuda_setting_valid(eq, 3));
++	KUNIT_EXPECT_TRUE(test, barracuda_setting_valid(bands, sizeof(bands)));
++	bands[12] = 11;
++	KUNIT_EXPECT_FALSE(test, barracuda_setting_valid(bands, sizeof(bands)));
++	KUNIT_EXPECT_FALSE(test,
++			   barracuda_setting_valid(firmware, sizeof(firmware)));
++	KUNIT_EXPECT_TRUE(test, barracuda_setting_valid(idle, sizeof(idle)));
++	idle[3] = 255;
++	KUNIT_EXPECT_FALSE(test, barracuda_setting_valid(idle, sizeof(idle)));
++}
++
++static void barracuda_test_settings_reply(struct kunit *test)
++{
++	struct barracuda *b = barracuda_test_alloc(test);
++	u8 reply[] = { 0x50, 0x49, 8, 3, 0, 0, 0, 0, 4, 0,
++		       0x93, 1, 1, 0 };
++
++	b->want_param = 0x93;
++	b->settings_waiting = true;
++	b->waiting = true;
++	barracuda_test_chunk(b, reply, sizeof(reply));
++	KUNIT_EXPECT_FALSE(test, b->waiting);
++	KUNIT_EXPECT_EQ(test, b->reply_value, 0);
++	KUNIT_EXPECT_EQ(test, b->settings_size, 1);
++	b->waiting = true;
++	reply[10] = 0x94;
++	barracuda_test_chunk(b, reply, sizeof(reply));
++	KUNIT_EXPECT_TRUE(test, b->waiting);
++	reply[10] = 0x93;
++	reply[11] = 2;
++	barracuda_test_chunk(b, reply, sizeof(reply));
++	KUNIT_EXPECT_TRUE(test, b->waiting);
++	reply[11] = 1;
++	reply[13] = 255;
++	barracuda_test_chunk(b, reply, sizeof(reply));
++	KUNIT_EXPECT_FALSE(test, b->waiting);
++	KUNIT_EXPECT_EQ(test, b->reply_value, -EREMOTEIO);
++	b->want_param = 0x15;
++	reply[10] = 0x15;
++	KUNIT_EXPECT_EQ(test,
++			barracuda_setting_reply(b, reply, sizeof(reply)), -1);
++}
++
+ static struct kunit_case barracuda_test_cases[] = {
++	KUNIT_CASE(barracuda_test_settings_allowlist),
++	KUNIT_CASE(barracuda_test_settings_reply),
+ 	KUNIT_CASE(barracuda_test_split),
+ 	KUNIT_CASE(barracuda_test_values),
+ 	KUNIT_CASE(barracuda_test_link_query),
+diff --git a/drivers/hid/hid-razer-barracuda.c b/drivers/hid/hid-razer-barracuda.c
+index 86fdaba..a413b26 100644
+--- a/drivers/hid/hid-razer-barracuda.c
++++ b/drivers/hid/hid-razer-barracuda.c
+@@ -14,6 +14,7 @@
+ #include <linux/completion.h>
+ #include <linux/device.h>
+ #include <linux/hid.h>
++#include <linux/hex.h>
+ #include <linux/input.h>
+ #include <linux/jiffies.h>
+ #include <linux/lockdep.h>
+@@ -142,6 +143,11 @@ struct barracuda {
+ 	struct mutex route_lock;
+ 	bool restoring_route;
+ 	u8 seq;
++	/* Explicit settings transactions; reads return the last reply only. */
++	bool settings_waiting;
++	u32 settings_token;
++	u8 settings_data[203];
++	u8 settings_size;
+ 
+ 	/* Serializes battery registration; battery exists only while linked. */
+ 	struct mutex supply_lock;
+@@ -227,6 +233,67 @@ static int barracuda_customer_reply(const u8 *p, unsigned int size, u8 param)
+ 	return p[13];
+ }
+ 
++/* The allowlist excludes firmware, storage, microphone and reset commands. */
++static bool barracuda_setting_valid(const u8 *p, unsigned int size)
++{
++	unsigned int i;
++
++	if (size < 3 || p[1] || size != 3U + p[2])
++		return false;
++	switch (p[0]) {
++	case 0x13:
++	case 0x14:
++	case 0x15:
++	case 0x27:
++	case 0x2c:
++	case 0x2d:
++		return size == 3;
++	case 0x93:
++		return size == 4 && (p[3] == 0 || p[3] == 7 || p[3] == 8 ||
++				     p[3] == 9 || p[3] == 255);
++	case 0x94:
++	case 0xa7:
++		return size == 4 && p[3] <= 1;
++	case 0xac:
++		return size == 4 && (p[3] == 0 || p[3] == 5 || p[3] == 15 ||
++				     p[3] == 30 || p[3] == 45 || p[3] == 60);
++	case 0xad:
++		return size == 9;
++	case 0x95:
++		if (size != 13)
++			return false;
++		for (i = 3; i < size; i++)
++			if (p[i] > 10)
++				return false;
++		return true;
++	default:
++		return false;
++	}
++}
++
++static int barracuda_setting_reply(struct barracuda *b, const u8 *p,
++				   unsigned int size)
++{
++	unsigned int len;
++
++	if (size < 13 || p[2] != BARRACUDA_FAMILY_CUSTOMER ||
++	    p[10] != b->want_param || p[11] != BARRACUDA_OP_REPLY)
++		return -1;
++	len = p[12];
++	if (len > sizeof(b->settings_data) || size != 13 + len ||
++	    p[8] != 3 + len || p[9])
++		return -1;
++	if (b->want_param == 0x15) {
++		if (len != 10)
++			return -1;
++	} else if (b->want_param != 0x2d && len != 1) {
++		return -1;
++	}
++	memcpy(b->settings_data, p + 13, len);
++	b->settings_size = len;
++	return b->want_param & 0x80 && p[13] ? -EREMOTEIO : 0;
++}
++
+ /*
+  * Acknowledgment FAMILY SEQ|80 STATUS RESULT. Returns the result length and
+  * sets *result, -1 if unrelated or -2 if the device reported a failure.
+@@ -320,7 +387,9 @@ static void barracuda_match_reply(struct barracuda *b, const u8 *p,
+ 
+ 	if (!b->waiting)
+ 		return;
+-	if (b->want_param) {
++	if (b->settings_waiting) {
++		ret = barracuda_setting_reply(b, p, size);
++	} else if (b->want_param) {
+ 		/* The value itself reaches the state through barracuda_decode(). */
+ 		ret = barracuda_customer_reply(p, size, b->want_param);
+ 	} else if (!b->acked) {
+@@ -754,8 +823,89 @@ out:
+ }
+ static DEVICE_ATTR_WO(headset_poweroff);
+ 
++/* Token plus hex payload. No query is ever sent by reading this attribute. */
++static ssize_t headset_settings_store(struct device *dev,
++				      struct device_attribute *attr,
++				      const char *buf, size_t count)
++{
++	static const u8 read_length[] = {
++		0x25, 0x34, 0x12, 0x5a, 0x5a, 0x01, 0x00,
++		0x00, 0x00, 0xf0, 0x00, 0x00, 0x00,
++	};
++	struct barracuda *b = hid_get_drvdata(to_hid_device(dev));
++	unsigned long flags;
++	u8 payload[13], token[4];
++	unsigned int size;
++	bool selected = false;
++	int ret;
++
++	if (count < 15 || count > 36 || buf[8] != ' ')
++		return -EINVAL;
++	size = count - 9;
++	if (buf[count - 1] == '\n')
++		size--;
++	if (size % 2 || size / 2 > sizeof(payload) ||
++	    hex2bin(token, buf, sizeof(token)) ||
++	    hex2bin(payload, buf + 9, size / 2) ||
++	    !barracuda_setting_valid(payload, size / 2))
++		return -EINVAL;
++	if (!mutex_trylock(&b->route_lock))
++		return -EBUSY;
++	if (!barracuda_refresh_wanted(b)) {
++		ret = -ENOTCONN;
++		goto out;
++	}
++	ret = barracuda_get(b, BARRACUDA_CMD_GET_LINK);
++	if (ret != 1) {
++		ret = ret < 0 ? ret : -ENOTCONN;
++		goto out;
++	}
++	ret = barracuda_route_begin(b, &selected);
++	if (ret)
++		goto out;
++	ret = barracuda_request(b, BARRACUDA_FAMILY_DIAG, read_length,
++				sizeof(read_length), 0, 0);
++	if (ret)
++		goto out;
++	spin_lock_irqsave(&b->lock, flags);
++	b->settings_waiting = true;
++	b->settings_size = 0;
++	spin_unlock_irqrestore(&b->lock, flags);
++	ret = barracuda_request(b, BARRACUDA_FAMILY_CUSTOMER, payload,
++				size / 2, 0, payload[0]);
++	spin_lock_irqsave(&b->lock, flags);
++	b->settings_waiting = false;
++	spin_unlock_irqrestore(&b->lock, flags);
++out:
++	if (!barracuda_route_end(b, selected))
++		ret = -EIO;
++	if (!ret)
++		b->settings_token = (u32)token[0] << 24 | token[1] << 16 |
++				    token[2] << 8 | token[3];
++	else
++		b->settings_size = 0;
++	mutex_unlock(&b->route_lock);
++	return ret ? ret : count;
++}
++
++static ssize_t headset_settings_show(struct device *dev,
++				     struct device_attribute *attr, char *buf)
++{
++	struct barracuda *b = hid_get_drvdata(to_hid_device(dev));
++	ssize_t ret;
++
++	if (mutex_lock_interruptible(&b->route_lock))
++		return -ERESTARTSYS;
++	ret = sysfs_emit(buf, "%08x %*phN\n", b->settings_token,
++			 b->settings_size, b->settings_data);
++	mutex_unlock(&b->route_lock);
++	return ret;
++}
++static DEVICE_ATTR_RW(headset_settings);
++
+ static struct attribute *barracuda_attrs[] = {
+ 	&dev_attr_headset_poweroff.attr,
++	&dev_attr_headset_settings.attr,
+ 	NULL,
+ };
+ ATTRIBUTE_GROUPS(barracuda);
+-- 
+2.55.0
+

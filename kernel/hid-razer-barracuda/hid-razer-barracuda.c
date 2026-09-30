@@ -14,6 +14,7 @@
 #include <linux/completion.h>
 #include <linux/device.h>
 #include <linux/hid.h>
+#include <linux/hex.h>
 #include <linux/input.h>
 #include <linux/jiffies.h>
 #include <linux/lockdep.h>
@@ -45,6 +46,7 @@
 
 #define BARRACUDA_FAMILY_ACK		0x01
 #define BARRACUDA_FAMILY_DIAG		0x06
+#define BARRACUDA_FAMILY_MMI		0x07
 #define BARRACUDA_FAMILY_CUSTOMER	0x08
 #define BARRACUDA_FAMILY_LINK		0x0e
 
@@ -129,6 +131,7 @@ struct barracuda {
 	 */
 	bool waiting;
 	bool acked;
+	bool read_length;
 	u8 want_family;
 	u8 want_seq;
 	u8 want_command;
@@ -138,7 +141,13 @@ struct barracuda {
 
 	/* Serializes query sequences and protects seq. */
 	struct mutex route_lock;
+	bool restoring_route;
 	u8 seq;
+	/* Explicit settings transactions; reads return the last reply only. */
+	bool settings_waiting;
+	u32 settings_token;
+	u8 settings_data[203];
+	u8 settings_size;
 
 	/* Serializes battery registration; battery exists only while linked. */
 	struct mutex supply_lock;
@@ -222,6 +231,67 @@ static int barracuda_customer_reply(const u8 *p, unsigned int size, u8 param)
 	    p[12] != 1)
 		return -1;
 	return p[13];
+}
+
+/* The allowlist excludes firmware, storage, microphone and reset commands. */
+static bool barracuda_setting_valid(const u8 *p, unsigned int size)
+{
+	unsigned int i;
+
+	if (size < 3 || p[1] || size != 3U + p[2])
+		return false;
+	switch (p[0]) {
+	case 0x13:
+	case 0x14:
+	case 0x15:
+	case 0x27:
+	case 0x2c:
+	case 0x2d:
+		return size == 3;
+	case 0x93:
+		return size == 4 && (p[3] == 0 || p[3] == 7 || p[3] == 8 ||
+				     p[3] == 9 || p[3] == 255);
+	case 0x94:
+	case 0xa7:
+		return size == 4 && p[3] <= 1;
+	case 0xac:
+		return size == 4 && (p[3] == 0 || p[3] == 5 || p[3] == 15 ||
+				     p[3] == 30 || p[3] == 45 || p[3] == 60);
+	case 0xad:
+		return size == 9;
+	case 0x95:
+		if (size != 13)
+			return false;
+		for (i = 3; i < size; i++)
+			if (p[i] > 10)
+				return false;
+		return true;
+	default:
+		return false;
+	}
+}
+
+static int barracuda_setting_reply(struct barracuda *b, const u8 *p,
+				   unsigned int size)
+{
+	unsigned int len;
+
+	if (size < 13 || p[2] != BARRACUDA_FAMILY_CUSTOMER ||
+	    p[10] != b->want_param || p[11] != BARRACUDA_OP_REPLY)
+		return -1;
+	len = p[12];
+	if (len > sizeof(b->settings_data) || size != 13 + len ||
+	    p[8] != 3 + len || p[9])
+		return -1;
+	if (b->want_param == 0x15) {
+		if (len != 10)
+			return -1;
+	} else if (b->want_param != 0x2d && len != 1) {
+		return -1;
+	}
+	memcpy(b->settings_data, p + 13, len);
+	b->settings_size = len;
+	return b->want_param & 0x80 && p[13] ? -EREMOTEIO : 0;
 }
 
 /*
@@ -317,7 +387,9 @@ static void barracuda_match_reply(struct barracuda *b, const u8 *p,
 
 	if (!b->waiting)
 		return;
-	if (b->want_param) {
+	if (b->settings_waiting) {
+		ret = barracuda_setting_reply(b, p, size);
+	} else if (b->want_param) {
 		/* The value itself reaches the state through barracuda_decode(). */
 		ret = barracuda_customer_reply(p, size, b->want_param);
 	} else if (!b->acked) {
@@ -331,6 +403,10 @@ static void barracuda_match_reply(struct barracuda *b, const u8 *p,
 		}
 		if (ret == -2) {
 			ret = -EPROTO;
+		} else if (b->read_length) {
+			ret = ret == 4 && result[0] == 0xf0 &&
+			      !result[1] && !result[2] && !result[3] ?
+			      0 : -EPROTO;
 		} else if (b->want_family == BARRACUDA_FAMILY_DIAG) {
 			ret = barracuda_voltage_mv(result, ret);
 			if (ret < 0)
@@ -508,9 +584,10 @@ static void barracuda_link_query(struct work_struct *work)
 static int barracuda_request(struct barracuda *b, u8 family, const u8 *payload,
 			     u8 len, u8 reply_command, u8 reply_param)
 {
+	struct completion *done = &b->reply_done;
 	unsigned long flags;
 	u8 *buf;
-	int ret;
+	int ret, waited = 0;
 
 	lockdep_assert_held(&b->route_lock);
 
@@ -524,6 +601,8 @@ static int barracuda_request(struct barracuda *b, u8 family, const u8 *payload,
 	barracuda_fill(buf, family, b->seq, payload, len);
 
 	spin_lock_irqsave(&b->lock, flags);
+	b->read_length = family == BARRACUDA_FAMILY_DIAG &&
+			 payload[0] == 0x25;
 	b->want_family = family;
 	b->want_seq = b->seq;
 	b->want_command = reply_command;
@@ -536,13 +615,19 @@ static int barracuda_request(struct barracuda *b, u8 family, const u8 *payload,
 
 	ret = hid_hw_output_report(b->hdev, buf, BARRACUDA_REPORT_SIZE);
 	kfree(buf);
-	if (ret == BARRACUDA_REPORT_SIZE)
-		wait_for_completion_timeout(&b->reply_done,
-					    BARRACUDA_REPLY_TIMEOUT);
+	if (ret == BARRACUDA_REPORT_SIZE) {
+		if (b->restoring_route)
+			waited = wait_for_completion_timeout(done,
+							     BARRACUDA_REPLY_TIMEOUT);
+		else
+			waited = wait_for_completion_interruptible_timeout(done,
+									   BARRACUDA_REPLY_TIMEOUT);
+	}
 
 	spin_lock_irqsave(&b->lock, flags);
 	b->waiting = false;
-	ret = ret == BARRACUDA_REPORT_SIZE ? b->reply_value : -EIO;
+	ret = ret == BARRACUDA_REPORT_SIZE ?
+		(waited < 0 ? waited : b->reply_value) : -EIO;
 	spin_unlock_irqrestore(&b->lock, flags);
 	return ret;
 }
@@ -607,9 +692,14 @@ static bool barracuda_route_end(struct barracuda *b, bool selected)
 
 	if (!selected)
 		return true;
-	for (attempt = 0; attempt < 2; attempt++)
-		if (!barracuda_set_route(b, BARRACUDA_ROUTE_LOCAL))
+	b->restoring_route = true;
+	for (attempt = 0; attempt < 2; attempt++) {
+		if (!barracuda_set_route(b, BARRACUDA_ROUTE_LOCAL)) {
+			b->restoring_route = false;
 			return true;
+		}
+	}
+	b->restoring_route = false;
 	spin_lock_irqsave(&b->lock, flags);
 	b->route_failed = true;
 	spin_unlock_irqrestore(&b->lock, flags);
@@ -685,6 +775,140 @@ static void barracuda_refresh(struct work_struct *work)
 		queue_delayed_work(system_long_wq, &b->refresh_work,
 				   BARRACUDA_POLL_INTERVAL);
 }
+
+/* Only an explicit sysfs write sends this one-shot headset command. */
+static ssize_t headset_poweroff_store(struct device *dev,
+				      struct device_attribute *attr,
+				      const char *buf, size_t count)
+{
+	static const u8 read_length[] = {
+		0x25, 0x34, 0x12, 0x5a, 0x5a, 0x01, 0x00,
+		0x00, 0x00, 0xf0, 0x00, 0x00, 0x00,
+	};
+	static const u8 poweroff[] = { 0x08, 0x00, 0x02 };
+	struct barracuda *b = hid_get_drvdata(to_hid_device(dev));
+	bool selected = false;
+	int ret;
+
+	if (!sysfs_streq(buf, "1"))
+		return -EINVAL;
+	if (!mutex_trylock(&b->route_lock))
+		return -EBUSY;
+	if (!barracuda_refresh_wanted(b)) {
+		ret = -ENOTCONN;
+		goto out;
+	}
+	ret = barracuda_get(b, BARRACUDA_CMD_GET_LINK);
+	if (ret != 1) {
+		ret = ret < 0 ? ret : -ENOTCONN;
+		goto out;
+	}
+	ret = barracuda_route_begin(b, &selected);
+	if (ret)
+		goto out;
+	ret = barracuda_request(b, BARRACUDA_FAMILY_DIAG, read_length,
+				sizeof(read_length), 0, 0);
+	if (ret)
+		goto out;
+	ret = barracuda_request(b, BARRACUDA_FAMILY_MMI, poweroff,
+				sizeof(poweroff), 0, 0);
+	/* Once sent, neither timeout nor a signal may restart shutdown. */
+	if (ret == -ETIMEDOUT || ret == -ERESTARTSYS)
+		ret = 0;
+out:
+	if (!barracuda_route_end(b, selected))
+		ret = -EIO;
+	mutex_unlock(&b->route_lock);
+	return ret ? ret : count;
+}
+static DEVICE_ATTR_WO(headset_poweroff);
+
+/* Token plus hex payload. No query is ever sent by reading this attribute. */
+static ssize_t headset_settings_store(struct device *dev,
+				      struct device_attribute *attr,
+				      const char *buf, size_t count)
+{
+	static const u8 read_length[] = {
+		0x25, 0x34, 0x12, 0x5a, 0x5a, 0x01, 0x00,
+		0x00, 0x00, 0xf0, 0x00, 0x00, 0x00,
+	};
+	struct barracuda *b = hid_get_drvdata(to_hid_device(dev));
+	unsigned long flags;
+	u8 payload[13], token[4];
+	unsigned int size;
+	bool selected = false;
+	int ret;
+
+	if (count < 15 || count > 36 || buf[8] != ' ')
+		return -EINVAL;
+	size = count - 9;
+	if (buf[count - 1] == '\n')
+		size--;
+	if (size % 2 || size / 2 > sizeof(payload) ||
+	    hex2bin(token, buf, sizeof(token)) ||
+	    hex2bin(payload, buf + 9, size / 2) ||
+	    !barracuda_setting_valid(payload, size / 2))
+		return -EINVAL;
+	if (!mutex_trylock(&b->route_lock))
+		return -EBUSY;
+	if (!barracuda_refresh_wanted(b)) {
+		ret = -ENOTCONN;
+		goto out;
+	}
+	ret = barracuda_get(b, BARRACUDA_CMD_GET_LINK);
+	if (ret != 1) {
+		ret = ret < 0 ? ret : -ENOTCONN;
+		goto out;
+	}
+	ret = barracuda_route_begin(b, &selected);
+	if (ret)
+		goto out;
+	ret = barracuda_request(b, BARRACUDA_FAMILY_DIAG, read_length,
+				sizeof(read_length), 0, 0);
+	if (ret)
+		goto out;
+	spin_lock_irqsave(&b->lock, flags);
+	b->settings_waiting = true;
+	b->settings_size = 0;
+	spin_unlock_irqrestore(&b->lock, flags);
+	ret = barracuda_request(b, BARRACUDA_FAMILY_CUSTOMER, payload,
+				size / 2, 0, payload[0]);
+	spin_lock_irqsave(&b->lock, flags);
+	b->settings_waiting = false;
+	spin_unlock_irqrestore(&b->lock, flags);
+out:
+	if (!barracuda_route_end(b, selected))
+		ret = -EIO;
+	if (!ret)
+		b->settings_token = (u32)token[0] << 24 | token[1] << 16 |
+				    token[2] << 8 | token[3];
+	else
+		b->settings_size = 0;
+	mutex_unlock(&b->route_lock);
+	return ret ? ret : count;
+}
+
+static ssize_t headset_settings_show(struct device *dev,
+				     struct device_attribute *attr, char *buf)
+{
+	struct barracuda *b = hid_get_drvdata(to_hid_device(dev));
+	ssize_t ret;
+
+	if (mutex_lock_interruptible(&b->route_lock))
+		return -ERESTARTSYS;
+	ret = sysfs_emit(buf, "%08x %*phN\n", b->settings_token,
+			 b->settings_size, b->settings_data);
+	mutex_unlock(&b->route_lock);
+	return ret;
+}
+static DEVICE_ATTR_RW(headset_settings);
+
+static struct attribute *barracuda_attrs[] = {
+	&dev_attr_headset_poweroff.attr,
+	&dev_attr_headset_settings.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(barracuda);
 
 static const enum power_supply_property barracuda_properties[] = {
 	POWER_SUPPLY_PROP_PRESENT,
@@ -923,6 +1147,9 @@ static void barracuda_stop(struct barracuda *b)
 	b->stopping = true;
 	spin_unlock_irqrestore(&b->lock, flags);
 	cancel_delayed_work_sync(&b->refresh_work);
+	/* Wait for an explicit power-off to finish restoring the route. */
+	mutex_lock(&b->route_lock);
+	mutex_unlock(&b->route_lock);
 
 	spin_lock_irqsave(&b->lock, flags);
 	b->stopped = true;
@@ -996,6 +1223,7 @@ static struct hid_driver barracuda_driver = {
 	.suspend = pm_ptr(barracuda_suspend),
 	.resume = pm_ptr(barracuda_resume),
 	.reset_resume = pm_ptr(barracuda_resume),
+	.driver.dev_groups = barracuda_groups,
 };
 module_hid_driver(barracuda_driver);
 

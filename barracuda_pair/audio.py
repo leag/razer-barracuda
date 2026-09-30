@@ -1,4 +1,4 @@
-"""Optional PipeWire effects; no HID commands or background Python process."""
+"""Explicit Linux audio tuning and migration of removed software effects."""
 from __future__ import annotations
 
 import argparse
@@ -13,12 +13,10 @@ import subprocess
 import tempfile
 import time
 
-from .audio_presets import EQ_PRESETS, MIC_EQ_PRESETS
 
 OWNER = '# Managed by barracuda-audio.\n'
 FREQUENCIES = {'output': [31, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000],
                'microphone': [100, 200, 300, 500, 800, 1500, 3000, 5000, 8000, 12000]}
-PRESETS = {'output': EQ_PRESETS, 'microphone': MIC_EQ_PRESETS}
 
 
 class AudioError(Exception):
@@ -74,20 +72,20 @@ def normalize(value):
                 raise AudioError('invalid-profile')
             for name, curve in custom.items():
                 if (not isinstance(name, str) or not name.strip() or len(name) > 60
-                        or name in PRESETS[target] or name in ('__proto__', 'constructor', 'prototype')):
+                        or name in ('__proto__', 'constructor', 'prototype')):
                     raise AudioError('invalid-profile')
                 state['equalizers'][target]['custom'][name] = gains(curve)
             favorites = item.get('favorites', [])
             if not isinstance(favorites, list) or any(not isinstance(name, str) for name in favorites):
                 raise AudioError('invalid-profile')
-            valid = set(PRESETS[target]) | set(custom)
+            valid = set(custom)
             state['equalizers'][target]['favorites'] = list(dict.fromkeys(name for name in favorites if name in valid))
         sidetone, tuning = value['sidetone'], value['tuning']
         if (type(sidetone['enabled']) is not bool or type(sidetone['level']) is not int
                 or not 0 <= sidetone['level'] <= 100):
             raise AudioError('invalid-settings')
-        if (type(tuning['quantum']) is not int or tuning['quantum'] not in (0, 256, 512, 1024)
-                or type(tuning['headroom']) is not int or tuning['headroom'] not in (0, 512, 1024, 2048)
+        if (type(tuning['quantum']) is not int or tuning['quantum'] not in (0, 128, 256, 512, 1024)
+                or type(tuning['headroom']) is not int or tuning['headroom'] not in (0, 128, 256, 512, 1024, 2048)
                 or type(tuning['fixed_rate']) is not bool or type(tuning['never_suspend']) is not bool):
             raise AudioError('invalid-settings')
         state['sidetone'] = {key: sidetone[key] for key in state['sidetone']}
@@ -135,58 +133,8 @@ def effect_name(target):
     return 'barracuda.effects.' + target
 
 
-def equalizer(target, item):
-    name = effect_name(target)
-    frequencies = FREQUENCIES[target]
-    # Automatic preamp headroom equal to the largest positive band gain.
-    attenuation = 10 ** (-max(0, max(item['gains'])) / 20)
-    filters = [{'type': 'builtin', 'label': 'mixer', 'name': 'preamp',
-                'control': {'Gain 1': attenuation}}]
-    if target == 'microphone':
-        filters.append({'type': 'builtin', 'label': 'bq_highpass', 'name': 'highpass',
-                        'control': {'Freq': 75, 'Q': 0.7}})
-    for i, (freq, gain) in enumerate(zip(frequencies, item['gains'])):
-        label = 'bq_lowshelf' if i == 0 else 'bq_highshelf' if i == 9 else 'bq_peaking'
-        filters.append({'type': 'builtin', 'label': label, 'name': f'eq{i}',
-                        'control': {'Freq': freq, 'Q': 1.0 if i in (0, 9) else 1.4, 'Gain': gain}})
-    links = [{'output': a['name'] + ':Out', 'input': b['name'] + ':In'} for a, b in zip(filters, filters[1:])]
-    media_class = 'Audio/Sink' if target == 'output' else 'Audio/Source'
-    main = {'node.name': name, 'node.description': 'Barracuda Output EQ' if target == 'output' else 'Barracuda Microphone EQ',
-            'media.class': media_class, 'barracuda.effects': True,
-            'filter.smart': True, 'filter.smart.name': name,
-            'filter.smart.target': {'alsa.components': 'USB1532:0552', 'media.class': media_class},
-            'priority.session': 0}
-    stream = {'node.name': name + '.stream', 'node.passive': True, 'node.dont-fallback': True,
-              'barracuda.effects': True}
-    capture, playback = (main, stream) if target == 'output' else (stream, main)
-    return {'name': 'libpipewire-module-filter-chain', 'args': {
-        'node.description': main['node.description'], 'audio.channels': 2 if target == 'output' else 1,
-        'audio.position': ['FL', 'FR'] if target == 'output' else ['MONO'],
-        'filter.graph': {'nodes': filters, 'links': links, 'inputs': ['preamp:In 1'], 'outputs': ['eq9:Out']},
-        'capture.props': capture, 'playback.props': playback}}
-
-
-def sidetone_module(level, source, sink):
-    return {'name': 'libpipewire-module-filter-chain', 'args': {
-        'node.description': 'Barracuda Sidetone', 'audio.channels': 1, 'audio.position': ['MONO'],
-        'filter.graph': {'nodes': [{'type': 'builtin', 'label': 'mixer', 'name': 'monitor',
-                                   'control': {'Gain 1': level / 100}}],
-                         'inputs': ['monitor:In 1'], 'outputs': ['monitor:Out']},
-        'capture.props': {'node.name': effect_name('sidetone'), 'barracuda.effects': True,
-                          'node.latency': '128/48000',
-                          'target.object': source['node.name'], 'node.dont-fallback': True},
-        'playback.props': {'node.name': effect_name('sidetone') + '.stream',
-                           'node.latency': '128/48000',
-                           'target.object': sink['node.name'], 'node.dont-fallback': True}}}
-
-
 def documents(state, nodes_list):
-    modules = [equalizer(target, item) for target, item in state['equalizers'].items() if item['enabled']]
-    if state['sidetone']['enabled']:
-        source, sink = device(nodes_list, 'Audio/Source'), device(nodes_list, 'Audio/Sink')
-        if not source or not sink:
-            raise AudioError('missing-microphone')
-        modules.append(sidetone_module(state['sidetone']['level'], source, sink))
+    modules = []
     tune = state['tuning']
     clock = {}
     if tune['quantum']:
@@ -255,46 +203,49 @@ def write_files(files):
             temp.unlink(missing_ok=True)
 
 
-def live_gains(state, nodes_list):
-    for target, item in state['equalizers'].items():
-        if not item['enabled']:
-            continue
-        for node in nodes_list:
-            props = node.get('info', {}).get('props', {})
-            control_node = effect_name(target) + ('.stream' if target == 'microphone' else '')
-            if props.get('node.name') != control_node or str(props.get('barracuda.effects')).lower() != 'true':
-                continue
-            params = ['preamp:Gain 1', 10 ** (-max(0, max(item['gains'])) / 20)]
-            for i, gain in enumerate(item['gains']):
-                params.extend([f'eq{i}:Gain', gain])
-            command('pw-cli', 'set-param', str(int(node['id'])), 'Props', json.dumps({'params': params}))
-
-
 def snapshot(state, nodes_list):
     source, sink = device(nodes_list, 'Audio/Source'), device(nodes_list, 'Audio/Sink')
     sidetone = [node for node in nodes_list if node.get('info', {}).get('props', {}).get('node.name')
                 in (effect_name('sidetone'), effect_name('sidetone') + '.stream')]
-    return {'state': state, 'presets': PRESETS, 'frequencies': FREQUENCIES,
+    legacy = any(node.get('info', {}).get('props', {}).get('node.name')
+                 in (effect_name('output'), effect_name('microphone'))
+                 for node in nodes_list)
+    return {'state': state, 'legacy_eq_loaded': legacy,
             'has_microphone': bool(source), 'has_output': bool(sink),
+            'legacy_effects_loaded': legacy or bool(sidetone),
             'sidetone_loaded': len(sidetone) == 2,
             'sidetone_running': len(sidetone) == 2 and all(node.get('info', {}).get('state') == 'running' for node in sidetone)}
 
 
 def restarted_nodes(state):
-    expected = {effect_name(target) for target, item in state['equalizers'].items() if item['enabled']}
-    if state['sidetone']['enabled']:
-        expected.add(effect_name('sidetone'))
     deadline = time.monotonic() + 3
     while True:
         current = nodes()
         found = {node.get('info', {}).get('props', {}).get('node.name') for node in current}
-        if expected <= found or time.monotonic() >= deadline:
+        legacy = {effect_name('output'), effect_name('microphone'), effect_name('sidetone'),
+                  effect_name('sidetone') + '.stream'}
+        if not (legacy & found) or time.monotonic() >= deadline:
             return current
         time.sleep(.1)
 
 
 def dispatch(request):
     op = request.get('op', 'status')
+    if op in ('remove_eq', 'remove_effects'):
+        if request.get('confirmed') is not True:
+            raise AudioError('confirmation-required')
+        state = load()
+        for item in state['equalizers'].values():
+            item['enabled'] = False
+        state['sidetone']['enabled'] = False
+        if snapshot(state, nodes())['legacy_effects_loaded']:
+            state['pending_restart'] = True
+        return dispatch({'op': 'save_apply', 'state': state, 'confirmed': True})
+    if op == 'save_apply':
+        result = dispatch({'op': 'save', 'state': request['state']})
+        if result['state']['pending_restart'] and request.get('confirmed') is True:
+            return dispatch({'op': 'apply', 'confirmed': True})
+        return result
     old = load()
     if op not in ('status', 'save', 'apply', 'microphone'):
         raise AudioError('invalid-request')
@@ -302,27 +253,24 @@ def dispatch(request):
     state = old
     if op == 'save':
         state = normalize(request['state'])
+        for item in state['equalizers'].values():
+            item['enabled'] = False
+        state['sidetone']['enabled'] = False
         generated = documents(state, current_nodes)
-        # Gains can update existing nodes immediately. Topology and system policy
-        # changes need the separate, explicitly confirmed audio restart action.
+        # Topology and system policy changes require a confirmed audio restart.
         structural_old, structural_new = copy.deepcopy(old), copy.deepcopy(state)
         for target in FREQUENCIES:
             for obj in (structural_old, structural_new):
                 obj['equalizers'][target] = {'enabled': obj['equalizers'][target]['enabled']}
         structural_old.pop('pending_restart', None)
         structural_new.pop('pending_restart', None)
-        state['pending_restart'] = old['pending_restart'] or structural_old != structural_new
+        state['pending_restart'] = (old['pending_restart'] or state['pending_restart']
+                                    or structural_old != structural_new)
         files = {path: OWNER + spa_config(value) for path, value in generated.items()}
         files[state_path()] = json.dumps(state, indent=2) + '\n'
         write_files(files)
-        try:
-            live_gains(state, current_nodes)
-        except AudioError as exc:
-            state['pending_restart'] = True
-            write_files({state_path(): json.dumps(state, indent=2) + '\n'})
-            return {'ok': True, **snapshot(state, current_nodes), 'warning': exc.code, 'detail': exc.detail}
     elif op == 'apply':
-        # The request comes only from the restart confirmation in the UI.
+        # The UI explicitly labels the action when an audio restart is needed.
         if request.get('confirmed') is not True:
             raise AudioError('confirmation-required')
         if not state_path().exists():

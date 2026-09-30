@@ -244,3 +244,24 @@ full at 100% with the cable connected. Physical GETs returned `21 01 01 64`
 (100%) with `2a 01 01 00` unplugged and `2a 01 01 01` plugged in, with the local
 route restored each time. Tests cover op-01 replies for battery and cable, the
 rejection of op-01 link values, and reply correlation.
+
+## Explicit headset power-off
+
+The complete HID series additionally exposes the write-only `headset_poweroff`
+attribute on its HID device. It is never invoked by probing, polling, battery
+reads or suspend. `barracuda-power --off` and the confirmed plasmoid action write
+`1`; the driver checks the link and serializes the validated MMI request with
+its battery worker. Link reports remain the source of connection state. The
+power-control udev rule grants the audio group access on driver binding. The
+new entry point has compiled and simulated-test validation; the earlier raw-HID
+experiment validated the physical command, not this new entry point.
+
+## Explicit native settings
+
+HID patch 4 adds the `headset_settings` mailbox used by `barracuda-headset`.
+It serializes allowlisted native EQ, gaming, DND, standby and Quick Connect
+requests with battery queries and power-off. The power-control udev rule grants
+the audio group write access on binding. Reading the attribute returns cached
+data and does not touch the hardware. No background settings polling or raw-HID
+fallback is installed. See [the protocol](PROTOCOL.md#explicit-native-settings-interface)
+and [the UI and validation limits](AUDIO_EFFECTS.md).

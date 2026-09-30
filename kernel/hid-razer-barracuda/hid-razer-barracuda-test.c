@@ -394,7 +394,122 @@ static void barracuda_test_match_reply(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, b->reply_value, 4200);
 }
 
+static void barracuda_test_poweroff(struct kunit *test)
+{
+	static const u8 payload[] = { 0x08, 0x00, 0x02 };
+	static const u8 expected[] = {
+		0x01, 0x80, 0x08, 0x50, 0x41, 0x07, 0x60,
+		0x03, 0x08, 0x00, 0x02,
+	};
+	u8 report[BARRACUDA_REPORT_SIZE];
+	unsigned int i;
+
+	barracuda_fill(report, BARRACUDA_FAMILY_MMI, 0x60,
+		       payload, sizeof(payload));
+	KUNIT_EXPECT_MEMEQ(test, report, expected, sizeof(expected));
+	for (i = sizeof(expected); i < sizeof(report); i++)
+		KUNIT_EXPECT_EQ(test, report[i], 0);
+}
+
+static void barracuda_test_poweroff_guards(struct kunit *test)
+{
+	struct barracuda *b = barracuda_test_alloc(test);
+	struct hid_device *hdev;
+	struct device *dev;
+
+	hdev = kunit_kzalloc(test, sizeof(*hdev), GFP_KERNEL);
+	KUNIT_ASSERT_NOT_NULL(test, hdev);
+	hid_set_drvdata(hdev, b);
+	dev = &hdev->dev;
+	KUNIT_EXPECT_EQ(test, headset_poweroff_store(dev, NULL, "0", 1), -EINVAL);
+	KUNIT_EXPECT_EQ(test, headset_poweroff_store(dev, NULL, "1", 1), -ENOTCONN);
+	b->state.linked = 0;
+	KUNIT_EXPECT_EQ(test, headset_poweroff_store(dev, NULL, "1", 1), -ENOTCONN);
+	b->state.linked = 1;
+	b->stopping = true;
+	KUNIT_EXPECT_EQ(test, headset_poweroff_store(dev, NULL, "1", 1), -ENOTCONN);
+	mutex_lock(&b->route_lock);
+	KUNIT_EXPECT_EQ(test, headset_poweroff_store(dev, NULL, "1", 1), -EBUSY);
+	mutex_unlock(&b->route_lock);
+}
+
+static void barracuda_test_read_length_ack(struct kunit *test)
+{
+	struct barracuda *b = barracuda_test_alloc(test);
+	u8 reply[] = {
+		0x50, 0x49, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x07, 0x00, 0x06, 0xe0, 0x00, 0xf0, 0x00, 0x00, 0x00,
+	};
+
+	b->want_family = BARRACUDA_FAMILY_DIAG;
+	b->want_seq = 0x60;
+	b->read_length = true;
+	b->waiting = true;
+	barracuda_test_chunk(b, reply, sizeof(reply));
+	KUNIT_EXPECT_FALSE(test, b->waiting);
+	KUNIT_EXPECT_EQ(test, b->reply_value, 0);
+	b->waiting = true;
+	reply[13] = 0;
+	barracuda_test_chunk(b, reply, sizeof(reply));
+	KUNIT_EXPECT_EQ(test, b->reply_value, -EPROTO);
+}
+
+static void barracuda_test_settings_allowlist(struct kunit *test)
+{
+	u8 eq[] = { 0x93, 0, 1, 7 };
+	u8 bands[] = { 0x95, 0, 10, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 };
+	u8 firmware[] = { 0x22, 0, 1, 0 };
+	u8 idle[] = { 0xac, 0, 1, 15 };
+
+	KUNIT_EXPECT_TRUE(test, barracuda_setting_valid(eq, sizeof(eq)));
+	eq[3] = 3;
+	KUNIT_EXPECT_FALSE(test, barracuda_setting_valid(eq, sizeof(eq)));
+	KUNIT_EXPECT_FALSE(test, barracuda_setting_valid(eq, 3));
+	KUNIT_EXPECT_TRUE(test, barracuda_setting_valid(bands, sizeof(bands)));
+	bands[12] = 11;
+	KUNIT_EXPECT_FALSE(test, barracuda_setting_valid(bands, sizeof(bands)));
+	KUNIT_EXPECT_FALSE(test,
+			   barracuda_setting_valid(firmware, sizeof(firmware)));
+	KUNIT_EXPECT_TRUE(test, barracuda_setting_valid(idle, sizeof(idle)));
+	idle[3] = 255;
+	KUNIT_EXPECT_FALSE(test, barracuda_setting_valid(idle, sizeof(idle)));
+}
+
+static void barracuda_test_settings_reply(struct kunit *test)
+{
+	struct barracuda *b = barracuda_test_alloc(test);
+	u8 reply[] = { 0x50, 0x49, 8, 3, 0, 0, 0, 0, 4, 0,
+		       0x93, 1, 1, 0 };
+
+	b->want_param = 0x93;
+	b->settings_waiting = true;
+	b->waiting = true;
+	barracuda_test_chunk(b, reply, sizeof(reply));
+	KUNIT_EXPECT_FALSE(test, b->waiting);
+	KUNIT_EXPECT_EQ(test, b->reply_value, 0);
+	KUNIT_EXPECT_EQ(test, b->settings_size, 1);
+	b->waiting = true;
+	reply[10] = 0x94;
+	barracuda_test_chunk(b, reply, sizeof(reply));
+	KUNIT_EXPECT_TRUE(test, b->waiting);
+	reply[10] = 0x93;
+	reply[11] = 2;
+	barracuda_test_chunk(b, reply, sizeof(reply));
+	KUNIT_EXPECT_TRUE(test, b->waiting);
+	reply[11] = 1;
+	reply[13] = 255;
+	barracuda_test_chunk(b, reply, sizeof(reply));
+	KUNIT_EXPECT_FALSE(test, b->waiting);
+	KUNIT_EXPECT_EQ(test, b->reply_value, -EREMOTEIO);
+	b->want_param = 0x15;
+	reply[10] = 0x15;
+	KUNIT_EXPECT_EQ(test,
+			barracuda_setting_reply(b, reply, sizeof(reply)), -1);
+}
+
 static struct kunit_case barracuda_test_cases[] = {
+	KUNIT_CASE(barracuda_test_settings_allowlist),
+	KUNIT_CASE(barracuda_test_settings_reply),
 	KUNIT_CASE(barracuda_test_split),
 	KUNIT_CASE(barracuda_test_values),
 	KUNIT_CASE(barracuda_test_link_query),
@@ -409,6 +524,9 @@ static struct kunit_case barracuda_test_cases[] = {
 	KUNIT_CASE(barracuda_test_voltage),
 	KUNIT_CASE(barracuda_test_ack),
 	KUNIT_CASE(barracuda_test_match_reply),
+	KUNIT_CASE(barracuda_test_poweroff),
+	KUNIT_CASE(barracuda_test_poweroff_guards),
+	KUNIT_CASE(barracuda_test_read_length_ack),
 	{}
 };
 

@@ -1,4 +1,6 @@
 import QtQuick
+import QtQuick.Layouts
+import org.kde.plasma.core as PlasmaCore
 import QtTest
 import "../plasmoid/contents/ui"
 
@@ -16,14 +18,239 @@ Item {
         sink: null
         localeName: "en_US"
     }
+    QtObject {
+        id: fakeAudio
+        property bool busy: false
+        property var response: null
+        property string error: ""
+        property string message: ""
+        property var requests: []
+        signal loaded(var result)
+        function request(value) { requests = requests.concat([value]) }
+    }
+    QtObject {
+        id: fakeHeadset
+        property bool busy: false
+        property var response: null
+        property string error: ""
+        property string message: ""
+        property var requests: []
+        signal loaded(var result)
+        function request(value) { requests = requests.concat([value]); }
+        function errorLabel(code) { return code; }
+    }
+    OutputPanel {
+        id: panel
+        width: 400
+        height: 540
+        visible: false
+        sink: null
+        audioController: fakeAudio
+        headsetController: fakeHeadset
+    }
+    PlasmaCore.Dialog {
+        id: sizeDialog
+        visible: false
+        mainItem: OutputPanel {
+            id: sizedPanel
+            sink: null
+            audioController: fakeAudio
+            headsetController: fakeHeadset
+        }
+    }
+    SignalSpy {
+        id: powerSpy
+        target: summary
+        signalName: "powerOffRequested"
+    }
     SignalSpy {
         id: pairingSpy
         target: summary
         signalName: "pairingRequested"
     }
+    SignalSpy {
+        id: settingsSpy
+        target: summary
+        signalName: "settingsRequested"
+    }
     TestCase {
         name: "OutputSummary"
         when: windowShown
+        function test_popup_shrinks_after_effects() {
+            sizeDialog.visible = true
+            wait(50)
+            const compactHeight = sizeDialog.height
+            sizedPanel.effectsOpen = true
+            tryVerify(() => sizeDialog.height > compactHeight)
+            sizedPanel.effectsOpen = false
+            tryCompare(sizeDialog, "height", compactHeight)
+            sizedPanel.effectsOpen = true
+            tryVerify(() => sizeDialog.height > compactHeight)
+            sizedPanel.activeView = false
+            tryCompare(sizeDialog, "height", compactHeight)
+            sizeDialog.visible = false
+        }
+        function test_popup_fits_pairing_and_power_messages() {
+            sizedPanel.activeView = true
+            sizedPanel.effectsOpen = false
+            sizeDialog.visible = true
+            wait(50)
+            const compactHeight = sizeDialog.height
+            const overview = findChild(sizedPanel, "outputOverview")
+            for (const action of ["pairingButton", "powerOffButton"]) {
+                findChild(sizedPanel, action).triggered()
+                tryVerify(() => sizeDialog.height > compactHeight)
+                tryVerify(() => overview.height >= overview.implicitHeight - 1)
+                const cancel = action === "pairingButton" ? "cancelPairingButton" : "cancelPowerOffButton"
+                mouseClick(findChild(sizedPanel, cancel))
+                tryCompare(sizeDialog, "height", compactHeight)
+            }
+            for (const field of ["pairingBusy", "powerBusy"]) {
+                sizedPanel[field] = true
+                tryVerify(() => sizeDialog.height > compactHeight)
+                tryVerify(() => overview.height >= overview.implicitHeight - 1)
+                sizedPanel[field] = false
+                tryCompare(sizeDialog, "height", compactHeight)
+            }
+            for (const field of ["pairingError", "powerError", "pairingResult", "powerResult"]) {
+                sizedPanel[field] = "Headset action message. ".repeat(12)
+                tryVerify(() => sizeDialog.height > compactHeight)
+                tryVerify(() => overview.height >= overview.implicitHeight - 1)
+                sizedPanel[field] = ""
+                tryCompare(sizeDialog, "height", compactHeight)
+            }
+            sizeDialog.visible = false
+        }
+        function test_poweroff_is_explicit_and_serialized_in_ui() {
+            const action = findChild(summary, "powerOffButton")
+            summary.localeName = "en_US"
+            compare(action.text, "Turn off headset…")
+            powerSpy.clear()
+            action.triggered()
+            verify(summary.confirmingPowerOff)
+            compare(powerSpy.count, 0)
+            mouseClick(findChild(summary, "cancelPowerOffButton"))
+            compare(powerSpy.count, 0)
+            verify(!summary.confirmingPowerOff)
+            action.triggered()
+            wait(20)
+            mouseClick(findChild(summary, "confirmPowerOffButton"))
+            compare(powerSpy.count, 1)
+            verify(!summary.confirmingPowerOff)
+            summary.powerBusy = true
+            verify(!action.enabled)
+            verify(!findChild(summary, "pairingButton").enabled)
+            summary.powerBusy = false
+            summary.pairingBusy = true
+            verify(!action.enabled)
+            summary.pairingBusy = false
+            summary.localeName = "es_CL"
+            compare(action.text, "Apagar auricular…")
+            action.triggered()
+            summary.activeView = false
+            verify(!summary.confirmingPowerOff)
+            summary.activeView = true
+            summary.localeName = "en_US"
+        }
+        function test_native_effects_navigation() {
+            summary.visible = false
+            panel.visible = true
+            verify(findChild(panel, "audioTabs") === null)
+            compare(fakeAudio.requests.length, 0)
+            wait(20)
+            mouseClick(findChild(panel, "configureEffectsButton"))
+            verify(panel.effectsOpen)
+            verify(findChild(panel, "headsetSettings").visible)
+            verify(findChild(panel, "audioSettings") === null)
+            compare(fakeAudio.requests.length, 1)
+            compare(fakeAudio.requests[0].op, "status")
+            const eq = {enabled: false, gains: [0,0,0,0,0,0,0,0,0,0], custom: {}, favorites: []}
+            const result = {state: {equalizers: {output: eq, microphone: eq},
+                sidetone: {enabled: false, level: 15}, tuning: {quantum: 0, fixed_rate: false, never_suspend: false, headroom: 0}},
+                presets: {output: {Flat: eq.gains}, microphone: {Flat: eq.gains}},
+                frequencies: {output: [31,63,125,250,500,1000,2000,4000,8000,16000],
+                    microphone: [100,200,300,500,800,1500,3000,5000,8000,12000]}, has_microphone: true}
+            fakeAudio.response = result
+            fakeAudio.loaded(result)
+            wait(20)
+            mouseClick(findChild(panel, "backToOutput"))
+            verify(!panel.effectsOpen)
+            wait(20)
+            mouseClick(findChild(panel, "configureEffectsButton"))
+            verify(findChild(panel, "headsetSettings").visible)
+            compare(fakeAudio.requests.length, 1)
+            panel.activeView = false
+            verify(!panel.effectsOpen)
+            panel.activeView = true
+            verify(!findChild(panel, "headsetSettings").visible)
+            panel.visible = false
+            summary.visible = true
+        }
+        function test_settings_and_unknown_battery() {
+            summary.localeName = "en_US"
+            summary.battery = null
+            const hint = findChild(summary, "batteryUnavailableHint")
+            verify(hint.visible)
+            verify(hint.text.includes("does not determine"))
+            const settings = findChild(summary, "soundSettingsButton")
+            compare(settings.text, "Sound settings…")
+            settingsSpy.clear()
+            mouseClick(settings)
+            compare(settingsSpy.count, 1)
+            summary.localeName = "es_CL"
+            compare(settings.text, "Ajustes de sonido…")
+            verify(hint.text.includes("Esto no indica"))
+            summary.battery = {percent: 65, state: "Discharging"}
+            verify(!hint.visible)
+            summary.battery = null
+            summary.localeName = "en_US"
+        }
+        function test_native_battery_presentation() {
+            const icon = findChild(summary, "headsetBatteryIcon")
+            const percent = findChild(summary, "batteryPercentage")
+            compare(findChild(summary, "batteryChargeBar"), null)
+            const state = findChild(summary, "batteryStatus")
+            summary.localeName = "en_US"
+            for (const level of [0, 5, 65, 99, 100]) {
+                summary.battery = {percent: level, state: "Discharging"}
+                compare(icon.batteryType, "")
+                compare(icon.percent, level)
+                compare(percent.text, level + "%")
+                verify(!icon.pluggedIn)
+                verify(!state.visible)
+            }
+            summary.battery = {percent: 99, state: "Charging"}
+            verify(icon.pluggedIn)
+            compare(state.text, "Charging")
+            verify(state.visible)
+            compare(percent.text, "99%")
+            summary.localeName = "es_CL"
+            compare(state.text, "Cargando")
+            summary.battery = {percent: 99, state: "Unknown"}
+            verify(!icon.pluggedIn)
+            compare(state.text, "Estado de carga desconocido")
+            summary.battery = null
+            verify(!icon.hasBattery)
+            compare(percent.text, "Desconocido")
+            summary.localeName = "en_US"
+            compare(percent.text, "Unknown")
+        }
+        function test_bluetooth_presentation() {
+            summary.sink = {name: "bluez_output.example.1", description: "Razer Barracuda X (BT)",
+                            properties: {"device.api": "bluez5"}, volume: 42598, muted: false}
+            summary.battery = {percent: 60, state: "NoCharge"}
+            compare(summary.deviceIcon, "audio-headset")
+            compare(summary.deviceName, "Razer Barracuda X")
+            verify(summary.statusText.startsWith("Bluetooth"))
+            compare(findChild(summary, "batteryPercentage").text, "60%")
+            verify(!findChild(summary, "batteryStatus").visible)
+            verify(!findChild(summary, "batteryUnavailableHint").visible)
+            verify(findChild(summary, "moreActionsButton").visible)
+            verify(findChild(summary, "pairingButton").text.includes("USB"))
+            verify(findChild(summary, "powerOffButton").text.includes("USB"))
+            summary.sink = null
+            summary.battery = null
+        }
         function test_battery_reconnect_and_late_data() {
             const frame = {Product: "Razer Barracuda X (2022)", Type: "Headset",
                            "Is Power Supply": false, "Plugged in": true,
@@ -75,19 +302,31 @@ Item {
             const button = findChild(summary, "pairingButton")
             verify(button !== null)
             compare(pairingSpy.count, 0)
+            mouseClick(findChild(summary, "moreActionsButton"))
+            tryCompare(findChild(summary, "moreActionsMenu"), "opened", true)
             mouseClick(button)
             compare(pairingSpy.count, 0)
             verify(summary.confirmingPairing)
+            tryCompare(findChild(summary, "moreActionsMenu"), "visible", false)
+            wait(20)
             mouseClick(findChild(summary, "cancelPairingButton"))
             verify(!summary.confirmingPairing)
             compare(pairingSpy.count, 0)
+            mouseClick(findChild(summary, "moreActionsButton"))
+            tryCompare(findChild(summary, "moreActionsMenu"), "opened", true)
             mouseClick(button)
+            tryCompare(findChild(summary, "moreActionsMenu"), "visible", false)
+            wait(20)
             mouseClick(findChild(summary, "confirmPairingButton"))
             compare(pairingSpy.count, 1)
             summary.pairingBusy = true
             verify(!button.enabled)
+            mouseClick(findChild(summary, "moreActionsButton"))
+            tryCompare(findChild(summary, "moreActionsMenu"), "opened", true)
             mouseClick(button)
             compare(pairingSpy.count, 1)
+            findChild(summary, "moreActionsMenu").close()
+            tryCompare(findChild(summary, "moreActionsMenu"), "visible", false)
             summary.pairingBusy = false
         }
         function test_closing_clears_pending_confirmation() {

@@ -1,7 +1,7 @@
 From f2a67f56ff6411a8c9dff91ef309b093a8cd6c42 Mon Sep 17 00:00:00 2001
 From: Luis Atala <luis.atala@gmail.com>
 Date: Fri, 25 Sep 2026 20:55:05 -0300
-Subject: [PATCH 0/2] HID: add driver for the Razer Barracuda X (2022) dongle
+Subject: [PATCH 0/4] HID: add driver for the Razer Barracuda X (2022) dongle
 
 The Razer Barracuda X (2022) is a wireless headset with a 2.4 GHz USB
 dongle (1532:0552). The dongle is a UAC1 audio device plus a HID
@@ -20,6 +20,16 @@ queries to the headset for the duration of the query, and restoring the
 local route afterwards. It is a separate patch so that it can be reviewed,
 or dropped, on its own.
 
+Patch 3 adds a write-only headset_poweroff sysfs action. It sends a
+hardware-validated MMI request only on an explicit write, serialized with
+battery queries, and restores the local route. The protocol was tested
+from userspace; the new driver entry point still needs hardware validation.
+
+Patch 4 adds a serialized, allowlisted native-settings mailbox for explicitly
+requested EQ, gaming, DND, standby and Quick Connect operations. It shares the
+route mutex with battery queries and power-off. Default/Game EQ was physically
+tested from userspace; the mailbox and other setters need hardware validation.
+
 The driver is separate from hid-razer, which handles keyboard macro keys
 and shares no protocol with this device.
 
@@ -34,7 +44,8 @@ Two userspace consumers use the link state:
 
 Testing:
 - KUnit: 13 tests after patch 1, 18 after patch 2, under QEMU x86_64
-  with KASAN, UBSAN and lockdep.
+  with KASAN, UBSAN and lockdep. The complete series passes 23 tests,
+  including power-off guards, native settings and read-length validation.
 - W=1 and sparse (C=2) builds without warnings, built-in and as a module.
 - Hardware: an out-of-tree version of this driver with the same protocol
   handling has been in use with a Razer Barracuda X (RZ04-04430-100) on
@@ -51,25 +62,16 @@ over several sessions. The sessions covered protocol analysis of my own
 captures, the out-of-tree driver, and restructuring it for submission:
 a single file, KUnit tests instead of a userspace test, a hid_is_usb()
 check, and removal of the module parameters. checkpatch and sparse were
-run on the result.
+run on the result. OpenAI Codex assisted with the serialized power-off and
+native-settings additions, their tests and protocol documentation.
 
-Luis Atala (2):
+Luis Atala (4):
   HID: razer-barracuda: add driver for the Razer Barracuda X (2022)
     dongle
   HID: razer-barracuda: query battery, cable and voltage
-
- MAINTAINERS                            |    6 +
- drivers/hid/Kconfig                    |   23 +
- drivers/hid/Makefile                   |    1 +
- drivers/hid/hid-ids.h                  |    1 +
- drivers/hid/hid-razer-barracuda-test.c |  420 ++++++++++
- drivers/hid/hid-razer-barracuda.c      | 1008 ++++++++++++++++++++++++
- 6 files changed, 1459 insertions(+)
- create mode 100644 drivers/hid/hid-razer-barracuda-test.c
- create mode 100644 drivers/hid/hid-razer-barracuda.c
-
+  HID: razer-barracuda: serialize explicit headset power-off
+  HID: razer-barracuda: serialize native headset settings
 
 base-commit: 145c2b2e9a5c0f794fb4009bcb072ab19f8ccfcd
 -- 
 2.55.0
-

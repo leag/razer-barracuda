@@ -21,7 +21,7 @@ class UpstreamSeriesTests(unittest.TestCase):
         if shutil.which('git') is None:
             self.skipTest('git is required to apply the series')
         series = sorted((UPSTREAM / 'hid').glob('0[0-9][0-9][1-9]-*.patch'))
-        self.assertEqual(len(series), 2)
+        self.assertEqual(len(series), 4)
         with tempfile.TemporaryDirectory() as directory:
             # The driver files are new in the series, so they apply to an empty tree.
             for patch in series:

@@ -9,6 +9,8 @@ generated with `git format-patch` against the HID tree's `for-next` branch
 | `upstream/hid/0000-cover-letter.patch` | Cover letter | linux-input |
 | `upstream/hid/0001-*.patch` | The driver: link query, passive battery and cable reports, `wireless_status`, jack switches, KUnit tests | linux-input |
 | `upstream/hid/0002-*.patch` | Battery, cable and voltage queries over the remote diagnostic route | linux-input |
+| `upstream/hid/0003-*.patch` | Explicit serialized headset power-off and sysfs ABI | linux-input |
+| `upstream/hid/0004-*.patch` | Explicit bounded native headset settings mailbox | linux-input |
 | `upstream/alsa/0001-*.patch` | snd-usb-audio jack quirk | linux-sound, once the HID driver is accepted |
 
 The pairing CLI and Plasma widget are userspace components, not part of this
@@ -19,7 +21,7 @@ themselves change the HID/ALSA patch series or its validation history.
 HID patches, and Jaroslav Kysela and Takashi Iwai for the ALSA patch.
 
 The sources in `kernel/hid-razer-barracuda/` are the driver as it stands
-after patch 2. The DKMS build is the same file; the only DKMS-specific file is
+after patch 4. The DKMS build is the same file; the only DKMS-specific file is
 a small `hid-ids.h` with the two IDs, because kernel header packages do not
 ship `drivers/hid/hid-ids.h`. `tests/test_upstream.py` fails if the series and
 the sources differ, or if a patch already has a `Signed-off-by`.
@@ -30,20 +32,20 @@ the sources differ, or if a patch already has a `Signed-off-by`.
 git clone --depth 1 -b for-next \
   https://git.kernel.org/pub/scm/linux/kernel/git/hid/hid.git linux
 cd linux
-git am /path/to/this/repo/upstream/hid/000[12]-*.patch
+git am /path/to/this/repo/upstream/hid/000[1234]-*.patch
 ```
 
 Make changes as fixups to the patch they belong to, then regenerate the
 series and copy the sources back:
 
 ```bash
-git rebase -i --autosquash HEAD~2
-git format-patch --cover-letter --base=HEAD~2 -o /path/to/this/repo/upstream/hid HEAD~2
+git rebase -i --autosquash HEAD~4
+git format-patch --cover-letter --base=HEAD~4 -o /path/to/this/repo/upstream/hid HEAD~4
 cp drivers/hid/hid-razer-barracuda*.c /path/to/this/repo/kernel/hid-razer-barracuda/
 ```
 
 `format-patch` writes a new cover letter template; keep the existing text.
-Patch 1 must build and pass its own tests without patch 2.
+Patches 3 and 4 use the battery route mutex added by patch 2. Patch 1 must build and pass its own tests without patch 2.
 
 ## Checks
 
@@ -57,7 +59,7 @@ Run each of these after every change, and on each patch of the series:
 # W=1 and sparse, built-in and as a module
 make W=1 C=2 drivers/hid/hid-razer-barracuda.o
 
-./scripts/checkpatch.pl --strict -g HEAD~2..HEAD
+./scripts/checkpatch.pl --strict -g HEAD~4..HEAD
 ```
 
 On 2026-09-25, against `for-next` at `145c2b2e9`: KUnit passed 13 tests after
@@ -85,7 +87,7 @@ error was the missing `Signed-off-by`.
    describes how the code was written.
 3. **Rebase** onto the current `for-next` and rerun the checks.
 4. **Sign off.** Only you can certify the Developer Certificate of Origin:
-   `git rebase --signoff HEAD~2`. Keep the `Assisted-by` tags
+   `git rebase --signoff HEAD~4`. Keep the `Assisted-by` tags
    (`Documentation/process/coding-assistants.rst`).
 5. **Send** with `git send-email`, to the maintainers and lists from
    `scripts/get_maintainer.pl`, in plain text.
@@ -93,3 +95,15 @@ error was the missing `Signed-off-by`.
 After the HID driver is accepted, rebase the ALSA patch onto the sound tree
 (`git://git.kernel.org/pub/scm/linux/kernel/git/tiwai/sound.git`, `for-next`),
 add a `Link:` to the accepted HID series, sign it off and send it.
+
+The explicit power-off addition passed the isolated Python/QML suite (81 tests),
+KUnit on patch 1 (13), patch 2 (18) and the full series (21), with KASAN, UBSAN
+and lockdep. W=1/C=2 checks passed for each patch and the DKMS module. Strict
+checkpatch reported only the intentionally missing user DCO sign-off. These
+checks do not replace physical validation of the new sysfs action.
+
+The native settings addition passes the isolated Python/QML suite (90 tests),
+the full KUnit run (23 tests including KUnit framework tests), the DKMS W=1
+build and the built-in W=1/C=2 check. Strict checkpatch reports only the missing
+user DCO sign-off. The new mailbox and the remaining setters still need
+physical validation; the raw-HID Default/Game EQ comparison was audible.

@@ -32,6 +32,20 @@ SPANISH = {'Adapter not detected': 'Adaptador no detectado',
  'Pairing failed: {error}': 'Falló el emparejamiento: {error}',
  'Pairing cancelled': 'Emparejamiento cancelado'}
 
+SPANISH.update({
+ 'More than one Barracuda adapter is connected': 'Hay más de un adaptador Barracuda conectado',
+ 'Update the Barracuda driver to enable headset power-off': 'Actualiza el driver Barracuda para habilitar el apagado de los auriculares',
+ 'Power-off permission denied; install the power-control udev rule': 'Sin permiso para apagar; instala la regla udev de control de energía',
+ 'Another headset operation is in progress; try again shortly': 'Hay otra operación en curso; vuelve a intentarlo en unos segundos',
+ 'The headset link is not confirmed; no power-off command was sent': 'El enlace no está confirmado; no se envió el comando de apagado',
+ 'The adapter did not answer; headset state is unknown': 'El adaptador no respondió; el estado de los auriculares es desconocido',
+ 'Power control failed; inspect the headset and reconnect the dongle if needed': 'Falló el control de energía; comprueba los auriculares y reconecta el adaptador si es necesario',
+ 'Turn off the Barracuda headset? Use its button to turn it on again. [y/N] ': '¿Apagar los auriculares Barracuda? Usa su botón para encenderlos de nuevo. [s/N] ',
+ 'Power-off cancelled': 'Apagado cancelado',
+ 'Power control interrupted; check the headset state before trying again': 'Control de energía interrumpido; comprueba el estado antes de volver a intentarlo',
+ 'Power-off request sent. Use the headset button to turn it on again.': 'Solicitud de apagado enviada. Usa el botón de los auriculares para encenderlos de nuevo.',
+})
+
 def set_language(language):
     global LANGUAGE
     if language not in ("en", "es"):

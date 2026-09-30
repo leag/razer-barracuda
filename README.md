@@ -9,8 +9,9 @@ Linux support for the Razer Barracuda X (2022), USB `1532:0552`.
   the default output's device icon. Barracuda uses KDE Breeze's detailed headset
   icon, including the microphone.
 
-WirePlumber manages audio switching. Optional [audio effects](docs/AUDIO_EFFECTS.md)
-use its smart-filter policy; effects and system tuning require explicit activation. This is an independent project, not an official Razer application.
+WirePlumber manages audio switching. Optional [headset controls and system tuning](docs/AUDIO_EFFECTS.md)
+use native headset commands and explicit PipeWire/WirePlumber configuration.
+This is an independent project, not an official Razer application.
 
 ## Install
 
@@ -35,11 +36,15 @@ The widget offers native pairing confirmation and displays the result. There is 
 
 Add **Current Audio Output** (**Salida de audio actual**) from Plasma's widget
 picker. The panel icon follows the default audio device; hover shows its name
-and volume/mute state. Click opens a summary for any default output, with secondary
-actions for KDE Sound settings and native Barracuda pairing. It also shows the
-Barracuda battery reported by KDE. The **Equalizer**, **Microphone** and **System** tabs offer optional output
-and microphone EQ, profiles, sidetone and persistent PipeWire/WirePlumber tuning.
-Pairing requires `barracuda-pair` on `PATH`. This is a separate widget, not
+and volume/mute state. Click opens a compact summary of the default output and the Barracuda battery
+reported by KDE. Sound settings and **Audio effects…** open their controls;
+**More actions** contains native Barracuda pairing and an explicit headset power-off action. The effects view has
+native headset EQ, with Gaming, Do Not Disturb, idle shutdown and Bluetooth
+Quick Connect under **More headset settings**. Session tuning is not exposed in the widget. Native effects support both the
+USB dongle and the paired Bluetooth headset.
+Software EQ and sidetone are removed; existing filters have an explicit cleanup action.
+Pairing requires `barracuda-pair` on `PATH`. Power-off requires `barracuda-power`,
+the updated HID driver and its power-control udev rule. This is a separate widget, not
 a modification of KDE's stock volume applet. See [usage](docs/USAGE.md).
 The detailed artwork comes from the installed `breeze-icons` package, not from
 bundled project icons. After a widget update, Plasma may need to be

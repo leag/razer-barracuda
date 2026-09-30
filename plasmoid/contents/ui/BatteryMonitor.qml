@@ -8,7 +8,8 @@ Plasma5Support.DataSource {
     engine: "powermanagement"
     connectedSources: ["Battery"]
     property var records: ({})
-    readonly property var battery: Output.battery(records, Object.keys(records))
+    property var sink: null
+    readonly property var battery: Output.battery(records, Object.keys(records), sink)
 
     // Sources may disappear and return under the same name. Subscribe on each
     // addition and publish a fresh snapshot on every update, including updates

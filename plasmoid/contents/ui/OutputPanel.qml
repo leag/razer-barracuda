@@ -11,56 +11,88 @@ ColumnLayout {
     property bool pairingBusy: false
     property string pairingError: ""
     property string pairingResult: ""
+    property bool powerBusy: false
+    property string powerError: ""
+    property string powerResult: ""
     property var battery: null
+    property bool effectsOpen: false
+    property var audioController: audio
+    property var headsetController: headset
     signal settingsRequested()
     signal pairingRequested()
+    signal powerOffRequested()
     Layout.minimumWidth: Kirigami.Units.gridUnit * 22
-    Layout.preferredWidth: Kirigami.Units.gridUnit * 30
-    Layout.minimumHeight: Kirigami.Units.gridUnit * 24
-    Layout.preferredHeight: Kirigami.Units.gridUnit * 30
+    Layout.preferredWidth: Kirigami.Units.gridUnit * 24
+    Layout.minimumHeight: effectsOpen ? Kirigami.Units.gridUnit * 24 : panel.Layout.preferredHeight
+    Layout.preferredHeight: effectsOpen ? Kirigami.Units.gridUnit * 30
+        : Math.max(Kirigami.Units.gridUnit * 12, overview.implicitHeight + Kirigami.Units.largeSpacing * 2)
+    // Keep the overview fitted to its content, including action messages.
+    Layout.maximumHeight: effectsOpen ? Infinity : panel.Layout.preferredHeight
     onActiveViewChanged: {
         if (!activeView)
-            effects.restartConfirmation = false;
+            effectsOpen = false;
+    }
+    function openEffects() {
+        effectsOpen = true;
+        if (!audioController.response && !audioController.busy)
+            audioController.request({op: "status"});
+        if (!headsetController.busy)
+            headsetController.request({op: "status"});
     }
     AudioController { id: audio; objectName: "audioController" }
-    PC3.TabBar {
-        id: tabs
-        objectName: "audioTabs"
+    HeadsetController {
+        id: headset
+        objectName: "headsetController"
+        sink: panel.sink
+        activeView: panel.effectsOpen
+    }
+    RowLayout {
+        visible: panel.effectsOpen
         Layout.fillWidth: true
-        PC3.TabButton { text: Output.text("Output", "Salida", Qt.locale().name) }
-        PC3.TabButton { text: Output.text("Equalizer", "Ecualizador", Qt.locale().name) }
-        PC3.TabButton { text: Output.text("Microphone", "Micrófono", Qt.locale().name) }
-        PC3.TabButton { text: Output.text("System", "Sistema", Qt.locale().name) }
-        onCurrentIndexChanged: {
-            if (currentIndex > 0 && !audio.response && !audio.busy)
-                audio.request({op: "status"});
+        PC3.ToolButton {
+            objectName: "backToOutput"
+            icon.name: "go-previous"
+            text: Output.text("Back", "Volver", Qt.locale().name)
+            onClicked: panel.effectsOpen = false
+        }
+        PC3.Label {
+            Layout.fillWidth: true
+            text: Output.text("Audio effects", "Efectos de audio", Qt.locale().name)
+            font.bold: true
         }
     }
     StackLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        currentIndex: tabs.currentIndex === 0 ? 0 : 1
+        currentIndex: panel.effectsOpen ? 1 : 0
         PC3.ScrollView {
             id: overviewScroll
             PC3.ScrollBar.horizontal.policy: PC3.ScrollBar.AlwaysOff
-            PC3.ScrollBar.vertical.policy: PC3.ScrollBar.AlwaysOn
-            contentWidth: availableWidth
+            PC3.ScrollBar.vertical.policy: PC3.ScrollBar.AsNeeded
+            // Keep wrapping stable while the vertical scrollbar changes visibility.
+            contentWidth: width
             OutputSummary {
-                width: overviewScroll.availableWidth
+                id: overview
+                objectName: "outputOverview"
+                width: overviewScroll.width
                 sink: panel.sink
-                activeView: panel.activeView && tabs.currentIndex === 0
+                activeView: panel.activeView && !panel.effectsOpen
                 pairingBusy: panel.pairingBusy
                 pairingError: panel.pairingError
                 pairingResult: panel.pairingResult
+                powerBusy: panel.powerBusy
+                powerError: panel.powerError
+                powerResult: panel.powerResult
                 battery: panel.battery
                 onSettingsRequested: panel.settingsRequested()
                 onPairingRequested: panel.pairingRequested()
+                onPowerOffRequested: panel.powerOffRequested()
+                onEffectsRequested: panel.openEffects()
             }
         }
-        AudioSettings {
-            id: effects
-            controller: audio
-            section: tabs.currentIndex === 2 ? "microphone" : tabs.currentIndex === 3 ? "system" : "output"
+        HeadsetSettings {
+            controller: panel.headsetController
+            audioController: panel.audioController
         }
     }
 }

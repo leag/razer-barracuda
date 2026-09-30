@@ -19,6 +19,8 @@ classifiers = [
 
 [project.scripts]
 barracuda-pair = "barracuda_pair.pairing:main"
+barracuda-power = "barracuda_pair.control:main"
+barracuda-headset = "barracuda_pair.headset:main"
 barracuda-audio = "barracuda_pair.audio:main"
 
 [tool.setuptools.packages.find]

@@ -44,6 +44,21 @@ The reconstructed E3 request is a 64-byte HID report:
 `e3 00` or `e3 01`; acknowledgments alone do not establish connection state.
 See [protocol observations](PROTOCOL.md) for exact validation offsets.
 
+## Headset power-off through the vendor MMI channel
+
+Static review of the vendor library identified `AW_POWER_OFF(true)`, which
+routes to the headset and sends family `07`, payload `08 00 02`
+(`APP_MMI_POWER_OFF_PRESS`). An explicitly authorized physical test subsequently
+confirmed power-off on the Barracuda X (2022), with user observation and validated
+link-loss reports. No command acknowledgment arrived. The local diagnostic route
+was restored and verified afterwards. See [the exact sequence and validation
+limits](PROTOCOL.md#explicit-headset-power-off-diagnostic).
+
+This establishes the observed command's effect, not a complete static trace of
+its companion-firmware handler. The library also exposes reboot, pairing-data
+clear and factory-reset operations; they were not executed or validated by this
+test and remain outside the application and driver command set.
+
 ## Static research coverage
 
 All ten entries of the analyzed bridge's outer dispatch table were identified.
@@ -584,3 +599,14 @@ These payloads are not connection reports and must never change link state.
 | `bt_link_connected` bitmask updates | Distinguish connection membership from an RSSI/quality measurement. | Individual bit meanings and relation to the wireless link remain unresolved. |
 | Family-6 `0x32` RSSI getter with remote diagnostic routing | Retrieve changing signed RSSI fields from the headset through USB. | Local results are fixed; physical units, freshness and production-safe routing coordination remain unvalidated. |
 | Register writes and restart handlers | Recognize commands that could alter or interrupt the device. | No register-write or restart command was executed. |
+
+## Additional command inventory and native sidetone
+
+See [the command implementation review](COMMAND_REVIEW.md) for the named SDK
+command inventory, implementation boundaries and recovered sidetone handlers.
+An explicitly authorized live probe returned family-6 `72` gain `00` and a
+correlated OTA status `01` for `70 01` (enable). The SDK accepts OTA statuses
+`00` and `01`. An acknowledgment does not establish audible operation; gain
+units, bounds and persistence remain unvalidated. The user reported no audible
+effect; a subsequent `70 00` disable returned accepted OTA status `01`. Local routing
+was restored and verified after each probe; no gain setter was sent.

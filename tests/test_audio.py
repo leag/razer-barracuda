@@ -50,7 +50,7 @@ class AudioTests(unittest.TestCase):
             with self.assertRaises(audio.AudioError):
                 audio.gains(values)
         state = audio.defaults()
-        state['equalizers']['output']['custom']['Flat'] = [0] * 10
+        state['equalizers']['output']['custom']['__proto__'] = [0] * 10
         with self.assertRaisesRegex(audio.AudioError, 'invalid-profile'):
             audio.normalize(state)
 
@@ -61,22 +61,25 @@ class AudioTests(unittest.TestCase):
             eq['gains'][2] = 6
         state['tuning'].update(never_suspend=True, quantum=512, fixed_rate=True, headroom=1024)
         documents = {p.name: doc for p, doc in audio.documents(state, DEVICES).items()}
-        output, mic = documents['90-barracuda-effects.conf']['context.modules']
-        self.assertEqual(output['args']['capture.props']['filter.smart.target'],
-                         {'alsa.components': 'USB1532:0552', 'media.class': 'Audio/Sink'})
-        self.assertEqual(mic['args']['playback.props']['filter.smart.target']['media.class'], 'Audio/Source')
-        self.assertAlmostEqual(output['args']['filter.graph']['nodes'][0]['control']['Gain 1'], 10 ** (-6 / 20))
-        self.assertEqual(mic['args']['filter.graph']['nodes'][1]['control']['Freq'], 75)
-        self.assertEqual(len(output['args']['filter.graph']['links']), 10)
-        self.assertEqual(len(mic['args']['filter.graph']['links']), 11)
+        self.assertEqual(documents['90-barracuda-effects.conf']['context.modules'], [])
         rules = documents['90-barracuda-audio.conf']['monitor.alsa.rules']
         self.assertTrue(all(rule['matches'][0]['alsa.components'] == 'USB1532:0552' for rule in rules))
         self.assertNotIn('api.alsa.headroom', rules[1]['actions']['update-props'])
         self.assertNotIn('api.alsa.period-size', json.dumps(documents))
 
+    def test_small_buffer_options(self):
+        for frames in (128, 256):
+            state = audio.defaults()
+            state['tuning'].update(quantum=frames, headroom=frames)
+            state = audio.normalize(state)
+            documents = {p.name: doc for p, doc in audio.documents(state, DEVICES).items()}
+            self.assertEqual(documents['91-barracuda-latency.conf']['context.properties']['default.clock.quantum'], frames)
+            rules = documents['90-barracuda-audio.conf']['monitor.alsa.rules']
+            self.assertEqual(rules[0]['actions']['update-props']['api.alsa.headroom'], frames)
+
     def test_save_does_not_restart_or_change_defaults(self):
         state = audio.defaults()
-        state['equalizers']['output']['enabled'] = True
+        state['tuning']['quantum'] = 128
         result = audio.dispatch({'op': 'save', 'state': state})
         self.assertTrue(result['state']['pending_restart'])
         self.commands.assert_called_once_with('pw-dump')
@@ -85,35 +88,29 @@ class AudioTests(unittest.TestCase):
         self.assertEqual(len(list(Path(self.directory.name).rglob('*.conf'))), 3)
         self.assertNotIn('set-default', str(self.commands.call_args_list))
 
-    def test_live_output_gains_use_discovered_owned_node(self):
+    def test_legacy_eq_is_detected_and_removed_only_on_explicit_request(self):
         state = audio.defaults()
         state['equalizers']['output']['enabled'] = True
-        state['equalizers']['output']['gains'][3] = 4
-        physical_and_effect = DEVICES + [node(500, 'barracuda.effects.output', 'Audio/Sink', '',
-                                               **{'barracuda.effects': True})]
-        audio.live_gains(state, physical_and_effect)
-        args = self.commands.call_args.args
-        self.assertEqual(args[:4], ('pw-cli', 'set-param', '500', 'Props'))
-        values = json.loads(args[4])['params']
-        self.assertEqual(values[values.index('eq3:Gain') + 1], 4)
-        self.commands.reset_mock()
-        audio.live_gains(state, DEVICES + [node(500, 'barracuda.effects.output', 'Audio/Sink')])
-        self.commands.assert_not_called()
+        audio.state_path().parent.mkdir(parents=True)
+        audio.state_path().write_text(json.dumps(state))
+        legacy = DEVICES + [node(500, 'barracuda.effects.output', 'Audio/Sink', '')]
+        self.assertTrue(audio.snapshot(state, legacy)['legacy_eq_loaded'])
+        with self.assertRaisesRegex(audio.AudioError, 'confirmation-required'):
+            audio.dispatch({'op': 'remove_eq'})
+        self.assertNotIn('systemctl', str(self.commands.call_args_list))
+        result = audio.dispatch({'op': 'remove_eq', 'confirmed': True})
+        self.assertFalse(result['state']['equalizers']['output']['enabled'])
+        self.assertNotIn('filter-chain', (Path(self.directory.name) / 'pipewire/pipewire.conf.d/90-barracuda-effects.conf').read_text())
+        self.commands.assert_any_call('systemctl', '--user', 'restart', 'pipewire.service',
+                                     'pipewire-pulse.service', 'wireplumber.service')
 
-    def test_sidetone_is_scoped_and_has_level(self):
+    def test_removed_sidetone_does_not_generate_a_filter(self):
         state = audio.defaults()
         state['sidetone'].update(enabled=True, level=17)
-        documents = audio.documents(state, DEVICES)
-        args = next(iter(documents.values()))['context.modules'][0]['args']
-        self.assertEqual(args['capture.props']['target.object'], 'headset-input')
-        self.assertEqual(args['playback.props']['target.object'], 'headset-output')
-        self.assertTrue(args['playback.props']['node.dont-fallback'])
-        for side in ('capture.props', 'playback.props'):
-            self.assertEqual(args[side]['node.latency'], '128/48000')
-            self.assertNotIn('node.force-quantum', args[side])
-        self.assertEqual(args['filter.graph']['nodes'][0]['control']['Gain 1'], .17)
-        with self.assertRaisesRegex(audio.AudioError, 'missing-microphone'):
-            audio.documents(state, DEVICES[:1])
+        document = next(iter(audio.documents(state, DEVICES).values()))
+        self.assertEqual(document['context.modules'], [])
+        result = audio.dispatch({'op': 'save', 'state': state})
+        self.assertFalse(result['state']['sidetone']['enabled'])
 
     def test_sidetone_status_distinguishes_loaded_and_running(self):
         state = audio.defaults()
@@ -133,7 +130,7 @@ class AudioTests(unittest.TestCase):
         state['equalizers']['output']['favorites'] = ["Música '$(touch nope)'", 'Flat', 'missing']
         audio.dispatch({'op': 'save', 'state': state})
         saved = audio.load()
-        self.assertEqual(saved['equalizers']['output']['favorites'], ["Música '$(touch nope)'", 'Flat'])
+        self.assertEqual(saved['equalizers']['output']['favorites'], ["Música '$(touch nope)'"])
         self.assertFalse(saved['pending_restart'])
         self.commands.assert_called_once_with('pw-dump')
 
@@ -162,6 +159,21 @@ class AudioTests(unittest.TestCase):
         audio.dispatch({'op': 'apply', 'confirmed': True})
         self.commands.assert_any_call('systemctl', '--user', 'restart', 'pipewire.service',
                                       'pipewire-pulse.service', 'wireplumber.service')
+
+    def test_single_apply_only_restarts_when_needed_and_authorized(self):
+        state = audio.defaults()
+        result = audio.dispatch({'op': 'save_apply', 'state': state, 'confirmed': True})
+        self.assertFalse(result['state']['pending_restart'])
+        self.assertNotIn('systemctl', str(self.commands.call_args_list))
+        state['tuning']['quantum'] = 128
+        result = audio.dispatch({'op': 'save_apply', 'state': state, 'confirmed': False})
+        self.assertTrue(result['state']['pending_restart'])
+        self.assertNotIn('systemctl', str(self.commands.call_args_list))
+        self.commands.reset_mock()
+        result = audio.dispatch({'op': 'save_apply', 'state': state, 'confirmed': True})
+        self.assertFalse(result['state']['pending_restart'])
+        restarts = [call for call in self.commands.call_args_list if call.args[0] == 'systemctl']
+        self.assertEqual(len(restarts), 1)
 
     def test_disable_restores_empty_owned_fragments(self):
         state = audio.defaults()

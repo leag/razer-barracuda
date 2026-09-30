@@ -9,6 +9,15 @@ function audioCommand(request) {
     return "barracuda-audio --request '" + JSON.stringify(request).replace(/'/g, "'\\''") + "'";
 }
 
+function headsetCommand(request, sink) {
+    const command = Object.assign({}, request);
+    if (bluetooth(sink)) {
+        command.transport = "bluetooth";
+        command.address = bluetoothAddress(sink);
+    }
+    return "barracuda-headset --request '" + JSON.stringify(command).replace(/'/g, "'\\''") + "'";
+}
+
 function pairingCommand(locale) {
     // Called only after explicit confirmation in the native UI.
     return "barracuda-pair --yes --timeout 60 --language "
@@ -20,18 +29,44 @@ function batterySources(sources) {
     return ["Battery"].concat(sources.filter(source => /^Battery\d+$/.test(source)));
 }
 
-function battery(data, sources) {
-    for (const source of sources) {
+function bluetooth(sink) {
+    const props = sink ? (sink.properties || {}) : {};
+    return props["device.api"] === "bluez5" || props["api.bluez5.address"] !== undefined
+        || /^bluez_output[.]/.test(sink ? String(sink.name || "") : "");
+}
+
+function bluetoothAddress(sink) {
+    const props = sink ? (sink.properties || {}) : {};
+    const address = props["api.bluez5.address"] || props["device.string"];
+    if (typeof address === "string" && /^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(address))
+        return address.toUpperCase();
+    const match = /^bluez_output[.]((?:[0-9a-f]{2}_){5}[0-9a-f]{2})[.]/i.exec(sink ? sink.name : "");
+    return match ? match[1].replace(/_/g, ":").toUpperCase() : "";
+}
+
+function deviceName(sink, locale) {
+    if (!available(sink))
+        return text("No audio output", "Sin salida de audio", locale);
+    const name = sink.description || sink.name;
+    return bluetooth(sink) && name === "Razer Barracuda X (BT)" ? "Razer Barracuda X" : name;
+}
+
+function battery(data, sources, sink) {
+    const preferred = bluetooth(sink) ? "Razer Barracuda X (BT)" : "Razer Barracuda X (2022)";
+    const ordered = sources.filter(source => data[source] && data[source].Product === preferred)
+        .concat(sources.filter(source => !data[source] || data[source].Product !== preferred));
+    for (const source of ordered) {
         const item = data[source];
         if (!item || item["Is Power Supply"] !== false || item.Type !== "Headset"
-                || item.Product !== "Razer Barracuda X (2022)" || item["Plugged in"] !== true)
+                || !["Razer Barracuda X (2022)", "Razer Barracuda X (BT)"].includes(item.Product)
+                || item["Plugged in"] !== true)
             continue;
         const percent = item.Percent;
         if (typeof percent !== "number" || !isFinite(percent) || percent < 0 || percent > 100)
-            return null;
+            continue;
         // KDE can expose zero when the underlying percentage is unavailable.
         if (percent === 0 && item.State === "Unknown")
-            return null;
+            continue;
         return {percent: Math.round(percent), state: item.State};
     }
     return null;
@@ -40,16 +75,21 @@ function battery(data, sources) {
 function batteryText(value, locale) {
     if (!value)
         return text("Battery unavailable", "Batería no disponible", locale);
-    const level = value.percent + "%";
+    return value.percent + "% · " + batteryState(value, locale);
+}
+
+function batteryState(value, locale) {
+    if (!value)
+        return text("Battery unavailable", "Batería no disponible", locale);
     switch (value.state) {
     case "Charging":
-        return level + " · " + text("Charging", "Cargando", locale);
+        return text("Charging", "Cargando", locale);
     case "FullyCharged":
-        return level + " · " + text("Fully charged", "Carga completa", locale);
+        return text("Fully charged", "Carga completa", locale);
     case "Discharging":
-        return level + " · " + text("On battery", "Con batería", locale);
+        return text("On battery", "Con batería", locale);
     default:
-        return level + " · " + text("Charge state unknown", "Estado de carga desconocido", locale);
+        return text("Charge state unknown", "Estado de carga desconocido", locale);
     }
 }
 
@@ -81,6 +121,9 @@ function icon(sink) {
             || (String(props["device.vendor.id"]).toLowerCase() === "0x1532"
                 && String(props["device.product.id"]).toLowerCase() === "0x0552"))
         return "audio-headset";
+    if (bluetooth(sink) && (sink.description === "Razer Barracuda X (BT)"
+            || props["device.icon_name"] === "audio-headset"))
+        return "audio-headset";
     if (sink.formFactor === "headphone" || sink.formFactor === "headset")
         return "audio-headset";
     var ports = sink.ports || [];
@@ -102,4 +145,8 @@ function artwork(iconName) {
     if (/^audio-speakers(-|$)/.test(iconName))
         return "file:///usr/share/icons/breeze/devices/64/audio-speakers.svg";
     return iconName;
+}
+
+function powerOffCommand(locale) {
+    return "barracuda-power --off --yes --language " + (String(locale).toLowerCase().startsWith("es") ? "es" : "en");
 }

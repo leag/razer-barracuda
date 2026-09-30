@@ -14,10 +14,12 @@ PlasmoidItem {
     // Follow the server default, not individual applications' output overrides.
     readonly property var sink: Server.defaultSink
     readonly property bool hasOutput: Output.available(sink)
-    readonly property string deviceName: hasOutput ? (sink.description || sink.name)
-        : label("No audio output", "Sin salida de audio")
+    readonly property string deviceName: Output.deviceName(sink, Qt.locale().name)
     readonly property string deviceIcon: Output.icon(sink)
     readonly property string deviceArtwork: Output.artwork(deviceIcon)
+    property bool powerBusy: false
+    property string powerError: ""
+    property string powerResult: ""
     property bool pairingBusy: false
     property string pairingError: ""
     property string pairingResult: ""
@@ -30,9 +32,11 @@ PlasmoidItem {
         }
     }
     onExpandedChanged: {
-        if (!expanded) {
+        if (!root.expanded) {
             pairingError = "";
             pairingResult = "";
+            powerError = "";
+            powerResult = "";
         }
     }
     function label(english, spanish) {
@@ -42,7 +46,7 @@ PlasmoidItem {
         KCMUtils.KCMLauncher.openSystemSettings("kcm_pulseaudio")
     }
     function openPairing() {
-        if (pairingBusy)
+        if (pairingBusy || powerBusy)
             return;
         pairingError = "";
         pairingResult = "";
@@ -50,8 +54,35 @@ PlasmoidItem {
         pairingLauncher.connectSource(Output.pairingCommand(Qt.locale().name));
     }
 
+    function turnOffHeadset() {
+        if (pairingBusy || powerBusy)
+            return;
+        powerError = "";
+        powerResult = "";
+        powerBusy = true;
+        powerLauncher.connectSource(Output.powerOffCommand(Qt.locale().name));
+    }
+    Plasma5Support.DataSource {
+        id: powerLauncher
+        engine: "executable"
+        connectedSources: []
+        onNewData: (sourceName, data) => {
+            disconnectSource(sourceName);
+            root.powerBusy = false;
+            if (data["exit code"] === 0)
+                root.powerResult = root.label(
+                    "Power-off request sent. Use the headset button to turn it on again.",
+                    "Solicitud de apagado enviada. Usa el botón de los auriculares para encenderlos de nuevo.");
+            else
+                root.powerError = root.label("Could not send the power-off request.",
+                    "No se pudo enviar la solicitud de apagado.") + "\n"
+                    + String(data.stderr || data.stdout || "").trim();
+        }
+    }
+
     BatteryMonitor {
         id: powerSource
+        sink: root.sink
     }
 
     Plasma5Support.DataSource {
@@ -131,8 +162,12 @@ PlasmoidItem {
         pairingBusy: root.pairingBusy
         pairingError: root.pairingError
         pairingResult: root.pairingResult
+        powerBusy: root.powerBusy
+        powerError: root.powerError
+        powerResult: root.powerResult
         battery: root.battery
         onSettingsRequested: root.openSettings()
         onPairingRequested: root.openPairing()
+        onPowerOffRequested: root.turnOffHeadset()
     }
 }

@@ -361,8 +361,10 @@ def main(argv=None):
         print(tr("HID permission denied"), file=sys.stderr)
         return 1
     try:
-        return run(PairingSession(transport), scan_only=args.scan,
-                   address=address, timeout=args.timeout)
+        from .control import control_lock
+        with control_lock():
+            return run(PairingSession(transport), scan_only=args.scan,
+                       address=address, timeout=args.timeout)
     except (PairingError, OSError) as exc:
         print(tr("Pairing failed: {error}", error=exc), file=sys.stderr)
         return 1
