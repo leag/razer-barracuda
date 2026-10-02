@@ -10,8 +10,9 @@
 - Add the read-only `barracuda-headset --request '{"op":"link"}'` query. It reads
   the driver's `wireless_status` and power-supply values and BlueZ, without the
   control lock and without sending anything to the hardware.
-- Mark the panel icon with an emblem for disconnected, unconfirmed and low-battery
-  states, and use the driver's battery reading when KDE does not list it.
+- Strike the panel icon through with a red slash when the headset is disconnected
+  or the adapter is missing, mark unconfirmed and low-battery states with an
+  emblem, and use the driver's battery reading when KDE does not list it.
 - Native headset settings follow the confirmed USB or Bluetooth link, using the
   default output only when both or neither is confirmed.
 

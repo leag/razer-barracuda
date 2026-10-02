@@ -123,35 +123,14 @@ ColumnLayout {
         Layout.rightMargin: Kirigami.Units.largeSpacing
         spacing: Kirigami.Units.largeSpacing
 
-        Item {
+        HeadsetArtwork {
             Layout.alignment: Qt.AlignTop
             Layout.preferredWidth: Kirigami.Units.iconSizes.huge
             Layout.preferredHeight: Kirigami.Units.iconSizes.huge
-            Image {
-                id: artwork
-                anchors.fill: parent
-                source: Output.artwork("audio-headset")
-                sourceSize.width: 64
-                sourceSize.height: 64
-                fillMode: Image.PreserveAspectFit
-                visible: status === Image.Ready
-                opacity: summary.connected ? 1 : 0.5
-            }
-            Kirigami.Icon {
-                anchors.fill: parent
-                source: "audio-headset"
-                visible: artwork.status !== Image.Ready
-                opacity: artwork.opacity
-            }
-            Kirigami.Icon {
-                objectName: "connectionEmblem"
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                width: Kirigami.Units.iconSizes.smallMedium
-                height: width
-                source: Output.emblem(summary.connection, summary.battery)
-                visible: source !== ""
-            }
+            connected: summary.connected
+            slashed: Output.slashed(summary.connection)
+            emblem: Output.emblem(summary.connection, summary.battery)
+            emblemSize: Kirigami.Units.iconSizes.smallMedium
         }
 
         ColumnLayout {

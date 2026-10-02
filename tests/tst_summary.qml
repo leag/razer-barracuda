@@ -399,12 +399,14 @@ Item {
             const hint = findChild(summary, "connectionHint")
             const details = findChild(summary, "connectionDetails")
             const emblem = findChild(summary, "connectionEmblem")
+            const slash = findChild(summary, "disconnectedSlash")
             summary.localeName = "en_US"
             summary.status = null
             compare(state.text, "Checking…")
             verify(!hint.visible)
             verify(!details.visible)
             verify(!emblem.visible)
+            verify(!slash.visible)
             summary.status = {ok: false}
             compare(state.text, "Status unavailable")
             verify(hint.visible)
@@ -412,13 +414,17 @@ Item {
             summary.status = {ok: true, usb: {adapter: "missing"}, bluetooth: null}
             compare(state.text, "Adapter not detected")
             verify(details.visible)
-            compare(emblem.source, "emblem-unavailable")
+            verify(slash.visible)
+            verify(!emblem.visible)
             summary.status = linked("unknown")
             compare(state.text, "Link not confirmed")
             verify(hint.text.includes("does not mean"))
             compare(emblem.source, "emblem-question")
+            verify(!slash.visible)
             summary.status = linked("disconnected", {state: "disconnected", address: "01:02:03:04:05:06"})
             compare(state.text, "Disconnected")
+            verify(slash.visible)
+            verify(!emblem.visible)
             const values = () => findChildren(details, "detailValue").filter(item => item.visible).map(item => item.text)
             tryCompare(values(), "length", 3)
             compare(values(), ["Detected", "Disconnected", "Not connected"])
@@ -427,6 +433,7 @@ Item {
             compare(state.text, "Connected · USB dongle")
             verify(!hint.visible)
             verify(!emblem.visible)
+            verify(!slash.visible)
             tryVerify(() => values().length === 4)
             compare(values(), ["Detected", "Connected", "Connected", "4.12 V"])
             summary.localeName = "es_CL"

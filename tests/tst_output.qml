@@ -97,8 +97,13 @@ TestCase {
     function test_panel_emblem() {
         compare(Output.emblem({state: "connected"}, null), "");
         compare(Output.emblem({state: "checking"}, null), "");
-        compare(Output.emblem({state: "disconnected"}, null), "emblem-unavailable");
-        compare(Output.emblem({state: "no-adapter"}, null), "emblem-unavailable");
+        // Disconnected and missing-adapter states use the slash, not an emblem.
+        compare(Output.emblem({state: "disconnected"}, null), "");
+        compare(Output.emblem({state: "no-adapter"}, null), "");
+        verify(Output.slashed({state: "disconnected"}));
+        verify(Output.slashed({state: "no-adapter"}));
+        for (const state of ["connected", "unknown", "unavailable", "checking"])
+            verify(!Output.slashed({state: state}));
         compare(Output.emblem({state: "unknown"}, null), "emblem-question");
         compare(Output.emblem({state: "unavailable"}, null), "emblem-question");
         compare(Output.emblem({state: "connected"}, {percent: 10, state: "Discharging"}), "emblem-warning");

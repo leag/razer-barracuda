@@ -58,12 +58,13 @@ import QtTest
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PC3
 import org.kde.plasma.core as PlasmaCore
+import "UI_DIR"
 Item {
     id: root
     property int formFactor: PlasmaCore.Types.Horizontal
-    property string headsetArtwork: "file:///usr/share/icons/breeze/devices/64/audio-headset.svg"
     property string statusText: "Test"
     property bool connected: false
+    property bool slashed: false
     property string emblem: ""
     property bool expanded: false
     function openSettings() {}
@@ -102,25 +103,39 @@ Item {
                     verify(button.implicitHeight > 0)
                 }
             }
-            const picture = button.contentItem.children[0]
-            const badge = button.contentItem.children[2]
+            const artwork = button.contentItem.children[0]
+            const glyph = findChild(artwork, "headsetGlyph")
+            const picture = findChild(artwork, "headsetPicture")
+            const slash = findChild(artwork, "disconnectedSlash")
+            const badge = findChild(artwork, "connectionEmblem")
             tryCompare(picture, "status", Image.Ready)
             verify(picture.visible)
-            for (const state of [{connected: true, emblem: ""},
-                                 {connected: false, emblem: "emblem-unavailable"},
-                                 {connected: false, emblem: "emblem-question"},
-                                 {connected: true, emblem: "emblem-warning"}]) {
+            for (const state of [{connected: true, slashed: false, emblem: ""},
+                                 {connected: false, slashed: true, emblem: ""},
+                                 {connected: false, slashed: false, emblem: "emblem-question"},
+                                 {connected: true, slashed: false, emblem: "emblem-warning"}]) {
                 root.connected = state.connected
+                root.slashed = state.slashed
                 root.emblem = state.emblem
                 compare(picture.opacity, state.connected ? 1 : 0.5)
+                compare(slash.visible, state.slashed)
+                // The software scene graph used by these tests cannot cut the
+                // gap, so the glyph must stay visible and unlayered.
+                verify(glyph.visible)
+                verify(!glyph.layer.enabled)
                 compare(badge.visible, state.emblem !== "")
                 verify(badge.width <= picture.width / 2)
+                // Breeze's proportions: inside the artwork, at least 1 px wide.
+                const reach = (slash.width * Math.SQRT1_2 + slash.height * Math.SQRT1_2) / 2
+                verify(reach <= artwork.width / 2)
+                verify(slash.height >= 1)
+                verify(slash.height <= Math.max(1, artwork.width / 22) + 0.001)
             }
             compare(button.Accessible.description, "Test")
         }
     }
 }
-""".replace('COMPONENT', compact)
+""".replace('COMPONENT', compact).replace('UI_DIR', (ROOT / 'plasmoid/contents/ui').as_uri())
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'tst_panel.qml'
             path.write_text(harness)

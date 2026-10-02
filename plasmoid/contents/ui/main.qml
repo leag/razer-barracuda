@@ -21,7 +21,7 @@ PlasmoidItem {
     readonly property bool connected: connection.state === "connected"
     readonly property string statusText: Output.connectionText(connection, Qt.locale().name)
     readonly property var target: Output.headsetTarget(sink, linkStatus)
-    readonly property string headsetArtwork: Output.artwork("audio-headset")
+    readonly property bool slashed: Output.slashed(connection)
     readonly property string emblem: Output.emblem(connection, battery)
     property bool powerBusy: false
     property string powerError: ""
@@ -138,7 +138,7 @@ PlasmoidItem {
         }
     }
 
-    Plasmoid.icon: headsetArtwork
+    Plasmoid.icon: Output.artwork("audio-headset")
     toolTipMainText: "Razer Barracuda X"
     toolTipSubText: statusText
         + (battery ? "\n" + label("Battery: ", "Batería: ")
@@ -161,31 +161,14 @@ PlasmoidItem {
         Layout.preferredWidth: Plasmoid.formFactor === PlasmaCore.Types.Horizontal ? height : implicitWidth
         Layout.preferredHeight: Plasmoid.formFactor === PlasmaCore.Types.Vertical ? width : implicitHeight
         contentItem: Item {
-            Image {
-                id: panelArtwork
+            HeadsetArtwork {
                 anchors.centerIn: parent
                 width: Math.min(parent.width, parent.height, Kirigami.Units.iconSizes.medium)
                 height: width
-                source: root.headsetArtwork
-                sourceSize.width: 64
-                sourceSize.height: 64
-                fillMode: Image.PreserveAspectFit
-                visible: status === Image.Ready
-                opacity: root.connected ? 1 : 0.5
-            }
-            Kirigami.Icon {
-                anchors.fill: panelArtwork
-                source: "audio-headset"
-                visible: panelArtwork.status !== Image.Ready
-                opacity: panelArtwork.opacity
-            }
-            Kirigami.Icon {
-                anchors.right: panelArtwork.right
-                anchors.bottom: panelArtwork.bottom
-                width: Math.min(Kirigami.Units.iconSizes.small, panelArtwork.width / 2)
-                height: width
-                source: root.emblem
-                visible: root.emblem !== ""
+                connected: root.connected
+                slashed: root.slashed
+                emblem: root.emblem
+                emblemSize: Math.min(Kirigami.Units.iconSizes.small, width / 2)
             }
         }
         Accessible.name: "Razer Barracuda X"

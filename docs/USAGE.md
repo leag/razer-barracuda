@@ -27,10 +27,12 @@ there is no tray monitor, graphical pairing dialog or background audio router.
 Add **Barracuda Headset** (**Auricular Barracuda**) to a Plasma 6 panel or
 desktop. A widget already added by an earlier version keeps working after an update.
 The panel shows KDE Breeze's detailed headset artwork. It is drawn at full
-opacity while the headset link is confirmed and dimmed otherwise, with a small
-emblem: unavailable when the headset is disconnected or the adapter is missing,
-a question mark when the link is not confirmed, and a warning at 10% battery or
-less while not charging. Hover shows the connection state and battery. Text
+opacity while the headset link is confirmed and dimmed otherwise. A thin red
+diagonal slash, cut into the artwork like Breeze's `camera-off` icon, marks a
+disconnected headset or a missing adapter; with Qt Quick's software renderer the
+slash is drawn over the uncut artwork. A small corner emblem
+shows a question mark when the link is not confirmed, and a warning at 10%
+battery or less while not charging. Hover shows the connection state and battery. Text
 follows the desktop locale (English/Spanish). The icon has no button frame on
 pointer hover; keyboard navigation retains the theme's focus indicator.
 

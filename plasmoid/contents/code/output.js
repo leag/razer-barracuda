@@ -168,10 +168,13 @@ function headsetTarget(sink, status) {
     return bluetooth(sink) ? {transport: "bluetooth", address: bluetoothAddress(sink)} : {transport: "usb"};
 }
 
-// Panel emblem for states other than a confirmed link, and for a low battery.
+// Disconnected and missing-adapter states strike the artwork through.
+function slashed(value) {
+    return value.state === "disconnected" || value.state === "no-adapter";
+}
+
+// Corner emblem for an unconfirmed or unreadable state, and for a low battery.
 function emblem(value, battery) {
-    if (value.state === "disconnected" || value.state === "no-adapter")
-        return "emblem-unavailable";
     if (value.state === "unknown" || value.state === "unavailable")
         return "emblem-question";
     if (value.state === "connected" && battery && battery.percent <= 10
