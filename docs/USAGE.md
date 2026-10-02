@@ -25,8 +25,7 @@ there is no tray monitor, graphical pairing dialog or background audio router.
 ## Barracuda Headset widget
 
 Add **Barracuda Headset** (**Auricular Barracuda**) to a Plasma 6 panel or
-desktop. It was previously called **Current Audio Output**; the widget ID is
-unchanged, so an existing panel entry keeps working after an update.
+desktop. A widget already added by an earlier version keeps working after an update.
 The panel shows KDE Breeze's detailed headset artwork. It is drawn at full
 opacity while the headset link is confirmed and dimmed otherwise, with a small
 emblem: unavailable when the headset is disconnected or the adapter is missing,

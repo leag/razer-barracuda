@@ -34,8 +34,7 @@ The widget offers native pairing confirmation and displays the result. There is 
 
 ## Plasma widget
 
-Add **Barracuda Headset** (**Auricular Barracuda**) from Plasma's widget
-picker; it replaces the former **Current Audio Output** under the same widget ID.
+Add **Barracuda Headset** (**Auricular Barracuda**) from Plasma's widget picker.
 The panel icon shows whether the headset link is confirmed; hover shows the
 connection and battery. Click opens the connection state with its details
 (USB dongle, 2.4 GHz link, Bluetooth, charging cable and voltage) and the battery.
