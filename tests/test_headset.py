@@ -121,5 +121,69 @@ class HeadsetTests(unittest.TestCase):
                     headset.attribute()
 
 
+    def adapter(self, root, link=None, driver='razer-barracuda', supply=None):
+        interface = root / 'usb' / '1-1:1.3'
+        interface.mkdir(parents=True)
+        (interface / 'bInterfaceNumber').write_text('03\n')
+        if link is not None:
+            (interface / 'wireless_status').write_text(link + '\n')
+        device = interface / '0003:1532:0552.0001'
+        device.mkdir()
+        (device / 'uevent').write_text('HID_ID=0003:00001532:00000552\n')
+        (root / 'drivers' / driver).mkdir(parents=True)
+        (device / 'driver').symlink_to(root / 'drivers' / driver)
+        if supply is not None:
+            battery = device / 'power_supply' / 'razer-barracuda-0003:1532:0552.0001-battery'
+            battery.mkdir(parents=True)
+            (battery / 'uevent').write_text(supply)
+        (root / 'hid').mkdir()
+        (root / 'hid' / device.name).symlink_to(device)
+        return root / 'hid'
+
+    def test_link_reads_published_state_and_keeps_unknown_distinct(self):
+        with tempfile.TemporaryDirectory() as directory:
+            hid = Path(directory) / 'hid'
+            hid.mkdir()
+            self.assertEqual(headset.usb_link(hid), {'adapter': 'missing'})
+            self.assertEqual(headset.usb_link(Path(directory) / 'absent'), {'adapter': 'missing'})
+        for link, expected in ((None, 'unknown'), ('connected', 'connected'),
+                               ('disconnected', 'disconnected'), ('not supported', 'unknown')):
+            with self.subTest(link=link), tempfile.TemporaryDirectory() as directory:
+                result = headset.usb_link(self.adapter(Path(directory), link))
+                self.assertEqual(result, {'adapter': 'present', 'driver': True,
+                                          'link': expected, 'battery': None})
+        with tempfile.TemporaryDirectory() as directory:
+            # A stale attribute without the project driver is not link evidence.
+            result = headset.usb_link(self.adapter(Path(directory), 'connected', driver='hid-generic'))
+            self.assertEqual(result, {'adapter': 'present', 'driver': False,
+                                      'link': 'unknown', 'battery': None})
+
+    def test_link_battery_details_without_queries(self):
+        supply = ('POWER_SUPPLY_NAME=razer-barracuda-battery\nPOWER_SUPPLY_STATUS=Charging\n'
+                  'POWER_SUPPLY_CAPACITY=65\nPOWER_SUPPLY_VOLTAGE_NOW=4123456\n')
+        with tempfile.TemporaryDirectory() as directory:
+            result = headset.usb_link(self.adapter(Path(directory), 'connected', supply=supply))
+            self.assertEqual(result['battery'], {'percent': 65, 'status': 'Charging',
+                                                 'cable': True, 'voltage_mv': 4123})
+        for text, expected in (('POWER_SUPPLY_STATUS=Discharging\n',
+                                {'percent': None, 'status': 'Discharging', 'cable': False, 'voltage_mv': None}),
+                               ('POWER_SUPPLY_STATUS=Full\nPOWER_SUPPLY_CAPACITY=100\n',
+                                {'percent': 100, 'status': 'Full', 'cable': True, 'voltage_mv': None}),
+                               ('POWER_SUPPLY_STATUS=Unknown\nPOWER_SUPPLY_CAPACITY=101\n'
+                                'POWER_SUPPLY_VOLTAGE_NOW=-1\n',
+                                {'percent': None, 'status': 'Unknown', 'cable': None, 'voltage_mv': None})):
+            with self.subTest(text=text), tempfile.TemporaryDirectory() as directory:
+                result = headset.usb_link(self.adapter(Path(directory), 'connected', supply=text))
+                self.assertEqual(result['battery'], expected)
+
+    def test_link_request_is_read_only_and_unlocked(self):
+        with patch.object(headset, 'control_lock', side_effect=AssertionError('locked')), \
+                patch.object(headset, 'exchange', side_effect=AssertionError('query')), \
+                patch.object(headset, 'usb_link', return_value={'adapter': 'missing'}), \
+                patch.object(headset, 'headset_presence', return_value=None):
+            self.assertEqual(headset.dispatch({'op': 'link'}),
+                             {'ok': True, 'usb': {'adapter': 'missing'}, 'bluetooth': None})
+
+
 if __name__ == '__main__':
     unittest.main()

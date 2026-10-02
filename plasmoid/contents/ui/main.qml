@@ -11,19 +11,26 @@ import "../code/output.js" as Output
 
 PlasmoidItem {
     id: root
-    // Follow the server default, not individual applications' output overrides.
+    // The default output only selects the native-control transport when the
+    // link reports do not; it is never evidence of a physical link.
     readonly property var sink: Server.defaultSink
-    readonly property bool hasOutput: Output.available(sink)
-    readonly property string deviceName: Output.deviceName(sink, Qt.locale().name)
-    readonly property string deviceIcon: Output.icon(sink)
-    readonly property string deviceArtwork: Output.artwork(deviceIcon)
+    readonly property string sinkName: sink ? String(sink.name || "") : ""
+    onSinkNameChanged: linkMonitor.refresh()
+    readonly property var linkStatus: linkMonitor.status
+    readonly property var connection: Output.connection(linkStatus)
+    readonly property bool connected: connection.state === "connected"
+    readonly property string statusText: Output.connectionText(connection, Qt.locale().name)
+    readonly property var target: Output.headsetTarget(sink, linkStatus)
+    readonly property string headsetArtwork: Output.artwork("audio-headset")
+    readonly property string emblem: Output.emblem(connection, battery)
     property bool powerBusy: false
     property string powerError: ""
     property string powerResult: ""
     property bool pairingBusy: false
     property string pairingError: ""
     property string pairingResult: ""
-    readonly property var battery: powerSource.battery
+    // KDE's reading first; the driver's published value covers a missing UPower entry.
+    readonly property var battery: powerSource.battery || Output.driverBattery(linkStatus)
     readonly property bool batteryAvailable: battery !== null
     onBatteryAvailableChanged: {
         if (batteryAvailable) {
@@ -31,8 +38,16 @@ PlasmoidItem {
             pairingResult = "";
         }
     }
+    onConnectedChanged: {
+        if (connected) {
+            pairingError = "";
+            pairingResult = "";
+        }
+    }
     onExpandedChanged: {
-        if (!root.expanded) {
+        if (root.expanded)
+            linkMonitor.refresh();
+        else {
             pairingError = "";
             pairingResult = "";
             powerError = "";
@@ -69,6 +84,7 @@ PlasmoidItem {
         onNewData: (sourceName, data) => {
             disconnectSource(sourceName);
             root.powerBusy = false;
+            linkMonitor.refresh();
             if (data["exit code"] === 0)
                 root.powerResult = root.label(
                     "Power-off request sent. Use the headset button to turn it on again.",
@@ -82,7 +98,23 @@ PlasmoidItem {
 
     BatteryMonitor {
         id: powerSource
-        sink: root.sink
+        preferBluetooth: root.target.transport === "bluetooth"
+        // The driver registers its battery only on a confirmed link change.
+        onPresenceChanged: linkMonitor.refresh()
+    }
+
+    LinkMonitor {
+        id: linkMonitor
+        Component.onCompleted: refresh()
+    }
+
+    // Read only while the status is on screen; the closed panel icon follows the
+    // events above. There is no background monitor process.
+    Timer {
+        interval: root.expanded ? 5000 : 30000
+        repeat: true
+        running: root.expanded || Plasmoid.formFactor === PlasmaCore.Types.Planar
+        onTriggered: linkMonitor.refresh()
     }
 
     Plasma5Support.DataSource {
@@ -92,6 +124,7 @@ PlasmoidItem {
         onNewData: (sourceName, data) => {
             disconnectSource(sourceName);
             root.pairingBusy = false;
+            linkMonitor.refresh();
             const details = String(data.stdout || "").trim() + "\n" + String(data.stderr || "").trim();
             if (data["exit code"] === 0)
                 root.pairingResult = root.label(
@@ -105,10 +138,10 @@ PlasmoidItem {
         }
     }
 
-    Plasmoid.icon: deviceArtwork
-    toolTipMainText: deviceName
-    toolTipSubText: Output.status(sink, Qt.locale().name)
-        + (battery ? "\n" + label("Barracuda battery: ", "Batería del Barracuda: ")
+    Plasmoid.icon: headsetArtwork
+    toolTipMainText: "Razer Barracuda X"
+    toolTipSubText: statusText
+        + (battery ? "\n" + label("Battery: ", "Batería: ")
             + Output.batteryText(battery, Qt.locale().name) : "")
     preferredRepresentation: Plasmoid.formFactor === PlasmaCore.Types.Planar
         ? fullRepresentation : compactRepresentation
@@ -133,31 +166,35 @@ PlasmoidItem {
                 anchors.centerIn: parent
                 width: Math.min(parent.width, parent.height, Kirigami.Units.iconSizes.medium)
                 height: width
-                source: root.deviceArtwork.startsWith("file:") ? root.deviceArtwork : ""
+                source: root.headsetArtwork
                 sourceSize.width: 64
                 sourceSize.height: 64
                 fillMode: Image.PreserveAspectFit
                 visible: status === Image.Ready
+                opacity: root.connected ? 1 : 0.5
             }
             Kirigami.Icon {
                 anchors.fill: panelArtwork
-                source: root.deviceIcon
+                source: "audio-headset"
                 visible: panelArtwork.status !== Image.Ready
+                opacity: panelArtwork.opacity
             }
             Kirigami.Icon {
                 anchors.right: panelArtwork.right
                 anchors.bottom: panelArtwork.bottom
                 width: Math.min(Kirigami.Units.iconSizes.small, panelArtwork.width / 2)
                 height: width
-                source: "audio-volume-muted"
-                visible: root.hasOutput && root.sink.muted
+                source: root.emblem
+                visible: root.emblem !== ""
             }
         }
-        Accessible.name: root.deviceName
+        Accessible.name: "Razer Barracuda X"
+        Accessible.description: root.statusText
         onClicked: root.expanded = !root.expanded
     }
-    fullRepresentation: OutputPanel {
-        sink: root.sink
+    fullRepresentation: HeadsetPanel {
+        status: root.linkStatus
+        target: root.target
         activeView: root.expanded || Plasmoid.formFactor === PlasmaCore.Types.Planar
         pairingBusy: root.pairingBusy
         pairingError: root.pairingError

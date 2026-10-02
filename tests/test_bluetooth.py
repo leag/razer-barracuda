@@ -1,6 +1,7 @@
 """Bluetooth transport tests use synthetic SDP/PI streams, never real devices."""
 from contextlib import nullcontext
 import errno
+import json
 import struct
 import unittest
 from unittest.mock import MagicMock, Mock, patch
@@ -79,6 +80,40 @@ class BluetoothTests(unittest.TestCase):
                 bluetooth.paired_headset('01:02:03:04:05:06')
         with self.assertRaises(ValueError):
             bluetooth.paired_headset('$(touch nope)')
+
+    def test_presence_reads_bluez_without_opening_channels(self):
+        def device(name, connected, address='44:5e:cd:00:00:01', paired=True):
+            return {'org.bluez.Device1': {'Name': {'type': 's', 'data': name},
+                                          'Address': {'type': 's', 'data': address},
+                                          'Paired': {'type': 'b', 'data': paired},
+                                          'Connected': {'type': 'b', 'data': connected}}}
+        objects = {'/org/bluez/hci0': {'org.bluez.Adapter1': {}},
+                   '/org/bluez/hci0/dev_1': device('Other headset', True),
+                   '/org/bluez/hci0/dev_2': device('Razer Barracuda X (BT)', False),
+                   '/org/bluez/hci0/dev_3': device('Razer Barracuda X (BT)', True, '44:5e:cd:00:00:03'),
+                   '/org/bluez/hci0/dev_4': device('Razer Barracuda X (BT)', True, '$(nope)'),
+                   '/org/bluez/hci0/dev_5': device('Razer Barracuda X (BT)', True, paired=False)}
+        def reply(value):
+            return Mock(stdout=json.dumps({'type': 'a{oa{sa{sv}}}', 'data': [value]}))
+        with patch.object(bluetooth.subprocess, 'run', return_value=reply(objects)) as run, \
+                patch.object(bluetooth.socket, 'socket', side_effect=AssertionError('socket')):
+            self.assertEqual(bluetooth.headset_presence(),
+                             {'state': 'connected', 'address': '44:5E:CD:00:00:03'})
+        self.assertEqual(run.call_args.args[0][-1], 'GetManagedObjects')
+        del objects['/org/bluez/hci0/dev_3']
+        with patch.object(bluetooth.subprocess, 'run', return_value=reply(objects)):
+            self.assertEqual(bluetooth.headset_presence()['state'], 'disconnected')
+        with patch.object(bluetooth.subprocess, 'run', return_value=reply({})):
+            self.assertIsNone(bluetooth.headset_presence())
+        for failure in (FileNotFoundError('busctl'), bluetooth.subprocess.TimeoutExpired('busctl', 3)):
+            with patch.object(bluetooth.subprocess, 'run', side_effect=failure):
+                self.assertEqual(bluetooth.headset_presence(), {'state': 'unknown'})
+        # BlueZ not running: no Bluetooth headset can be connected through it.
+        with patch.object(bluetooth.subprocess, 'run',
+                          side_effect=bluetooth.subprocess.CalledProcessError(1, 'busctl')):
+            self.assertIsNone(bluetooth.headset_presence())
+        with patch.object(bluetooth.subprocess, 'run', return_value=Mock(stdout='not json')):
+            self.assertEqual(bluetooth.headset_presence(), {'state': 'unknown'})
 
     def test_session_closes_on_connect_failure_and_interrupt(self):
         conn=Mock(); conn.connect.side_effect=OSError(errno.ECONNREFUSED,'Refused')

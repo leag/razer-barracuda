@@ -8,8 +8,9 @@ Plasma5Support.DataSource {
     engine: "powermanagement"
     connectedSources: ["Battery"]
     property var records: ({})
-    property var sink: null
-    readonly property var battery: Output.battery(records, Object.keys(records), sink)
+    property bool preferBluetooth: false
+    readonly property var battery: Output.battery(records, Object.keys(records), preferBluetooth)
+    readonly property string presence: Output.batteryPresence(records, Object.keys(records))
 
     // Sources may disappear and return under the same name. Subscribe on each
     // addition and publish a fresh snapshot on every update, including updates

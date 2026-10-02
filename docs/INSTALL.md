@@ -96,7 +96,7 @@ kpackagetool6 --type Plasma/Applet --install plasmoid
 ```
 
 For an existing user installation use `--upgrade plasmoid` instead.
-Add **Current Audio Output** from the panel's **Add Widgets** menu. Installing
+Add **Barracuda Headset** from the panel's **Add Widgets** menu. Installing
 does not alter your panel layout. Plasma can cache QML even after removing and
 re-adding a widget; follow the [reload instructions](TROUBLESHOOTING.md#widget-update-not-visible)
 after upgrading. Do not install both a user copy and the Arch widget package.
@@ -110,9 +110,9 @@ plasmawindowed "$PWD/plasmoid"
 Close the preview when done. It does not need to run for the panel widget to work.
 
 The widget uses KDE's private volume QML API, tested with Plasma 6.7.4. It may need
-adjustment for future Plasma releases. It does not require the pairing CLI or
-driver to show other sound devices; the driver is needed for Barracuda's native
-wireless availability/battery integration.
+adjustment for future Plasma releases. The connection state requires
+`barracuda-headset` from the `barracuda-pair` package and the DKMS driver; without
+them the widget shows the state as unavailable and keeps Sound settings.
 The optional **Pair Barracuda…** action requires `barracuda-pair`
 on the desktop session's `PATH`. The user CLI installer does not add its
 `~/.local/bin` directory to `PATH`; add it to your session environment if needed.

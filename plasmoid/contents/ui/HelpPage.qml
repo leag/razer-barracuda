@@ -8,7 +8,7 @@ import "../code/output.js" as Output
 PC3.ScrollView {
     id: help
     implicitWidth: 0
-    objectName: "outputHelp"
+    objectName: "headsetHelp"
     property string localeName: Qt.locale().name
     function label(en, es) { return Output.text(en, es, localeName); }
     PC3.ScrollBar.horizontal.policy: PC3.ScrollBar.AlwaysOff
@@ -19,12 +19,15 @@ PC3.ScrollView {
         spacing: Kirigami.Units.largeSpacing
         Repeater {
             model: [
-                [help.label("Audio output", "Salida de audio"),
-                 help.label("<p>The icon follows KDE's <b>default output</b>. Open <b>Sound settings…</b> for KDE's audio controls.</p><p><b>WirePlumber</b> manages automatic output switching.</p>",
-                            "<p>El icono sigue la <b>salida predeterminada</b> de KDE. Abre <b>Ajustes de sonido…</b> para acceder a sus controles de audio.</p><p><b>WirePlumber</b> gestiona el cambio automático de salida.</p>")],
-                [help.label("Barracuda battery", "Batería del Barracuda"),
-                 help.label("<p>The reading comes from KDE and may be the <b>last reported value</b>.</p><p><b>Unknown</b> means no battery reading is available; it does not establish whether the headset is connected.</p>",
-                            "<p>La lectura proviene de KDE y puede ser el <b>último valor informado</b>.</p><p><b>Desconocido</b> significa que no hay una lectura disponible; no indica si los auriculares están conectados.</p>")],
+                [help.label("Connection status", "Estado de la conexión"),
+                 help.label("<p>The status comes from the Barracuda driver for the <b>USB dongle</b> and from BlueZ for <b>Bluetooth</b>. It is read while this popup is open and when the headset battery appears or disappears; nothing is sent to the headset.</p><ul><li><b>Connected</b>: the dongle or Bluetooth confirmed the link.</li><li><b>Disconnected</b>: the dongle reported that the headset is off or out of range.</li><li><b>Link not confirmed</b>: no confirmed state yet. This is not a disconnection.</li></ul><p>Cable and voltage are the last values reported by the driver.</p>",
+                            "<p>El estado proviene del driver del Barracuda para el <b>dongle USB</b> y de BlueZ para <b>Bluetooth</b>. Se lee mientras esta ventana está abierta y cuando la batería del auricular aparece o desaparece; no se envía nada al auricular.</p><ul><li><b>Conectado</b>: el dongle o Bluetooth confirmó la conexión.</li><li><b>Desconectado</b>: el dongle informó que el auricular está apagado o fuera de alcance.</li><li><b>Conexión no confirmada</b>: aún no hay un estado confirmado. Esto no es una desconexión.</li></ul><p>El cable y el voltaje son los últimos valores informados por el driver.</p>")],
+                [help.label("Battery", "Batería"),
+                 help.label("<p>The reading comes from KDE, or from the driver when KDE does not list it, and may be the <b>last reported value</b>.</p><p><b>Unknown</b> means no reading is available yet.</p>",
+                            "<p>La lectura proviene de KDE, o del driver si KDE no la muestra, y puede ser el <b>último valor informado</b>.</p><p><b>Desconocido</b> significa que aún no hay una lectura disponible.</p>")],
+                [help.label("Sound settings", "Ajustes de sonido"),
+                 help.label("<p><b>Sound settings…</b> opens KDE's audio controls. <b>WirePlumber</b> manages automatic output switching; this widget does not change audio routing.</p>",
+                            "<p><b>Ajustes de sonido…</b> abre los controles de audio de KDE. <b>WirePlumber</b> gestiona el cambio automático de salida; este widget no cambia el enrutamiento de audio.</p>")],
                 [help.label("Headset equalizer", "Ecualizador del auricular"),
                  help.label("<p>Choose a preset in <b>Profile</b> to change the headset's own EQ. The selection updates after the headset confirms it.</p><p>For custom EQ:</p><ol><li>Select <b>Custom</b>.</li><li>Adjust the bands; <b>0</b> is neutral.</li><li>Select <b>Apply changes</b>.</li></ol><p><b>Gaming mode</b> and the <b>Game</b> EQ preset are independent.</p>",
                             "<p>Elige un perfil en <b>Perfil</b> para cambiar el EQ del auricular. La selección se actualiza cuando el auricular la confirma.</p><p>Para personalizar el EQ:</p><ol><li>Selecciona <b>Personalizado</b>.</li><li>Ajusta las bandas; <b>0</b> es neutro.</li><li>Selecciona <b>Aplicar cambios</b>.</li></ol><p>El <b>modo Gaming</b> y el perfil EQ <b>Juegos</b> son independientes.</p>")],

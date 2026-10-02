@@ -29,8 +29,7 @@ installer does not reload the running audio module.
 Applications that open ALSA hardware directly (for example `hw:` or `plughw:`)
 bypass PipeWire's routing. Changing the desktop default does not move those
 streams. Select a PipeWire/PulseAudio backend in the application, if available,
-or select its output there. The plasmoid only reports the desktop default; it
-cannot report or move a direct ALSA stream.
+or select its output there. The plasmoid does not report or move audio streams.
 
 ## Analog versus digital profiles
 
@@ -101,11 +100,20 @@ not only Barracuda. With pausing disabled, playback may continue through the
 fallback speakers; consider privacy before changing it. Applications may also
 implement their own pause-on-disconnect behavior.
 
-## The icon is still a speaker
+## The widget shows Status unavailable
 
-KDE's stock volume widget uses a volume icon. Add this project's **Current Audio
-Output** widget separately; it does not patch KDE's widget. Hover verifies which
-default device it is showing. Per-application output overrides can differ.
+The connection state needs an updated `barracuda-headset` on `PATH`. Check it
+directly; the query is read-only:
+
+```bash
+barracuda-headset --request '{"op":"link"}'
+```
+
+An `invalid-request` error means an older helper; update `barracuda-pair` or
+rerun `scripts/install.py`. **Link not confirmed** with "Driver required" in
+the details means the dongle is not bound to `hid-razer-barracuda`; see
+[the driver](DKMS.md). This project's widget is separate from KDE's stock volume
+widget and does not patch it.
 
 If the widget fails to load, verify `plasma-pa` is installed. The private KDE API
 is tested on Plasma 6.7.4. It is a project widget, not an official KDE applet.

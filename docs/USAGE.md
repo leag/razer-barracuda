@@ -22,42 +22,55 @@ See [protocol observations](PROTOCOL.md#pairing).
 The CLI defaults to English regardless of desktop locale. It exits when done;
 there is no tray monitor, graphical pairing dialog or background audio router.
 
-## Current Audio Output widget
+## Barracuda Headset widget
 
-Add **Current Audio Output** (**Salida de audio actual**) to a Plasma 6 panel
-or desktop. The panel shows the default output's icon, with a small mute badge
-when muted. Hover shows its name; the desktop representation includes the name.
-Click opens a summary showing the default output's name, volume and mute state.
-It follows speakers, HDMI monitors and other audio outputs even without a Barracuda.
-Missing outputs and unavailable volume are shown explicitly. Sound settings are
-available as a secondary action. Text follows the desktop locale (English/Spanish).
-The icon has no button frame on pointer hover. Keyboard navigation retains the
-active Plasma theme's focus indicator.
+Add **Barracuda Headset** (**Auricular Barracuda**) to a Plasma 6 panel or
+desktop. It was previously called **Current Audio Output**; the widget ID is
+unchanged, so an existing panel entry keeps working after an update.
+The panel shows KDE Breeze's detailed headset artwork. It is drawn at full
+opacity while the headset link is confirmed and dimmed otherwise, with a small
+emblem: unavailable when the headset is disconnected or the adapter is missing,
+a question mark when the link is not confirmed, and a warning at 10% battery or
+less while not charging. Hover shows the connection state and battery. Text
+follows the desktop locale (English/Spanish). The icon has no button frame on
+pointer hover; keyboard navigation retains the theme's focus indicator.
 
-Barracuda USB identity, headphone/headset form factors and active headphone ports
-use the headset-with-microphone icon. This is a presentation choice; it does not
-mean the microphone is recording. Other outputs use their advertised icon, with a speaker
-fallback. Missing/dummy output uses an audio-card icon and “No audio output”.
+Click opens the connection summary:
 
-Headsets and speakers use KDE Breeze's detailed 64-pixel artwork
-(`audio-headset.svg` and `audio-speakers.svg`), scaled to the panel size.
-The widget reads these SVGs from
-`/usr/share/icons/breeze/devices/64/`, supplied by `breeze-icons`; no icons are
-bundled or copied. This deliberately bypasses the theme's small monochrome variants.
-The icon is centered and capped at KDE's medium icon size (32 logical pixels),
-shrinking to fit smaller panels. The full button remains clickable, while the
-drawing retains the proportions and margins of KDE's artwork.
+- **State**: Connected (USB dongle, Bluetooth, or both), Disconnected, Link not
+  confirmed, Adapter not detected, or Status unavailable, with a short hint.
+- **Details**: whether the USB dongle is detected, the 2.4 GHz link, the paired
+  Bluetooth connection, and while the dongle link is confirmed the charging
+  cable and battery voltage last reported by the driver.
+- **Battery**: percentage and charging state.
 
-The headset icon is a checkout change after v0.4.0; the published v0.4.0 packages
-use `audio-headphones.svg`. See [change history](CHANGELOG.md).
+The state comes from `barracuda-headset --request '{"op":"link"}'`, a finite,
+read-only query. It reads the driver's USB `wireless_status` attribute and
+power-supply values from sysfs, and the paired headset's connection from BlueZ.
+It never opens HID and never sends anything to the dongle or headset. The widget
+runs it on load, every 5 seconds while the popup is open, when a Barracuda
+battery appears or disappears in KDE (the driver registers it only on a confirmed
+link change), when the default output changes, and after pairing or power-off.
+There is no background process. Unknown, disconnected and missing-adapter states
+stay distinct: an unconfirmed link is never shown as a disconnection.
+Without an updated `barracuda-headset` on `PATH`, the widget shows
+**Status unavailable** and keeps its other actions.
 
-The Barracuda section shows its last reported battery percentage and charging
-state from KDE's power-management service, also included in the tooltip when
-available. This is independent of the selected audio output. Missing battery data
-is shown as unavailable, never as proof of a disconnected headset. The widget
-matches the Barracuda model and headset battery type, excluding computer and mouse
-batteries. It sends no battery queries. Unknown charging state remains unknown;
-a connected cable does not by itself prove that charging has completed.
+The default output is not link evidence. It only selects the native-control
+transport when both or neither link is confirmed; otherwise headset settings
+follow the confirmed USB or Bluetooth link.
+
+Artwork is read from `/usr/share/icons/breeze/devices/64/audio-headset.svg`,
+supplied by `breeze-icons`; no icons are bundled or copied. This deliberately
+bypasses the theme's small monochrome variants. The icon is centered and capped
+at KDE's medium icon size (32 logical pixels), shrinking to fit smaller panels.
+
+The battery comes from KDE's power-management service, or from the driver's
+published value when KDE does not list it. It is the last reported percentage
+and charging state. The widget matches the Barracuda model and headset battery
+type, excluding computer and mouse batteries. It sends no battery queries.
+Unknown charging state remains unknown; a connected cable does not by itself
+prove that charging has completed.
 
 **More actions → Pair Barracuda…** opens a native confirmation inside the widget. Connect the
 Barracuda dongle, put the headset in pairing mode, and choose **Pair** to confirm
@@ -74,11 +87,10 @@ popup dismisses pending confirmation and previous result messages, while an acti
 pairing operation continues. Pairing is
 specific to Barracuda X (2022), not a generic Bluetooth pairing interface.
 
-The icon describes the default device, not proof of a physical wireless link.
-It does not show which output each individual application uses. Selecting another
-default in KDE updates the widget. The summary does not poll or write audio state;
-only explicitly launched pairing accesses raw HID; power-off uses the serialized driver interface. Keep KDE's volume widget if you want its volume and device controls;
-this widget does not replace those controls.
+The widget never writes audio state. Only explicitly launched pairing accesses
+raw HID; power-off uses the serialized driver interface. **Sound settings…**
+opens KDE's audio controls; keep KDE's volume widget for volume and device
+selection, which this widget does not replace.
 
 The WirePlumber rule still advertises `audio-headphones` to other audio clients.
 That property and the plasmoid's choice of headset artwork are separate.
@@ -118,7 +130,7 @@ A short press of the headset's power/play button sends a standard HID media key.
 Linux and the desktop forward it to the selected media player; neither the CLI
 nor widget intercepts it. Only single-press play/pause has been validated.
 
-The compact overview shows the current output and a battery row. Sound settings
+The compact overview shows the connection state, its details and a battery row. Sound settings
 and **Headset settings…** are at the bottom; pairing is under **More actions**.
 Pairing displays an inline confirmation and progress message. **Back** returns
 from effects to the overview while preserving pending edits.

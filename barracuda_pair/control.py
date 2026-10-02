@@ -23,7 +23,8 @@ def control_lock():
         yield
 
 
-def power_attribute(sysfs=Path('/sys/bus/hid/devices')):
+def adapters(sysfs=Path('/sys/bus/hid/devices')):
+    """HID interface 3 of each connected dongle, matched by exact USB identity."""
     devices = []
     for device in sorted(sysfs.iterdir()):
         try:
@@ -34,6 +35,11 @@ def power_attribute(sysfs=Path('/sys/bus/hid/devices')):
             devices.append(device)
         except OSError:
             continue
+    return devices
+
+
+def power_attribute(sysfs=Path('/sys/bus/hid/devices')):
+    devices = adapters(sysfs)
     if not devices:
         raise OSError(errno.ENODEV, tr('Adapter not detected'))
     if len(devices) != 1:

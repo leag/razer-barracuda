@@ -10,6 +10,8 @@ import time
 
 
 MAX_REPLY = 258  # Three customer header bytes plus an eight-bit payload length.
+NAMES = ('Razer Barracuda X (BT)', 'Razer Barracuda X (2022)')
+ADDRESS = re.compile(r'(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}')
 
 
 def invalid(message):
@@ -99,9 +101,46 @@ def spp_channel(address):
     return channels.pop()
 
 
+def headset_presence():
+    """Paired headset as BlueZ reports it; opens no channel to the headset.
+
+    Returns None when no Barracuda is paired or BlueZ is not running, and an
+    unknown state when its answer cannot be read: an unreadable answer is not a
+    disconnected headset.
+    """
+    try:
+        reply = subprocess.run(['busctl', '--system', '--json=short', 'call', 'org.bluez', '/',
+                                'org.freedesktop.DBus.ObjectManager', 'GetManagedObjects'],
+                               capture_output=True, text=True, timeout=3, check=True)
+    except subprocess.CalledProcessError:
+        return None
+    except (OSError, subprocess.SubprocessError):
+        return {'state': 'unknown'}
+    try:
+        objects = json.loads(reply.stdout)['data'][0]
+        devices = [interfaces.get('org.bluez.Device1') for interfaces in objects.values()]
+    except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+        return {'state': 'unknown'}
+    found = []
+    for device in devices:
+        if not isinstance(device, dict):
+            continue
+        def value(name):
+            entry = device.get(name)
+            return entry.get('data') if isinstance(entry, dict) else None
+        address = value('Address')
+        if value('Name') not in NAMES or value('Paired') is not True \
+                or not isinstance(address, str) or not ADDRESS.fullmatch(address):
+            continue
+        found.append({'state': 'connected' if value('Connected') is True else 'disconnected',
+                      'address': address.upper()})
+    found.sort(key=lambda device: device['state'] != 'connected')
+    return found[0] if found else None
+
+
 def paired_headset(address):
     """Confirm BlueZ identity and connection before opening a serial channel."""
-    if not isinstance(address, str) or not re.fullmatch(r'(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}', address):
+    if not isinstance(address, str) or not ADDRESS.fullmatch(address):
         raise ValueError('Invalid Bluetooth address')
     address = address.upper()
     for adapter in sorted(Path('/sys/class/bluetooth').glob('hci*')):
@@ -115,7 +154,7 @@ def paired_headset(address):
             return json.loads(reply.stdout)['data']
         try:
             name = property_value('Name')
-            if name not in ('Razer Barracuda X (BT)', 'Razer Barracuda X (2022)'):
+            if name not in NAMES:
                 raise OSError(errno.ENODEV, 'Not a supported Barracuda headset')
             if property_value('Connected') is True and property_value('Paired') is True:
                 return address

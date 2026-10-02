@@ -6,16 +6,21 @@
 - `barracuda_pair/audio.py`: JSON helper for explicit Linux audio tuning and
   removal of legacy software EQ/sidetone; it never opens HID.
 - `barracuda_pair/headset.py`: finite native settings requests through the
-  driver's bounded, serialized sysfs mailbox. No raw HID fallback or monitor.
+  driver's bounded, serialized sysfs mailbox, and the read-only `link` request
+  (driver `wireless_status`, power-supply values and BlueZ connection). No raw
+  HID fallback or monitor.
 - `barracuda_pair/i18n.py`: English/Spanish CLI translations.
-- `plasmoid/`: native Plasma 6 QML widget. `Server.defaultSink` from
-  `org.kde.plasma.private.volume` provides the default output and notifications.
-  Pure JavaScript selects the device icon and formats volume/mute information.
-  The expanded view summarizes any default output using native Plasma controls.
-  KDE opens its own Sound settings as a secondary action. Explicit pairing uses
+- `plasmoid/`: native Plasma 6 QML widget for the headset connection. It runs
+  the read-only `barracuda-headset` link query through Plasma5Support's
+  executable engine: on load, every 5 s while the popup is open, and when a
+  Barracuda battery appears or disappears or the default output changes.
+  Pure JavaScript turns the result into distinct connected, disconnected,
+  unconfirmed, missing-adapter and unavailable states, and into detail rows.
+  `Server.defaultSink` only chooses the native-control transport when the link
+  reports do not. KDE opens its own Sound settings as a secondary action. Explicit pairing uses
   Plasma5Support's executable engine to run the existing CLI with `--yes` only
   after native UI confirmation. The widget shows activity and the final result;
-  no command runs when it loads. The powermanagement data engine supplies the
+  only the read-only link query runs when it loads. The powermanagement data engine supplies the
   Barracuda battery published by the driver through UPower/Solid, without HID reads.
   The compact view loads KDE's detailed headset/speaker SVGs with Qt Quick
   `Image`, avoiding theme recoloring and small symbolic variants. Other device
@@ -31,7 +36,7 @@
 - `tests/`: simulated pairing, installer, packaging and QML checks.
 
 Only the kernel driver monitors wireless state. WirePlumber owns routing.
-The CLI pairs only on explicit request. The summary reads audio state; the optional
+The CLI pairs only on explicit request. The summary reads published link state; the optional
 effects tab invokes finite helper commands only on user actions. There are no
 background Python workers, saved previous outputs, or autostart entries.
 See [audio effects](AUDIO_EFFECTS.md) for configuration ownership and activation.

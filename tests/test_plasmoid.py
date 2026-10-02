@@ -61,11 +61,10 @@ import org.kde.plasma.core as PlasmaCore
 Item {
     id: root
     property int formFactor: PlasmaCore.Types.Horizontal
-    property string deviceIcon: "audio-headset"
-    property string deviceArtwork: "file:///usr/share/icons/breeze/devices/64/audio-headset.svg"
-    property string deviceName: "Test"
-    property bool hasOutput: false
-    property var sink: null
+    property string headsetArtwork: "file:///usr/share/icons/breeze/devices/64/audio-headset.svg"
+    property string statusText: "Test"
+    property bool connected: false
+    property string emblem: ""
     property bool expanded: false
     function openSettings() {}
     COMPONENT
@@ -104,11 +103,20 @@ Item {
                 }
             }
             const picture = button.contentItem.children[0]
-            for (const icon of ["audio-headset", "audio-speakers"]) {
-                root.deviceArtwork = "file:///usr/share/icons/breeze/devices/64/" + icon + ".svg"
-                tryCompare(picture, "status", Image.Ready)
-                verify(picture.visible)
+            const badge = button.contentItem.children[2]
+            tryCompare(picture, "status", Image.Ready)
+            verify(picture.visible)
+            for (const state of [{connected: true, emblem: ""},
+                                 {connected: false, emblem: "emblem-unavailable"},
+                                 {connected: false, emblem: "emblem-question"},
+                                 {connected: true, emblem: "emblem-warning"}]) {
+                root.connected = state.connected
+                root.emblem = state.emblem
+                compare(picture.opacity, state.connected ? 1 : 0.5)
+                compare(badge.visible, state.emblem !== "")
+                verify(badge.width <= picture.width / 2)
             }
+            compare(button.Accessible.description, "Test")
         }
     }
 }

@@ -171,18 +171,18 @@ Item {
             nativeBackend.localeName = "en_US";
             verify(nativeBackend.errorLabel("gaming-not-applied").includes("did not change"));
         }
-        function test_output_change_drops_old_transport_reply() {
-            nativeBackend.sink = null;
+        function test_transport_change_drops_old_reply() {
+            nativeBackend.target = {transport: "usb"};
             nativeBackend.requestedKey = "usb";
             nativeBackend.response = {state: {preset: 7}};
-            nativeBackend.sink = {name: "bluez_output.01_02_03_04_05_06.1", properties: {"device.api": "bluez5"}};
+            nativeBackend.target = {transport: "bluetooth", address: "01:02:03:04:05:06"};
             compare(nativeBackend.response, null);
             nativeBackend.newData("old request", {stdout: JSON.stringify({ok: true, state: {preset: 9}})});
             compare(nativeBackend.response, null);
             nativeBackend.requestedKey = nativeBackend.targetKey;
             nativeBackend.newData("current request", {stdout: JSON.stringify({ok: true, state: {preset: 0}, transport: "bluetooth"})});
             compare(nativeBackend.response.state.preset, 0);
-            nativeBackend.sink = null;
+            nativeBackend.target = {transport: "usb"};
             nativeBackend.requestedKey = nativeBackend.targetKey;
         }
         function test_command_quotes_profile_names() {
