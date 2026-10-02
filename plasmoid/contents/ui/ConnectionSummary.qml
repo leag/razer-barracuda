@@ -9,7 +9,8 @@ import "../code/output.js" as Output
 ColumnLayout {
     id: summary
 
-    required property var sink
+    property var status: null
+    property var target: ({transport: "usb"})
     property string localeName: Qt.locale().name
     property bool pairingBusy: false
     property string pairingError: ""
@@ -29,17 +30,21 @@ ColumnLayout {
     }
     property var battery: null
     readonly property bool batteryAvailable: battery !== null
-    readonly property bool showBattery: batteryAvailable || Output.barracuda(sink)
+    readonly property var connection: Output.connection(status)
+    readonly property bool connected: connection.state === "connected"
+    readonly property bool showBattery: batteryAvailable || connected
+    readonly property string statusText: Output.connectionText(connection, localeName)
+    readonly property string hintText: Output.connectionHint(status, connection, localeName)
+    readonly property var details: Output.connectionDetails(status, localeName)
+    readonly property bool viaBluetooth: target.transport === "bluetooth"
     onBatteryAvailableChanged: {
         if (batteryAvailable)
             confirmingPairing = false;
     }
-    readonly property bool hasOutput: Output.available(sink)
-    readonly property string deviceName: Output.deviceName(sink, localeName)
-    readonly property string deviceIcon: Output.icon(sink)
-    readonly property string deviceArtwork: Output.artwork(deviceIcon)
-    readonly property string statusText: (Output.bluetooth(sink) ? "Bluetooth · " : "")
-        + Output.status(sink, localeName)
+    onConnectedChanged: {
+        if (connected)
+            confirmingPairing = false;
+    }
     signal helpRequested()
     signal effectsRequested()
     signal settingsRequested()
@@ -62,7 +67,8 @@ ColumnLayout {
         PlasmaExtras.Heading {
             Layout.fillWidth: true
             level: 3
-            text: summary.label("Audio output", "Salida de audio")
+            text: "Razer Barracuda X"
+            textFormat: Text.PlainText
         }
         PC3.ToolButton {
             objectName: "moreActionsButton"
@@ -78,7 +84,7 @@ ColumnLayout {
                 objectName: "moreActionsMenu"
                 PC3.MenuItem {
                     objectName: "pairingButton"
-                    text: Output.bluetooth(summary.sink)
+                    text: summary.viaBluetooth
                         ? summary.label("Pair USB dongle…", "Emparejar dongle USB…")
                         : summary.label("Pair Barracuda…", "Emparejar Barracuda…")
                     icon.name: "network-wireless"
@@ -90,7 +96,7 @@ ColumnLayout {
                 }
                 PC3.MenuItem {
                     objectName: "powerOffButton"
-                    text: Output.bluetooth(summary.sink)
+                    text: summary.viaBluetooth
                         ? summary.label("Turn off through USB dongle…", "Apagar mediante dongle USB…")
                         : summary.label("Turn off headset…", "Apagar auricular…")
                     icon.name: "system-shutdown"
@@ -118,50 +124,91 @@ ColumnLayout {
         spacing: Kirigami.Units.largeSpacing
 
         Item {
+            Layout.alignment: Qt.AlignTop
             Layout.preferredWidth: Kirigami.Units.iconSizes.huge
             Layout.preferredHeight: Kirigami.Units.iconSizes.huge
             Image {
                 id: artwork
                 anchors.fill: parent
-                source: summary.deviceArtwork.startsWith("file:") ? summary.deviceArtwork : ""
+                source: Output.artwork("audio-headset")
                 sourceSize.width: 64
                 sourceSize.height: 64
                 fillMode: Image.PreserveAspectFit
                 visible: status === Image.Ready
+                opacity: summary.connected ? 1 : 0.5
             }
             Kirigami.Icon {
                 anchors.fill: parent
-                source: summary.deviceIcon
+                source: "audio-headset"
                 visible: artwork.status !== Image.Ready
+                opacity: artwork.opacity
+            }
+            Kirigami.Icon {
+                objectName: "connectionEmblem"
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                width: Kirigami.Units.iconSizes.smallMedium
+                height: width
+                source: Output.emblem(summary.connection, summary.battery)
+                visible: source !== ""
             }
         }
 
         ColumnLayout {
             Layout.fillWidth: true
+            Layout.alignment: Qt.AlignVCenter
+            spacing: Kirigami.Units.smallSpacing
             PC3.Label {
+                objectName: "connectionState"
                 Layout.fillWidth: true
-                text: summary.deviceName
+                text: summary.statusText
                 textFormat: Text.PlainText
                 wrapMode: Text.Wrap
                 font.bold: true
+                color: summary.connected ? Kirigami.Theme.positiveTextColor
+                    : summary.connection.state === "unavailable" ? Kirigami.Theme.negativeTextColor
+                    : Kirigami.Theme.textColor
             }
             PC3.Label {
+                objectName: "connectionHint"
                 Layout.fillWidth: true
-                visible: summary.hasOutput
-                text: summary.statusText
+                visible: text.length > 0
+                text: summary.hintText
+                textFormat: Text.PlainText
                 wrapMode: Text.Wrap
+                opacity: 0.75
             }
         }
     }
 
-    PC3.Label {
+    ColumnLayout {
+        objectName: "connectionDetails"
         Layout.fillWidth: true
         Layout.leftMargin: Kirigami.Units.largeSpacing
         Layout.rightMargin: Kirigami.Units.largeSpacing
-        visible: !summary.hasOutput
-        text: summary.label("Connect an audio device to see its output here.", "Conecta un dispositivo de audio para ver su salida aquí.")
-        wrapMode: Text.Wrap
-        opacity: 0.7
+        spacing: Kirigami.Units.smallSpacing
+        visible: summary.details.length > 0
+        Repeater {
+            model: summary.details
+            RowLayout {
+                required property var modelData
+                Layout.fillWidth: true
+                PC3.Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    text: modelData[0]
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                    opacity: 0.75
+                }
+                PC3.Label {
+                    objectName: "detailValue"
+                    text: modelData[1]
+                    textFormat: Text.PlainText
+                    horizontalAlignment: Text.AlignRight
+                }
+            }
+        }
     }
 
     Kirigami.Separator {
@@ -200,7 +247,7 @@ ColumnLayout {
                 PC3.Label {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
-                    text: summary.label("Barracuda battery", "Batería del Barracuda")
+                    text: summary.label("Battery", "Batería")
                     textFormat: Text.PlainText
                     wrapMode: Text.Wrap
                 }
@@ -231,8 +278,8 @@ ColumnLayout {
         Layout.leftMargin: Kirigami.Units.largeSpacing
         Layout.rightMargin: Kirigami.Units.largeSpacing
         visible: summary.showBattery && !summary.batteryAvailable
-        text: summary.label("No battery reading is available. This does not determine whether the headset is connected.",
-                            "No hay una lectura de batería disponible. Esto no indica si los auriculares están conectados.")
+        text: summary.label("No battery reading is available yet.",
+                            "Aún no hay una lectura de batería disponible.")
         wrapMode: Text.Wrap
         opacity: 0.7
     }
@@ -334,7 +381,7 @@ ColumnLayout {
     Kirigami.Separator { Layout.fillWidth: true }
 
     GridLayout {
-        objectName: "outputActions"
+        objectName: "overviewActions"
         Layout.fillWidth: true
         Layout.margins: Kirigami.Units.largeSpacing
         columns: width < Kirigami.Units.gridUnit * 20 ? 1 : 2

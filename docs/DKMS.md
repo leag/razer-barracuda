@@ -114,8 +114,8 @@ marked as unknown (which consumers must ignore).
 
 UPower/KDE presentation depends on the desktop version and available readings.
 The battery has device scope and does not represent the computer's own battery.
-WirePlumber handles audio routing. The plasmoid displays the default output;
-only the driver monitors physical link state.
+WirePlumber handles audio routing. The plasmoid displays the link state the
+driver publishes in `wireless_status`; only the driver monitors physical link state.
 
 ## Removal
 

@@ -3,10 +3,11 @@ import argparse
 from contextlib import ExitStack
 import errno
 import json
+from pathlib import Path
 import secrets
 
-from .control import control_lock, power_attribute
-from .bluetooth import BluetoothSession
+from .control import adapters, control_lock, power_attribute
+from .bluetooth import BluetoothSession, headset_presence
 
 FEATURES = {'preset': 0x13, 'gaming': 0x14, 'bands': 0x15,
             'dnd': 0x27, 'standby': 0x2c, 'devices': 0x2d}
@@ -140,8 +141,77 @@ def snapshot(path):
             'transport': 'bluetooth' if isinstance(path, BluetoothSession) else 'usb'}
 
 
+def uevent(path):
+    values = {}
+    for line in path.read_text().splitlines():
+        key, separator, value = line.partition('=')
+        if separator:
+            values[key] = value
+    return values
+
+
+def bounded(values, key, low, high):
+    try:
+        number = int(values[key])
+    except (KeyError, ValueError):
+        return None
+    return number if low <= number <= high else None
+
+
+def battery_details(device):
+    """Values the driver last published; reading them sends no query."""
+    for supply in sorted((device / 'power_supply').glob('razer-barracuda-*')):
+        try:
+            values = uevent(supply / 'uevent')
+        except OSError:
+            continue
+        status = values.get('POWER_SUPPLY_STATUS', 'Unknown')
+        voltage = bounded(values, 'POWER_SUPPLY_VOLTAGE_NOW', 1, 10_000_000)
+        return {'percent': bounded(values, 'POWER_SUPPLY_CAPACITY', 0, 100),
+                'status': status,
+                # The driver reports cable presence as charging or full.
+                'cable': {'Charging': True, 'Full': True, 'Discharging': False}.get(status),
+                'voltage_mv': None if voltage is None else round(voltage / 1000)}
+    return None
+
+
+def usb_link(sysfs=Path('/sys/bus/hid/devices')):
+    """Link state as published by the driver; USB presence alone is not a link."""
+    try:
+        devices = adapters(sysfs)
+    except OSError:
+        devices = []
+    if not devices:
+        return {'adapter': 'missing'}
+    if len(devices) != 1:
+        return {'adapter': 'multiple'}
+    device = devices[0]
+    try:
+        driver = (device / 'driver').resolve().name == 'razer-barracuda'
+    except OSError:
+        driver = False
+    link = 'unknown'
+    if driver:
+        # The attribute appears once the driver has confirmed a link state.
+        try:
+            reported = (device.resolve().parent / 'wireless_status').read_text().strip()
+        except OSError:
+            reported = ''
+        if reported in ('connected', 'disconnected'):
+            link = reported
+    return {'adapter': 'present', 'driver': driver, 'link': link,
+            'battery': battery_details(device) if driver else None}
+
+
+def link_status():
+    return {'ok': True, 'usb': usb_link(), 'bluetooth': headset_presence()}
+
+
 def dispatch(request):
     op = request.get('op', 'status')
+    if op == 'link':
+        # Read-only and independent of the control lock: no hardware access.
+        return link_status()
     if op not in ('status', 'set'):
         raise HeadsetError('invalid-request')
     feature, value = request.get('feature'), request.get('value')

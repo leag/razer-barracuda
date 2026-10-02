@@ -5,9 +5,9 @@ Linux support for the Razer Barracuda X (2022), USB `1532:0552`.
 - `barracuda-pair`: command-line pairing, in English or Spanish. No tray process.
 - `hid-razer-barracuda-dkms`: native battery reporting, wireless link and jack
   detection, including the automatic snd-usb-audio quirk when needed.
-- `plasma6-applets-barracuda`: **Current Audio Output**, a Plasma 6 widget showing
-  the default output's device icon. Barracuda uses KDE Breeze's detailed headset
-  icon, including the microphone.
+- `plasma6-applets-barracuda`: **Barracuda Headset**, a Plasma 6 widget showing
+  the headset's connection state, link details, battery and native controls, with
+  KDE Breeze's detailed headset artwork.
 
 WirePlumber manages audio switching. Optional [headset controls and system tuning](docs/AUDIO_EFFECTS.md)
 use native headset commands and explicit PipeWire/WirePlumber configuration.
@@ -34,10 +34,13 @@ The widget offers native pairing confirmation and displays the result. There is 
 
 ## Plasma widget
 
-Add **Current Audio Output** (**Salida de audio actual**) from Plasma's widget
-picker. The panel icon follows the default audio device; hover shows its name
-and volume/mute state. Click opens a compact summary of the default output and the Barracuda battery
-reported by KDE. Sound settings and **Headset settings…** open their controls;
+Add **Barracuda Headset** (**Auricular Barracuda**) from Plasma's widget
+picker; it replaces the former **Current Audio Output** under the same widget ID.
+The panel icon shows whether the headset link is confirmed; hover shows the
+connection and battery. Click opens the connection state with its details
+(USB dongle, 2.4 GHz link, Bluetooth, charging cable and voltage) and the battery.
+The state comes from a read-only `barracuda-headset` query that sends nothing to
+the headset. Sound settings and **Headset settings…** open their controls;
 **More actions** contains native Barracuda pairing and an explicit headset power-off action. The effects view has
 native headset EQ, with Gaming, Do Not Disturb, idle shutdown and Bluetooth
 Quick Connect under **More settings**. Session tuning is not exposed in the widget. Native effects support both the

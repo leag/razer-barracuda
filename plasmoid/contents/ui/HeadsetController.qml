@@ -6,9 +6,9 @@ Plasma5Support.DataSource {
     id: controller
     engine: "executable"
     connectedSources: []
-    property var sink: null
+    property var target: ({transport: "usb"})
     property bool activeView: false
-    readonly property string targetKey: Output.bluetooth(sink) ? Output.bluetoothAddress(sink) : "usb"
+    readonly property string targetKey: target.transport === "bluetooth" ? target.address : "usb"
     property string requestedKey: targetKey
     onTargetKeyChanged: {
         response = null;
@@ -51,7 +51,7 @@ Plasma5Support.DataSource {
         error = "";
         message = "";
         requestedKey = targetKey;
-        connectSource(Output.headsetCommand(value, sink));
+        connectSource(Output.headsetCommand(value, target));
     }
     onNewData: (sourceName, data) => {
         disconnectSource(sourceName);

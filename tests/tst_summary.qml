@@ -13,10 +13,14 @@ Item {
         // Inject engine events without using the system's power service.
         engine: ""
     }
-    OutputSummary {
+    LinkMonitor {
+        id: link
+        // Inject command output without running the helper.
+        engine: ""
+    }
+    ConnectionSummary {
         id: summary
         anchors.fill: parent
-        sink: null
         localeName: "en_US"
     }
     QtObject {
@@ -40,21 +44,19 @@ Item {
         function request(value) { requests = requests.concat([value]); }
         function errorLabel(code) { return code; }
     }
-    OutputPanel {
+    HeadsetPanel {
         id: panel
         width: 400
         height: 540
         visible: false
-        sink: null
         audioController: fakeAudio
         headsetController: fakeHeadset
     }
     PlasmaCore.Dialog {
         id: sizeDialog
         visible: false
-        mainItem: OutputPanel {
+        mainItem: HeadsetPanel {
             id: sizedPanel
-            sink: null
             audioController: fakeAudio
             headsetController: fakeHeadset
         }
@@ -75,7 +77,7 @@ Item {
         signalName: "settingsRequested"
     }
     TestCase {
-        name: "OutputSummary"
+        name: "ConnectionSummary"
         when: windowShown
         function test_help_navigation_and_translation() {
             summary.visible = false
@@ -91,24 +93,24 @@ Item {
                 compare(action.text, locale === "en_US" ? "Help" : "Ayuda")
                 action.triggered()
                 verify(panel.helpOpen)
-                verify(findChild(panel, "outputHelp").visible)
-                compare(findChild(panel, "outputHelp").localeName, locale)
-                const body = findChild(findChild(panel, "outputHelp"), "helpBody")
+                verify(findChild(panel, "headsetHelp").visible)
+                compare(findChild(panel, "headsetHelp").localeName, locale)
+                const body = findChild(findChild(panel, "headsetHelp"), "helpBody")
                 compare(body.textFormat, Text.RichText)
                 verify(body.text.includes("<b>"))
                 verify(body.text.includes("<p>"))
-                verify(!findChild(panel, "outputOverview").activeView)
+                verify(!findChild(panel, "connectionOverview").activeView)
                 compare(fakeAudio.requests.length, audioRequests)
                 compare(fakeHeadset.requests.length, headsetRequests)
                 wait(20)
-                mouseClick(findChild(panel, "backToOutput"))
+                mouseClick(findChild(panel, "backToOverview"))
                 verify(!panel.helpOpen)
             }
             panel.effectsOpen = true
             wait(20)
             mouseClick(findChild(panel, "effectsHelpButton"))
             verify(panel.helpOpen)
-            verify(findChild(panel, "outputHelp").visible)
+            verify(findChild(panel, "headsetHelp").visible)
             panel.activeView = false
             verify(!panel.helpOpen)
             verify(!panel.effectsOpen)
@@ -118,7 +120,7 @@ Item {
             summary.visible = true
         }
         function test_action_layout_adapts_to_width() {
-            const actions = findChild(summary, "outputActions")
+            const actions = findChild(summary, "overviewActions")
             const settings = findChild(summary, "soundSettingsButton")
             const effects = findChild(summary, "configureEffectsButton")
             const originalWidth = summary.parent.width
@@ -159,11 +161,11 @@ Item {
             sizedPanel.activeView = true
             sizedPanel.effectsOpen = false
             sizedPanel.helpOpen = false
-            sizedPanel.sink = {name: "speakers", description: "Speakers", volume: 32768, muted: false}
+            sizedPanel.status = null
             sizedPanel.battery = null
             sizeDialog.visible = true
             wait(50)
-            const overview = findChild(sizedPanel, "outputOverview")
+            const overview = findChild(sizedPanel, "connectionOverview")
             const compactHeight = sizeDialog.height
             const compactContent = overview.implicitHeight
             verify(!overview.showBattery)
@@ -174,7 +176,6 @@ Item {
             tryCompare(sizeDialog, "height", compactHeight)
             tryCompare(overview, "implicitHeight", compactContent)
             verify(overview.height >= overview.implicitHeight - 1)
-            sizedPanel.sink = null
             sizeDialog.visible = false
         }
         function test_popup_shrinks_after_effects() {
@@ -197,7 +198,7 @@ Item {
             sizeDialog.visible = true
             wait(50)
             const compactHeight = sizeDialog.height
-            const overview = findChild(sizedPanel, "outputOverview")
+            const overview = findChild(sizedPanel, "connectionOverview")
             for (const action of ["pairingButton", "powerOffButton"]) {
                 findChild(sizedPanel, action).triggered()
                 tryVerify(() => sizeDialog.height > compactHeight)
@@ -274,7 +275,7 @@ Item {
             fakeAudio.response = result
             fakeAudio.loaded(result)
             wait(20)
-            mouseClick(findChild(panel, "backToOutput"))
+            mouseClick(findChild(panel, "backToOverview"))
             verify(!panel.effectsOpen)
             wait(20)
             mouseClick(findChild(panel, "configureEffectsButton"))
@@ -290,10 +291,10 @@ Item {
         function test_settings_and_unknown_battery() {
             summary.localeName = "en_US"
             summary.battery = null
-            summary.sink = {name: "barracuda", properties: {"device.vendor.id": "0x1532", "device.product.id": "0x0552"}}
+            summary.status = linked("connected")
             const hint = findChild(summary, "batteryUnavailableHint")
             verify(hint.visible)
-            verify(hint.text.includes("does not determine"))
+            verify(hint.text.includes("No battery reading"))
             const settings = findChild(summary, "soundSettingsButton")
             compare(settings.text, "Sound settings…")
             settingsSpy.clear()
@@ -301,20 +302,21 @@ Item {
             compare(settingsSpy.count, 1)
             summary.localeName = "es_CL"
             compare(settings.text, "Ajustes de sonido…")
-            verify(hint.text.includes("Esto no indica"))
+            verify(hint.text.includes("lectura de batería"))
             summary.battery = {percent: 65, state: "Discharging"}
             verify(!hint.visible)
             summary.battery = null
             summary.localeName = "en_US"
-            summary.sink = null
+            summary.status = null
             verify(!hint.visible)
             verify(!findChild(summary, "headsetBatteryRow").visible)
-            summary.sink = {name: "speakers", description: "Speakers"}
+            // A missing reading is not shown as a battery for a disconnected headset.
+            summary.status = linked("disconnected")
             verify(!findChild(summary, "headsetBatteryRow").visible)
             summary.battery = {percent: 65, state: "Discharging"}
             verify(findChild(summary, "headsetBatteryRow").visible)
             summary.battery = null
-            summary.sink = null
+            summary.status = null
         }
         function test_native_battery_presentation() {
             const icon = findChild(summary, "headsetBatteryIcon")
@@ -347,19 +349,20 @@ Item {
             compare(percent.text, "Unknown")
         }
         function test_bluetooth_presentation() {
-            summary.sink = {name: "bluez_output.example.1", description: "Razer Barracuda X (BT)",
-                            properties: {"device.api": "bluez5"}, volume: 42598, muted: false}
+            summary.status = {ok: true, usb: {adapter: "missing"},
+                              bluetooth: {state: "connected", address: "01:02:03:04:05:06"}}
+            summary.target = {transport: "bluetooth", address: "01:02:03:04:05:06"}
             summary.battery = {percent: 60, state: "NoCharge"}
-            compare(summary.deviceIcon, "audio-headset")
-            compare(summary.deviceName, "Razer Barracuda X")
-            verify(summary.statusText.startsWith("Bluetooth"))
+            compare(summary.statusText, "Connected · Bluetooth")
             compare(findChild(summary, "batteryPercentage").text, "60%")
             verify(!findChild(summary, "batteryStatus").visible)
             verify(!findChild(summary, "batteryUnavailableHint").visible)
             verify(findChild(summary, "moreActionsButton").visible)
             verify(findChild(summary, "pairingButton").text.includes("USB"))
             verify(findChild(summary, "powerOffButton").text.includes("USB"))
-            summary.sink = null
+            summary.target = {transport: "usb"}
+            verify(!findChild(summary, "pairingButton").text.includes("USB"))
+            summary.status = null
             summary.battery = null
         }
         function test_battery_reconnect_and_late_data() {
@@ -391,22 +394,72 @@ Item {
             const component = Qt.createComponent("../plasmoid/contents/ui/main.qml")
             compare(component.status, Component.Ready, component.errorString())
         }
-        function test_default_device_changes() {
-            compare(summary.deviceName, "No audio output")
-            verify(!summary.hasOutput)
-            summary.sink = {name: "speakers", description: "Speakers", volume: 32768, muted: false}
-            compare(summary.deviceName, "Speakers")
-            compare(summary.statusText, "Volume: 50%")
-            summary.sink = {name: "hdmi", description: "Monitor", iconName: "video-display", volume: 65536, muted: true}
-            compare(summary.deviceName, "Monitor")
-            compare(summary.deviceIcon, "video-display")
-            compare(summary.statusText, "Muted · Volume: 100%")
+        function test_connection_presentation() {
+            const state = findChild(summary, "connectionState")
+            const hint = findChild(summary, "connectionHint")
+            const details = findChild(summary, "connectionDetails")
+            const emblem = findChild(summary, "connectionEmblem")
+            summary.localeName = "en_US"
+            summary.status = null
+            compare(state.text, "Checking…")
+            verify(!hint.visible)
+            verify(!details.visible)
+            verify(!emblem.visible)
+            summary.status = {ok: false}
+            compare(state.text, "Status unavailable")
+            verify(hint.visible)
+            verify(hint.text.includes("barracuda-headset"))
+            summary.status = {ok: true, usb: {adapter: "missing"}, bluetooth: null}
+            compare(state.text, "Adapter not detected")
+            verify(details.visible)
+            compare(emblem.source, "emblem-unavailable")
+            summary.status = linked("unknown")
+            compare(state.text, "Link not confirmed")
+            verify(hint.text.includes("does not mean"))
+            compare(emblem.source, "emblem-question")
+            summary.status = linked("disconnected", {state: "disconnected", address: "01:02:03:04:05:06"})
+            compare(state.text, "Disconnected")
+            const values = () => findChildren(details, "detailValue").filter(item => item.visible).map(item => item.text)
+            tryCompare(values(), "length", 3)
+            compare(values(), ["Detected", "Disconnected", "Not connected"])
+            summary.status = linked("connected", null,
+                                    {percent: 65, status: "Charging", cable: true, voltage_mv: 4123})
+            compare(state.text, "Connected · USB dongle")
+            verify(!hint.visible)
+            verify(!emblem.visible)
+            tryVerify(() => values().length === 4)
+            compare(values(), ["Detected", "Connected", "Connected", "4.12 V"])
             summary.localeName = "es_CL"
-            compare(summary.statusText, "Silenciado · Volumen: 100%")
-            summary.sink = {name: "auto_null", volume: 65536}
-            compare(summary.deviceName, "Sin salida de audio")
-            verify(!summary.hasOutput)
-            summary.sink = null
+            compare(state.text, "Conectado · Dongle USB")
+            tryVerify(() => values()[3] === "4,12 V")
+            summary.localeName = "en_US"
+            summary.status = null
+        }
+        function findChildren(item, name) {
+            let found = item.objectName === name ? [item] : []
+            for (const child of item.children)
+                found = found.concat(findChildren(child, name))
+            return found
+        }
+        function test_link_monitor_serializes_queries() {
+            link.status = null
+            link.refresh()
+            verify(link.running)
+            compare(link.connectedSources.length, 1)
+            link.refresh()
+            verify(link.pending)
+            compare(link.connectedSources.length, 1)
+            link.newData(link.connectedSources[0],
+                         {stdout: '{"ok": true, "usb": {"adapter": "missing"}, "bluetooth": null}'})
+            compare(link.status.usb.adapter, "missing")
+            // The pending refresh starts once the previous query finished.
+            verify(link.running)
+            verify(!link.pending)
+            link.newData(link.connectedSources[0], {stdout: ""})
+            verify(!link.running)
+            compare(link.status.ok, false)
+            compare(link.connectedSources.length, 0)
+            link.status = null
         }
         function test_pairing_is_explicit_and_independent_of_output() {
             pairingSpy.clear()
@@ -447,7 +500,20 @@ Item {
             summary.activeView = true
             verify(!summary.confirmingPairing)
         }
+        function linked(value, bluetooth, battery) {
+            return {ok: true, usb: {adapter: "present", driver: true, link: value, battery: battery || null},
+                    bluetooth: bluetooth === undefined ? null : bluetooth}
+        }
         function test_reconnection_clears_pending_confirmation() {
+            summary.status = linked("disconnected")
+            summary.confirmingPairing = true
+            summary.status = linked("connected")
+            verify(!summary.confirmingPairing)
+            summary.confirmingPairing = true
+            summary.status = linked("connected")
+            verify(summary.confirmingPairing)
+            summary.confirmingPairing = false
+            summary.status = null
             summary.battery = null
             summary.confirmingPairing = true
             summary.battery = {percent: 65, state: "Discharging"}

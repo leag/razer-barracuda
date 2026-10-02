@@ -1,5 +1,20 @@
 # Change history
 
+## Unreleased
+
+- Turn the Plasma widget into **Barracuda Headset**, focused on the headset
+  connection instead of the default output. It shows connected (USB dongle,
+  Bluetooth or both), disconnected, unconfirmed, missing-adapter and unavailable
+  states, with details for the dongle, 2.4 GHz link, Bluetooth, charging cable and
+  battery voltage. The widget ID is unchanged; all existing actions remain.
+- Add the read-only `barracuda-headset --request '{"op":"link"}'` query. It reads
+  the driver's `wireless_status` and power-supply values and BlueZ, without the
+  control lock and without sending anything to the hardware.
+- Mark the panel icon with an emblem for disconnected, unconfirmed and low-battery
+  states, and use the driver's battery reading when KDE does not list it.
+- Native headset settings follow the confirmed USB or Bluetooth link, using the
+  default output only when both or neither is confirmed.
+
 ## v0.5.0
 
 - Add native headset EQ, Gaming, Do Not Disturb, idle shutdown and Bluetooth

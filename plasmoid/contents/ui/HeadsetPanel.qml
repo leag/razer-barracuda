@@ -6,7 +6,8 @@ import "../code/output.js" as Output
 
 ColumnLayout {
     id: panel
-    required property var sink
+    property var status: null
+    property var target: ({transport: "usb"})
     property bool activeView: true
     property bool pairingBusy: false
     property string pairingError: ""
@@ -52,7 +53,7 @@ ColumnLayout {
     HeadsetController {
         id: headset
         objectName: "headsetController"
-        sink: panel.sink
+        target: panel.target
         activeView: panel.effectsOpen && !panel.helpOpen
     }
     RowLayout {
@@ -60,7 +61,7 @@ ColumnLayout {
         visible: panel.detailOpen
         Layout.fillWidth: true
         PC3.ToolButton {
-            objectName: "backToOutput"
+            objectName: "backToOverview"
             icon.name: "go-previous"
             text: Output.text("Back", "Volver", panel.localeName)
             onClicked: { panel.effectsOpen = false; panel.helpOpen = false; }
@@ -90,11 +91,12 @@ ColumnLayout {
             PC3.ScrollBar.vertical.policy: PC3.ScrollBar.AsNeeded
             // Keep wrapping stable while the vertical scrollbar changes visibility.
             contentWidth: width
-            OutputSummary {
+            ConnectionSummary {
                 id: overview
-                objectName: "outputOverview"
+                objectName: "connectionOverview"
                 width: overviewScroll.width
-                sink: panel.sink
+                status: panel.status
+                target: panel.target
                 activeView: panel.activeView && !panel.detailOpen
                 localeName: panel.localeName
                 pairingBusy: panel.pairingBusy
