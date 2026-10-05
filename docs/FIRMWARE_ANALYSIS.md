@@ -7,8 +7,9 @@ to the analyzed build and must not be assumed valid for other revisions.
 
 References to the monitor in historical experiments describe the former tray
 application. The current userspace components are the `barracuda-pair` CLI
-(`barracuda_pair` module) and a read-only Plasma output widget. The widget
-sends no HID commands. UI/package changes do not alter these recorded captures
+(`barracuda_pair` module), native control helpers and the Plasma headset
+widget. Status reads send no HID commands; explicit settings, pairing and
+power-off actions use their documented helpers. UI/package changes do not alter these recorded captures
 or authorize additional queries; see [architecture](ARCHITECTURE.md).
 
 ## Current application and driver behavior and validation
@@ -16,9 +17,10 @@ or authorize additional queries; see [architecture](ARCHITECTURE.md).
 The driver sends the E3 connection query when binding
 the dongle, at most three
 times two seconds apart, stopping after a valid status. Failed queries leave
-status unknown and passive reading continues. The battery queries documented in
-[DKMS.md](DKMS.md) are the driver's only other commands. No firmware, pairing,
-memory-write or restart commands are used by the driver. The separate CLI pairs
+status unknown and passive reading continues. The driver also refreshes battery telemetry as documented in
+[DKMS.md](DKMS.md), and provides serialized interfaces for explicit native
+settings and power-off requests described in [PROTOCOL.md](PROTOCOL.md).
+No firmware, pairing, memory-write or restart commands are used by the driver. The separate CLI pairs
 only on explicit request; see [the pairing sequence](PROTOCOL.md#pairing).
 
 | Query | Headset on | Headset off |
@@ -65,6 +67,34 @@ All ten entries of the analyzed bridge's outer dispatch table were identified.
 The complete tunneled protocol and radio transport have not been decoded.
 The following sections record static findings; statements about unconfirmed
 fields do not supersede the E3/E6 hardware results above.
+
+## Research index and completed static-analysis scope
+
+The retained static-analysis work is documented through the following stages.
+Each page identifies its input image and separates recovered code or stored
+configuration from physical observations. Completion here means the existing
+findings have been recorded; it does not mean every firmware path is decoded.
+
+| Evidence | Findings | Detailed record |
+| --- | --- | --- |
+| Packaged T3 dongle images and Windows SDK | Bridge dispatch, tunnel framing, connection queries, diagnostic routing and command inventory | This page and [command review](COMMAND_REVIEW.md) |
+| T3 dongle XIP/patch and installed headset receiver | Relayed diagnostic commands, autonomous SPP_Audio builders and unresolved dongle EX9 fields | [Dongle-to-headset inventory](DONGLE_HEADSET_COMMANDS.md) |
+| Razer Audio Android T3 providers | App control IDs, EQ bands, Gaming and voice-language download path | [Android analysis](ANDROID_ANALYSIS.md) |
+| Published T3BT headset update | Six native control handlers, neutral EQ encoding and partial Gaming/sidetone paths | [Headset firmware](HEADSET_FIRMWARE_ANALYSIS.md) |
+| Authorized installed headset backup | Missing MCU ROM/EX9 routines, Gaming writer versus GET state, sidetone DSP queue and getter limitations | [Installed ROM](LIVE_ROM_ANALYSIS.md) |
+| Exact DP/CT schemas and stored payloads | Four-bit sidetone gain, dongle-related Gaming guard and configured buffer durations | [DSP parameters](DSP_PARAMETER_ANALYSIS.md) |
+| Seven language images and installed audio data | Prompt extraction, 16-region codec, exact image reconstruction and offline replacement tooling | [Voice prompts](VOICE_PROMPT_ANALYSIS.md) |
+
+The main remaining boundaries are the active DSP interpretation of sidetone,
+Gaming's per-entry guard and state-reporting behavior during a USB transaction,
+measured latency, RSSI calibration, and a charge-complete notification observed
+at the LED transition. Offline prompt reconstruction does not validate installing
+modified audio data. No new runtime command follows from these findings.
+
+Vendor images, backups, schemas, disassembly and decoded audio remain in ignored
+private research directories. Public documentation records results and local
+reproduction steps; it does not redistribute those inputs. The reproduction
+commands require retained private inputs and are not a clean-checkout test suite.
 
 ## HID reports
 
@@ -542,8 +572,9 @@ notification, whose value comes from `GP + 76499`; none loads `0x21` or `0x2a`.
 The `0x21`/`0x2a` immediates at `0x1ffc21ea`/`0x1ffc22b0` in the patch image are
 indices in a ROM-patch registration table, and the `battchg` string is a
 Bluetooth HFP indicator name. The percentage is therefore most likely computed
-by the headset firmware and relayed by the dongle. The package contains no
-headset image, so that computation could not be inspected.
+by the headset firmware and relayed by the dongle. The analyzed dongle package contains no headset image. A separate headset
+update and installed backup were subsequently recovered (see the research index
+above); the percentage computation has not yet been traced in those images.
 
 The vendor SDK's 279/281/327 conversion (`Cust_Image.getBatteryPercent`) maps
 the ten voltage points to 0, 10, …, 90%, not 10..100%. Above the top point it
@@ -559,7 +590,7 @@ This suggests the SDK tracks charge completion as a distinct state, consistent
 with the green LED and `TR_CHARGER_COMPLETE`. The observed `2a 02 01 VV`
 payload carries only 0/1 and has not been seen to encode completion.
 
-### Charge-transition capture (in progress)
+### Charge-transition capture: inconclusive
 
 On 2026-09-23 at 02:06:41 UTC, a read-only capture of the Barracuda hidraw node
 was started with the headset charging (LED blinking red) after a brief

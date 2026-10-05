@@ -44,6 +44,9 @@ remain ignored under `private/headset-firmware-analysis/`.
 
 The seven AD component versions in `Version.bin` correspond to English,
 Chinese, French, German, Japanese, Korean and Spanish.
+The subsequent [voice-prompt analysis](VOICE_PROMPT_ANALYSIS.md) records
+extraction, codec validation, exact AD reconstruction and offline tooling for
+these images and the installed audio-data backup.
 
 ## Code mapping and limits
 

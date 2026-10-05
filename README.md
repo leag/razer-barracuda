@@ -57,7 +57,9 @@ bundled project icons. After a widget update, Plasma may need to be
 - [Installation](docs/INSTALL.md), [usage](docs/USAGE.md),
   [troubleshooting](docs/TROUBLESHOOTING.md)
 - [Driver](docs/DKMS.md), [jack detection](docs/JACK_DETECTION.md)
-- [Protocol](docs/PROTOCOL.md), [firmware research](docs/FIRMWARE_ANALYSIS.md)
+- [Protocol](docs/PROTOCOL.md), [firmware research index](docs/FIRMWARE_ANALYSIS.md#research-index-and-completed-static-analysis-scope),
+  [dongle-to-headset commands](docs/DONGLE_HEADSET_COMMANDS.md),
+  [voice-prompt analysis](docs/VOICE_PROMPT_ANALYSIS.md)
 - [Architecture](docs/ARCHITECTURE.md), [kernel submission](docs/UPSTREAM.md)
 - [Change history](docs/CHANGELOG.md), [releasing](docs/RELEASING.md),
   [contributing](CONTRIBUTING.md)
