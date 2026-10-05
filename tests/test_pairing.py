@@ -230,6 +230,32 @@ class PairingTests(unittest.TestCase):
         with self.assertRaises(pairing.PairingError):
             run(dongle)
 
+    def test_route_data_requires_a_preceding_matching_ack(self):
+        for mode in ('missing', 'mismatched', 'late', 'valid'):
+            with self.subTest(mode=mode):
+                dongle = FakeDongle()
+
+                def write(report):
+                    dongle.written.append(report)
+                    seq = report[6]
+                    if mode == 'valid':
+                        dongle.send(pairing.CLASS_ACK, bytes([pairing.CLASS_LINK, seq | 0x80, 0]))
+                    elif mode == 'mismatched':
+                        dongle.send(pairing.CLASS_ACK, bytes([pairing.CLASS_LINK, (seq + 1) | 0x80, 0]))
+                    dongle.send(pairing.CLASS_LINK, bytes([0xE0, 0]))
+                    if mode == 'late':
+                        dongle.send(pairing.CLASS_ACK, bytes([pairing.CLASS_LINK, seq | 0x80, 0]))
+
+                dongle.write = write
+                session = pairing.PairingSession(dongle, clock=dongle.clock,
+                                                 log=lambda message: None)
+                if mode == 'valid':
+                    self.assertEqual(session.link_command(0xE0, reply=True), b'\x00')
+                else:
+                    with self.assertRaises(pairing.PairingError):
+                        session.link_command(0xE0, reply=True)
+                self.assertEqual(len(dongle.written), 1)
+
     def test_cancellation_stops_scan_and_disables_inquiry(self):
         dongle = FakeDongle()
         session = pairing.PairingSession(dongle, clock=dongle.clock, sleep=dongle.sleep,

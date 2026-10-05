@@ -1,6 +1,12 @@
 # Separating headset controls from the kernel driver
 
-Status: proposed design; no runtime or ABI changes have been implemented.
+Status: deferred design. Current work hardens the existing driver interfaces;
+no userspace control separation or new arbitration ABI is implemented.
+
+Execution order, dependencies and delivery gates are tracked in the
+[implementation plan](CONTROL_SEPARATION_PLAN.md). The
+[feasibility record](CONTROL_SEPARATION_FEASIBILITY.md) documents the ownership
+limitation found in the first prototype; no production interface is selected.
 
 ## Objective
 
@@ -43,9 +49,10 @@ The XDG `control_lock` only coordinates cooperating processes for one user. It
 cannot exclude a kernel worker or another user. Pairing already uses raw HID;
 its interaction with driver requests must also be covered by the migration.
 
-The startup E3 worker currently sends outside `route_lock`. Merely holding the
-existing mutex is therefore insufficient: arbitration must cover every driver
-output path, including startup, telemetry and recovery.
+The initial feasibility baseline had startup E3 outside `route_lock`. The
+incremental driver hardening now serializes that exchange as well. This fixes
+interleaving among kernel transactions, but raw userspace output still bypasses
+the mutex; a future migration must cover both paths.
 
 ## Existing kernel/userspace precedents
 

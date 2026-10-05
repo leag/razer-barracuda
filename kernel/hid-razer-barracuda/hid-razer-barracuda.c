@@ -72,7 +72,7 @@
 #define BARRACUDA_VOLTAGE_MIN_MV	2500
 #define BARRACUDA_VOLTAGE_MAX_MV	4500
 
-/* Startup link queries use sequence numbers 1..3, refreshes 0x60..0x7f. */
+/* Serialized queries share one sequence range. */
 #define BARRACUDA_LINK_ATTEMPTS		3
 #define BARRACUDA_SEQ_FIRST		0x60
 #define BARRACUDA_SEQ_LAST		0x7f
@@ -121,7 +121,7 @@ struct barracuda {
 	bool changed;
 	bool refresh_due;
 	int jack_report;
-	/* Set when the local route could not be restored, until the next link. */
+	/* Cleared only after the local route has been verified. */
 	bool route_failed;
 	/*
 	 * The one outstanding query, matched in barracuda_match_reply(). Data
@@ -371,10 +371,8 @@ static void barracuda_event(struct barracuda *b, enum barracuda_event event,
 		b->refresh_due = true;
 	if (event == BARRACUDA_LINK) {
 		b->jack_report = value;
-		if (value == 1 && !b->stopping) {
+		if (value == 1 && !b->stopping)
 			b->refresh_due = true;
-			b->route_failed = false;
-		}
 	}
 }
 
@@ -540,46 +538,6 @@ static void barracuda_fill(u8 *buf, u8 family, u8 seq, const u8 *payload,
 	memcpy(buf + start, payload, len);
 }
 
-/*
- * Ask for the link state (E3) until a valid state is known, at most
- * BARRACUDA_LINK_ATTEMPTS times. A failed query leaves the state unknown;
- * unsolicited link reports still update it.
- */
-static void barracuda_link_query(struct work_struct *work)
-{
-	struct barracuda *b = container_of(to_delayed_work(work),
-					   struct barracuda, link_work);
-	static const u8 query[] = { BARRACUDA_CMD_GET_LINK };
-	unsigned long flags;
-	u8 *buf;
-	int ret;
-
-	buf = kmalloc(BARRACUDA_REPORT_SIZE, GFP_KERNEL);
-	if (!buf)
-		return;
-	spin_lock_irqsave(&b->lock, flags);
-	if (b->stopped || b->state.linked != BARRACUDA_UNKNOWN ||
-	    b->attempts >= BARRACUDA_LINK_ATTEMPTS) {
-		spin_unlock_irqrestore(&b->lock, flags);
-		kfree(buf);
-		return;
-	}
-	b->attempts++;
-	barracuda_fill(buf, BARRACUDA_FAMILY_LINK, b->attempts, query,
-		       sizeof(query));
-	spin_unlock_irqrestore(&b->lock, flags);
-
-	ret = hid_hw_output_report(b->hdev, buf, BARRACUDA_REPORT_SIZE);
-	kfree(buf);
-
-	spin_lock_irqsave(&b->lock, flags);
-	if (ret == BARRACUDA_REPORT_SIZE && !b->stopped &&
-	    b->state.linked == BARRACUDA_UNKNOWN &&
-	    b->attempts < BARRACUDA_LINK_ATTEMPTS)
-		schedule_delayed_work(&b->link_work, BARRACUDA_LINK_DELAY);
-	spin_unlock_irqrestore(&b->lock, flags);
-}
-
 /* Send one query and wait for its matching reply. */
 static int barracuda_request(struct barracuda *b, u8 family, const u8 *payload,
 			     u8 len, u8 reply_command, u8 reply_param)
@@ -601,6 +559,11 @@ static int barracuda_request(struct barracuda *b, u8 family, const u8 *payload,
 	barracuda_fill(buf, family, b->seq, payload, len);
 
 	spin_lock_irqsave(&b->lock, flags);
+	if (b->stopping && !b->restoring_route) {
+		spin_unlock_irqrestore(&b->lock, flags);
+		kfree(buf);
+		return -ESHUTDOWN;
+	}
 	b->read_length = family == BARRACUDA_FAMILY_DIAG &&
 			 payload[0] == 0x25;
 	b->want_family = family;
@@ -638,6 +601,37 @@ static int barracuda_get(struct barracuda *b, u8 command)
 				 command, 0);
 }
 
+/* Serialize the entire startup exchange, including its response wait. */
+static void barracuda_link_query(struct work_struct *work)
+{
+	struct barracuda *b = container_of(to_delayed_work(work),
+					   struct barracuda, link_work);
+	unsigned long flags, next, now;
+
+	mutex_lock(&b->route_lock);
+	spin_lock_irqsave(&b->lock, flags);
+	if (b->stopping || b->state.linked != BARRACUDA_UNKNOWN ||
+	    b->attempts >= BARRACUDA_LINK_ATTEMPTS) {
+		spin_unlock_irqrestore(&b->lock, flags);
+		goto out;
+	}
+	b->attempts++;
+	next = jiffies + BARRACUDA_LINK_DELAY;
+	spin_unlock_irqrestore(&b->lock, flags);
+
+	barracuda_get(b, BARRACUDA_CMD_GET_LINK);
+
+	spin_lock_irqsave(&b->lock, flags);
+	now = jiffies;
+	if (!b->stopping && b->state.linked == BARRACUDA_UNKNOWN &&
+	    b->attempts < BARRACUDA_LINK_ATTEMPTS)
+		schedule_delayed_work(&b->link_work,
+				      time_before(now, next) ? next - now : 0);
+	spin_unlock_irqrestore(&b->lock, flags);
+out:
+	mutex_unlock(&b->route_lock);
+}
+
 /* E1 selects the volatile destination of diagnostic queries; E0 reads it. */
 static int barracuda_set_route(struct barracuda *b, u8 route)
 {
@@ -669,8 +663,14 @@ static int barracuda_route_begin(struct barracuda *b, bool *selected)
 	spin_lock_irqsave(&b->lock, flags);
 	failed = b->route_failed;
 	spin_unlock_irqrestore(&b->lock, flags);
-	if (failed)
-		return -EIO;
+	if (failed) {
+		/* A link event is not evidence that route restoration succeeded. */
+		if (barracuda_get(b, BARRACUDA_CMD_GET_ROUTE) != BARRACUDA_ROUTE_LOCAL)
+			return -EIO;
+		spin_lock_irqsave(&b->lock, flags);
+		b->route_failed = false;
+		spin_unlock_irqrestore(&b->lock, flags);
+	}
 	transport = barracuda_get(b, BARRACUDA_CMD_GET_TRANSPORT);
 	if (transport < 0 || !(transport & BARRACUDA_TRANSPORT_HEADSET) ||
 	    barracuda_get(b, BARRACUDA_CMD_GET_ROUTE) != BARRACUDA_ROUTE_LOCAL)
@@ -681,7 +681,7 @@ static int barracuda_route_begin(struct barracuda *b, bool *selected)
 
 /*
  * Restore the local route, retrying once. If that fails, stop using the
- * route until the next confirmed link. Returns false on failure.
+ * route until a query verifies it is local. Returns false on failure.
  */
 static bool barracuda_route_end(struct barracuda *b, bool selected)
 {
@@ -695,6 +695,9 @@ static bool barracuda_route_end(struct barracuda *b, bool selected)
 	b->restoring_route = true;
 	for (attempt = 0; attempt < 2; attempt++) {
 		if (!barracuda_set_route(b, BARRACUDA_ROUTE_LOCAL)) {
+			spin_lock_irqsave(&b->lock, flags);
+			b->route_failed = false;
+			spin_unlock_irqrestore(&b->lock, flags);
 			b->restoring_route = false;
 			return true;
 		}
@@ -1146,15 +1149,15 @@ static void barracuda_stop(struct barracuda *b)
 	spin_lock_irqsave(&b->lock, flags);
 	b->stopping = true;
 	spin_unlock_irqrestore(&b->lock, flags);
+	cancel_delayed_work_sync(&b->link_work);
 	cancel_delayed_work_sync(&b->refresh_work);
-	/* Wait for an explicit power-off to finish restoring the route. */
+	/* Wait for an explicit control to finish restoring the route. */
 	mutex_lock(&b->route_lock);
 	mutex_unlock(&b->route_lock);
 
 	spin_lock_irqsave(&b->lock, flags);
 	b->stopped = true;
 	spin_unlock_irqrestore(&b->lock, flags);
-	cancel_delayed_work_sync(&b->link_work);
 	cancel_work_sync(&b->supply_work);
 }
 

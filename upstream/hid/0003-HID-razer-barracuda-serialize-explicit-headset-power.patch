@@ -1,7 +1,8 @@
-From 49e3d2e8e9cb7bb975923a8125e6399fd8e7f097 Mon Sep 17 00:00:00 2001
+From 86d7a79859ff9d4a9af4002ffbbb14f6e3c4f1d9 Mon Sep 17 00:00:00 2001
 From: Luis Atala <luis.atala@gmail.com>
 Date: Tue, 29 Sep 2026 17:25:48 -0300
-Subject: [PATCH] HID: razer-barracuda: serialize explicit headset power-off
+Subject: [PATCH 3/4] HID: razer-barracuda: serialize explicit headset
+ power-off
 
 Expose a write-only headset_poweroff attribute. A write of 1 checks a
 confirmed link and existing diagnostic transport, sends the validated MMI
@@ -14,14 +15,14 @@ Assisted-by: LLM [OpenAI Codex]
 ---
  .../testing/sysfs-driver-hid-razer-barracuda  | 16 ++++
  MAINTAINERS                                   |  1 +
- drivers/hid/hid-razer-barracuda-test.c        | 63 +++++++++++++
- drivers/hid/hid-razer-barracuda.c             | 92 +++++++++++++++++--
- 4 files changed, 165 insertions(+), 7 deletions(-)
+ drivers/hid/hid-razer-barracuda-test.c        | 63 ++++++++++++++
+ drivers/hid/hid-razer-barracuda.c             | 82 +++++++++++++++++--
+ 4 files changed, 157 insertions(+), 5 deletions(-)
  create mode 100644 Documentation/ABI/testing/sysfs-driver-hid-razer-barracuda
 
 diff --git a/Documentation/ABI/testing/sysfs-driver-hid-razer-barracuda b/Documentation/ABI/testing/sysfs-driver-hid-razer-barracuda
 new file mode 100644
-index 000000000..d7de28e7c
+index 0000000..d7de28e
 --- /dev/null
 +++ b/Documentation/ABI/testing/sysfs-driver-hid-razer-barracuda
 @@ -0,0 +1,16 @@
@@ -42,7 +43,7 @@ index 000000000..d7de28e7c
 +                rejected. This attribute is write-only and root-owned;
 +                administrators may grant access through local policy.
 diff --git a/MAINTAINERS b/MAINTAINERS
-index e06a07999..945add40e 100644
+index e06a079..945add4 100644
 --- a/MAINTAINERS
 +++ b/MAINTAINERS
 @@ -11647,6 +11647,7 @@ HID RAZER BARRACUDA X DRIVER
@@ -54,11 +55,11 @@ index e06a07999..945add40e 100644
  
  HID SENSOR HUB DRIVERS
 diff --git a/drivers/hid/hid-razer-barracuda-test.c b/drivers/hid/hid-razer-barracuda-test.c
-index 95182c585..787520b24 100644
+index 68b8e37..0f5695d 100644
 --- a/drivers/hid/hid-razer-barracuda-test.c
 +++ b/drivers/hid/hid-razer-barracuda-test.c
-@@ -394,6 +394,66 @@ static void barracuda_test_match_reply(struct kunit *test)
- 	KUNIT_EXPECT_EQ(test, b->reply_value, 4200);
+@@ -553,6 +553,66 @@ static void barracuda_test_failed_route(struct kunit *test)
+ 	mutex_unlock(&b->route_lock);
  }
  
 +static void barracuda_test_poweroff(struct kunit *test)
@@ -122,9 +123,9 @@ index 95182c585..787520b24 100644
 +}
 +
  static struct kunit_case barracuda_test_cases[] = {
- 	KUNIT_CASE(barracuda_test_split),
- 	KUNIT_CASE(barracuda_test_values),
-@@ -409,6 +469,9 @@ static struct kunit_case barracuda_test_cases[] = {
+ 	KUNIT_CASE(barracuda_test_startup_transaction),
+ 	KUNIT_CASE(barracuda_test_stopping_transaction),
+@@ -571,6 +631,9 @@ static struct kunit_case barracuda_test_cases[] = {
  	KUNIT_CASE(barracuda_test_voltage),
  	KUNIT_CASE(barracuda_test_ack),
  	KUNIT_CASE(barracuda_test_match_reply),
@@ -135,7 +136,7 @@ index 95182c585..787520b24 100644
  };
  
 diff --git a/drivers/hid/hid-razer-barracuda.c b/drivers/hid/hid-razer-barracuda.c
-index 6cae76c17..86fdabacf 100644
+index 20c7052..7ae2284 100644
 --- a/drivers/hid/hid-razer-barracuda.c
 +++ b/drivers/hid/hid-razer-barracuda.c
 @@ -45,6 +45,7 @@
@@ -154,15 +155,7 @@ index 6cae76c17..86fdabacf 100644
  	u8 want_family;
  	u8 want_seq;
  	u8 want_command;
-@@ -138,6 +140,7 @@ struct barracuda {
- 
- 	/* Serializes query sequences and protects seq. */
- 	struct mutex route_lock;
-+	bool restoring_route;
- 	u8 seq;
- 
- 	/* Serializes battery registration; battery exists only while linked. */
-@@ -331,6 +334,10 @@ static void barracuda_match_reply(struct barracuda *b, const u8 *p,
+@@ -330,6 +332,10 @@ static void barracuda_match_reply(struct barracuda *b, const u8 *p,
  		}
  		if (ret == -2) {
  			ret = -EPROTO;
@@ -173,7 +166,7 @@ index 6cae76c17..86fdabacf 100644
  		} else if (b->want_family == BARRACUDA_FAMILY_DIAG) {
  			ret = barracuda_voltage_mv(result, ret);
  			if (ret < 0)
-@@ -508,9 +515,10 @@ static void barracuda_link_query(struct work_struct *work)
+@@ -467,9 +473,10 @@ static void barracuda_fill(u8 *buf, u8 family, u8 seq, const u8 *payload,
  static int barracuda_request(struct barracuda *b, u8 family, const u8 *payload,
  			     u8 len, u8 reply_command, u8 reply_param)
  {
@@ -185,16 +178,16 @@ index 6cae76c17..86fdabacf 100644
  
  	lockdep_assert_held(&b->route_lock);
  
-@@ -524,6 +532,8 @@ static int barracuda_request(struct barracuda *b, u8 family, const u8 *payload,
- 	barracuda_fill(buf, family, b->seq, payload, len);
- 
- 	spin_lock_irqsave(&b->lock, flags);
+@@ -488,6 +495,8 @@ static int barracuda_request(struct barracuda *b, u8 family, const u8 *payload,
+ 		kfree(buf);
+ 		return -ESHUTDOWN;
+ 	}
 +	b->read_length = family == BARRACUDA_FAMILY_DIAG &&
 +			 payload[0] == 0x25;
  	b->want_family = family;
  	b->want_seq = b->seq;
  	b->want_command = reply_command;
-@@ -536,13 +546,19 @@ static int barracuda_request(struct barracuda *b, u8 family, const u8 *payload,
+@@ -500,13 +509,19 @@ static int barracuda_request(struct barracuda *b, u8 family, const u8 *payload,
  
  	ret = hid_hw_output_report(b->hdev, buf, BARRACUDA_REPORT_SIZE);
  	kfree(buf);
@@ -218,24 +211,7 @@ index 6cae76c17..86fdabacf 100644
  	spin_unlock_irqrestore(&b->lock, flags);
  	return ret;
  }
-@@ -607,9 +623,14 @@ static bool barracuda_route_end(struct barracuda *b, bool selected)
- 
- 	if (!selected)
- 		return true;
--	for (attempt = 0; attempt < 2; attempt++)
--		if (!barracuda_set_route(b, BARRACUDA_ROUTE_LOCAL))
-+	b->restoring_route = true;
-+	for (attempt = 0; attempt < 2; attempt++) {
-+		if (!barracuda_set_route(b, BARRACUDA_ROUTE_LOCAL)) {
-+			b->restoring_route = false;
- 			return true;
-+		}
-+	}
-+	b->restoring_route = false;
- 	spin_lock_irqsave(&b->lock, flags);
- 	b->route_failed = true;
- 	spin_unlock_irqrestore(&b->lock, flags);
-@@ -686,6 +707,59 @@ static void barracuda_refresh(struct work_struct *work)
+@@ -695,6 +710,59 @@ static void barracuda_refresh(struct work_struct *work)
  				   BARRACUDA_POLL_INTERVAL);
  }
  
@@ -295,17 +271,17 @@ index 6cae76c17..86fdabacf 100644
  static const enum power_supply_property barracuda_properties[] = {
  	POWER_SUPPLY_PROP_PRESENT,
  	POWER_SUPPLY_PROP_STATUS,
-@@ -923,6 +997,9 @@ static void barracuda_stop(struct barracuda *b)
- 	b->stopping = true;
+@@ -933,6 +1001,9 @@ static void barracuda_stop(struct barracuda *b)
  	spin_unlock_irqrestore(&b->lock, flags);
+ 	cancel_delayed_work_sync(&b->link_work);
  	cancel_delayed_work_sync(&b->refresh_work);
-+	/* Wait for an explicit power-off to finish restoring the route. */
++	/* Wait for an explicit control to finish restoring the route. */
 +	mutex_lock(&b->route_lock);
 +	mutex_unlock(&b->route_lock);
  
  	spin_lock_irqsave(&b->lock, flags);
  	b->stopped = true;
-@@ -996,6 +1073,7 @@ static struct hid_driver barracuda_driver = {
+@@ -1005,6 +1076,7 @@ static struct hid_driver barracuda_driver = {
  	.suspend = pm_ptr(barracuda_suspend),
  	.resume = pm_ptr(barracuda_resume),
  	.reset_resume = pm_ptr(barracuda_resume),
@@ -314,5 +290,5 @@ index 6cae76c17..86fdabacf 100644
  module_hid_driver(barracuda_driver);
  
 -- 
-2.55.0
+2.56.0
 

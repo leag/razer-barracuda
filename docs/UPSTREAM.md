@@ -107,3 +107,35 @@ the full KUnit run (23 tests including KUnit framework tests), the DKMS W=1
 build and the built-in W=1/C=2 check. Strict checkpatch reports only the missing
 user DCO sign-off. The new mailbox and the remaining setters still need
 physical validation; the raw-HID Default/Game EQ comparison was audible.
+
+## Current driver hardening validation
+
+On 2026-10-05, against `145c2b2e9`, the regenerated series passed KUnit
+under QEMU x86_64 with KASAN, UBSAN and lockdep: 13 tests after patch 1,
+21 after patch 2, 24 after patch 3 and 26 after patch 4 (including framework
+tests). Every patch prefix passed built-in and module `W=1 C=2` object builds.
+The DKMS source built at `W=1` against `7.2.9-1-cachyos`. Strict checkpatch
+reported only the intentionally missing user DCO sign-offs. The Python/QML
+suite passed 105 tests, and Python syntax compilation passed.
+
+The changes serialize startup E3 with other driver transactions, retain bounded
+startup retries after output failure, reject new normal requests during stopping,
+and require verified local mode before clearing a route-restoration failure.
+Fake transport tests exercise the real reply matcher and cleanup paths. Pairing
+now ignores route data received before its matching ACK, but raw pairing still
+has no kernel arbitration. These checks do not establish concurrent pairing
+safety or physical-device behavior. These isolated checks preceded deployment.
+
+The same source was subsequently installed through DKMS as local build
+`0.5.1.local1` on `7.2.9-1-cachyos`, and the loaded module identity matched the
+installed build. After the HID reload, native telemetry reported 76% and
+4.020 V, with no driver errors observed in the recent kernel log. The user
+reported that the new version appeared to work. The previous LTS installation
+was retained. This confirms basic startup/telemetry recovery only; suspension,
+all setters, power-off and concurrent pairing have not been physically validated.
+
+The pairing ACK fix was also deployed as local Arch package `barracuda-pair
+0.5.1-1.1`. All 17 pairing tests passed against the installed Python module
+using a fake dongle, and its source matched the checkout. The installed passive
+link helper reported a connected USB headset and 76% battery. This deployment
+did not reload the driver or perform a physical pairing operation.
