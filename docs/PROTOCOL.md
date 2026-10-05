@@ -18,7 +18,7 @@ sequenceDiagram
     participant S as Barracuda headset
 
     Note over H,D: HID interface 3 · OUT 0x03 · IN 0x84<br/>Request: 01 80 LEN 50 41 FAMILY SEQ ...
-    Note over H,D: Family 0e ACK echoes host SEQ<br/>Data uses a device counter; accept after matching ACK<br/>Reassemble fragmented data before parsing
+    Note over H,D: Family 0e ACK echoes host SEQ<br/>Data uses a device counter<br/> accept after matching ACK<br/>Reassemble fragmented data before parsing
 
     rect rgb(235, 245, 255)
         Note over H,D: Initial wireless-link query
@@ -26,7 +26,7 @@ sequenceDiagram
         D-->>H: ACK: family 0e, SS OR 0x80, status
         D-->>H: E3 data: e3 00 / e3 01
         Note over H: Validate prefix 01 80 0c 50 49 0e<br/>and bytes 11–13 = 02 00 e3<br/>Byte 14: 00 disconnected, 01 connected
-        Note over H,D: Maximum 3 attempts, 2 seconds apart<br/>Stop on valid status; timeout leaves link unknown
+        Note over H,D: Maximum 3 attempts, 2 seconds apart<br/>Stop on valid status<br/> timeout leaves link unknown
     end
 
     rect rgb(240, 255, 240)
@@ -36,7 +36,7 @@ sequenceDiagram
         Note over H: Validate prefix 01 80 0e 50 49<br/>and bytes 11–15 = 04 00 20 02 01<br/>Byte 16: 00 disconnected, 01 connected
         S-->>D: Battery / cable update
         D-->>H: Family 08: 21 02 01 VV / 2a 02 01 VV
-        Note over H: Battery: 0–100%; cable: 00 / 01<br/>Neither is link evidence
+        Note over H: Battery: 0–100%<br/> cable: 00 / 01<br/>Neither is link evidence
     end
 
     opt Telemetry refresh with confirmed link
