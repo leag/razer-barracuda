@@ -3,7 +3,7 @@
 # attached to GitHub releases.
 pkgbase=barracuda-pair
 pkgname=(barracuda-pair hid-razer-barracuda-dkms plasma6-applets-barracuda)
-pkgver=0.5.0
+pkgver=0.5.1
 pkgrel=1
 pkgdesc="Pairing utility and HID driver for the Razer Barracuda X (2022) HyperSpeed 2.4 GHz wireless dongle"
 arch=(any)

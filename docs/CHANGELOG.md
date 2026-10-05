@@ -1,6 +1,6 @@
 # Change history
 
-## Unreleased
+## v0.5.1
 
 - Turn the Plasma widget into **Barracuda Headset**, focused on the headset
   connection instead of the default output. It shows connected (USB dongle,
@@ -15,6 +15,10 @@
   emblem, and use the driver's battery reading when KDE does not list it.
 - Native headset settings follow the confirmed USB or Bluetooth link, using the
   default output only when both or neither is confirmed.
+
+- Size the panel headset artwork with Breeze's `smallMedium` icon size.
+- Complete the static research documentation for dongle-to-headset commands
+  and voice prompts, with an evidence index and explicit unresolved fields.
 
 ## v0.5.0
 
