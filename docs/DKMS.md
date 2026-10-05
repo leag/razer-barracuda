@@ -64,7 +64,24 @@ see [battery and cable queries](PROTOCOL.md#battery-and-cable-queries)):
 - It sends GET `0x21` (battery) and GET `0x2a` (cable): `PA 08 SEQ 03 PARAM 00 00`.
 - It reads the voltage with family-6 `0x31`, exposed as `voltage_now`.
 - It always restores `E1 00` and verifies E0 `00`, retrying once. If that fails,
-  periodic refreshes stop until the next link.
+  that refresh stops. A later refresh or control request must first verify E0
+  `00` before attempting another remote transaction; a link event alone does
+  not clear the failure. If the route remains remote or verification fails,
+  reconnect the dongle before retrying.
+
+Startup E3 exchanges use the same mutex and reply matcher as telemetry and
+controls. There are at most three startup attempts, spaced at least two seconds
+apart (active transactions may delay them), and failed queries leave the link
+unknown. Suspension/removal rejects new normal requests, waits for active
+transactions and bounded route cleanup, then stops input processing. Cleanup
+never retries a settings SET or power-off command.
+
+Pairing and scanning still use raw HID. Their per-user lock excludes this user's
+control helpers, but does not exclude automatic kernel queries or another user.
+The driver mutex does not make concurrent raw pairing safe. This coordination
+remains unresolved; the userspace-separation proposal is deferred. Pairing now
+requires a matching ACK before accepting a route-command data reply, which
+improves response validation but does not provide ownership of the device.
 
 Replies are `PARAM 01 01 VALUE` and are decoded like the headset's own
 `PARAM 02 01 VALUE` reports. The GET returned 100% on a fully charged headset,

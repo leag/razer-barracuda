@@ -76,8 +76,9 @@ sudo udevadm control --reload-rules
 ```
 
 Reconnect the dongle. Add `~/.local/bin` to your desktop session's `PATH` to use
-pairing from the widget. This installer copies only the pairing modules and CLI
-launcher; it does not install the driver or the other headset helpers.
+pairing from the widget. This installer copies the Python helper modules and creates the
+`barracuda-pair`, `barracuda-power` and `barracuda-headset` launchers. It does
+not install the driver or Plasma widget.
 
 To install the Plasma widget with its dependencies already available:
 
@@ -145,7 +146,7 @@ Turn the headset back on with its physical button.
 | Headset controls | [Native settings and audio tuning](docs/AUDIO_EFFECTS.md), [Bluetooth controls](docs/BLUETOOTH_CONTROLS.md) |
 | Linux integration | [HID driver and DKMS](docs/DKMS.md), [jack detection](docs/JACK_DETECTION.md), [architecture](docs/ARCHITECTURE.md) |
 | Protocol and research | [Protocol observations](docs/PROTOCOL.md), [firmware research index](docs/FIRMWARE_ANALYSIS.md#research-index-and-completed-static-analysis-scope), [dongle-to-headset commands](docs/DONGLE_HEADSET_COMMANDS.md), [voice prompts](docs/VOICE_PROMPT_ANALYSIS.md) |
-| Design proposals | [Separating controls into userspace](docs/CONTROL_SEPARATION_SPEC.md) |
+| Design proposals | [Separating controls into userspace](docs/CONTROL_SEPARATION_SPEC.md), [implementation plan](docs/CONTROL_SEPARATION_PLAN.md) |
 | Project development | [Contributing](CONTRIBUTING.md), [kernel submission](docs/UPSTREAM.md), [releasing](docs/RELEASING.md), [change history](docs/CHANGELOG.md) |
 
 ## Development

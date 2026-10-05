@@ -211,7 +211,8 @@ class PairingSession:
                     raise PairingError(tr("The adapter rejected command {frame}",
                                           frame=frame.hex(" ")))
                 ack = message.data[3:]
-            elif (reply_command is not None and message.klass == CLASS_LINK
+            elif (ack is not None and reply_command is not None
+                  and message.klass == CLASS_LINK
                   and message.data[:1] == bytes([reply_command])):
                 reply = message.data[1:]
             if reply_command is None and ack is not None:

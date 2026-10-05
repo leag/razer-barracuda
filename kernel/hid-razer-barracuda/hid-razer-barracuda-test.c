@@ -394,6 +394,165 @@ static void barracuda_test_match_reply(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, b->reply_value, 4200);
 }
 
+/* A fake transport checks locking and answers through the real reply matcher. */
+struct barracuda_test_transport {
+	struct barracuda b;
+	struct kunit *test;
+	unsigned int writes;
+	bool fail;
+	u8 route;
+};
+
+static int barracuda_test_output(struct hid_device *hdev, u8 *buf, size_t len)
+{
+	struct barracuda *b = hid_get_drvdata(hdev);
+	struct barracuda_test_transport *t = container_of(b, typeof(*t), b);
+	u8 ack[] = { 0x50, 0x49, 1, 0, 0, 0, 0, 0, 3, 0, 0x0e, 0, 0 };
+	u8 data[] = { 0x50, 0x49, 0x0e, 0, 0, 0, 0, 0, 2, 0, 0, 0 };
+	unsigned long flags;
+
+	KUNIT_EXPECT_TRUE(t->test, mutex_is_locked(&b->route_lock));
+	t->writes++;
+	if (t->fail)
+		return -EIO;
+	ack[11] = buf[6] | 0x80;
+	data[10] = buf[8];
+	switch (buf[8]) {
+	case BARRACUDA_CMD_GET_LINK:
+		data[11] = 1;
+		break;
+	case BARRACUDA_CMD_GET_TRANSPORT:
+		data[11] = BARRACUDA_TRANSPORT_HEADSET;
+		break;
+	case BARRACUDA_CMD_SET_ROUTE:
+		t->route = buf[9];
+		break;
+	case BARRACUDA_CMD_GET_ROUTE:
+		data[11] = t->route;
+		break;
+	}
+	spin_lock_irqsave(&b->lock, flags);
+	barracuda_frame(b, ack, sizeof(ack));
+	barracuda_frame(b, data, sizeof(data));
+	spin_unlock_irqrestore(&b->lock, flags);
+	return len;
+}
+
+static const struct hid_ll_driver barracuda_test_ll = {
+	.output_report = barracuda_test_output,
+};
+
+static void barracuda_test_destroy_hid(void *data)
+{
+	hid_destroy_device(data);
+}
+
+static struct barracuda_test_transport *barracuda_test_transport_alloc(struct kunit *test)
+{
+	struct barracuda_test_transport *t;
+	struct hid_device *hdev;
+	int ret;
+
+	t = kunit_kzalloc(test, sizeof(*t), GFP_KERNEL);
+	KUNIT_ASSERT_NOT_NULL(test, t);
+	hdev = hid_allocate_device();
+	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, hdev);
+	ret = kunit_add_action_or_reset(test, barracuda_test_destroy_hid, hdev);
+	KUNIT_ASSERT_EQ(test, ret, 0);
+	t->test = test;
+	barracuda_init(&t->b, hdev);
+	hid_set_drvdata(hdev, &t->b);
+	hdev->ll_driver = &barracuda_test_ll;
+	return t;
+}
+
+static void barracuda_test_startup_transaction(struct kunit *test)
+{
+	struct barracuda_test_transport *t = barracuda_test_transport_alloc(test);
+	struct barracuda *b = &t->b;
+	unsigned int i;
+
+	barracuda_link_query(&b->link_work.work);
+	KUNIT_EXPECT_EQ(test, t->writes, 1);
+	KUNIT_EXPECT_EQ(test, b->state.linked, 1);
+	KUNIT_EXPECT_FALSE(test, b->waiting);
+	KUNIT_EXPECT_FALSE(test, delayed_work_pending(&b->link_work));
+
+	barracuda_state_reset(&b->state);
+	b->attempts = 0;
+	t->writes = 0;
+	t->fail = true;
+	for (i = 0; i < BARRACUDA_LINK_ATTEMPTS; i++) {
+		barracuda_link_query(&b->link_work.work);
+		KUNIT_EXPECT_EQ(test, b->state.linked, BARRACUDA_UNKNOWN);
+		KUNIT_EXPECT_EQ(test, delayed_work_pending(&b->link_work),
+				i + 1 < BARRACUDA_LINK_ATTEMPTS);
+		cancel_delayed_work_sync(&b->link_work);
+	}
+	barracuda_link_query(&b->link_work.work);
+	KUNIT_EXPECT_EQ(test, t->writes, BARRACUDA_LINK_ATTEMPTS);
+}
+
+static void barracuda_test_stopping_transaction(struct kunit *test)
+{
+	struct barracuda_test_transport *t = barracuda_test_transport_alloc(test);
+	struct barracuda *b = &t->b;
+
+	b->stopping = true;
+	barracuda_link_query(&b->link_work.work);
+	KUNIT_EXPECT_EQ(test, b->attempts, 0);
+	mutex_lock(&b->route_lock);
+	KUNIT_EXPECT_EQ(test, barracuda_get(b, BARRACUDA_CMD_GET_LINK), -ESHUTDOWN);
+	KUNIT_EXPECT_EQ(test, t->writes, 0);
+	/* Cleanup remains possible while normal requests are rejected. */
+	t->route = BARRACUDA_ROUTE_REMOTE;
+	KUNIT_EXPECT_TRUE(test, barracuda_route_end(b, true));
+	KUNIT_EXPECT_EQ(test, t->writes, 2);
+	KUNIT_EXPECT_EQ(test, t->route, BARRACUDA_ROUTE_LOCAL);
+	KUNIT_EXPECT_FALSE(test, b->restoring_route);
+	mutex_unlock(&b->route_lock);
+}
+
+static void barracuda_test_failed_route(struct kunit *test)
+{
+	struct barracuda_test_transport *t = barracuda_test_transport_alloc(test);
+	struct barracuda *b = &t->b;
+	unsigned long flags;
+	bool selected;
+
+	t->fail = true;
+	mutex_lock(&b->route_lock);
+	KUNIT_EXPECT_FALSE(test, barracuda_route_end(b, true));
+	KUNIT_EXPECT_EQ(test, t->writes, 2);
+	KUNIT_EXPECT_TRUE(test, b->route_failed);
+	KUNIT_EXPECT_FALSE(test, b->restoring_route);
+	mutex_unlock(&b->route_lock);
+	t->fail = false;
+	t->writes = 0;
+	spin_lock_irqsave(&b->lock, flags);
+	barracuda_event(b, BARRACUDA_LINK, 1);
+	spin_unlock_irqrestore(&b->lock, flags);
+	KUNIT_EXPECT_TRUE(test, b->route_failed);
+
+	mutex_lock(&b->route_lock);
+	t->route = BARRACUDA_ROUTE_REMOTE;
+	KUNIT_EXPECT_EQ(test, barracuda_route_begin(b, &selected), -EIO);
+	KUNIT_EXPECT_FALSE(test, selected);
+	KUNIT_EXPECT_TRUE(test, b->route_failed);
+	KUNIT_EXPECT_EQ(test, t->writes, 1);
+	/* A failed verification must not clear the latch either. */
+	t->fail = true;
+	KUNIT_EXPECT_EQ(test, barracuda_route_begin(b, &selected), -EIO);
+	KUNIT_EXPECT_TRUE(test, b->route_failed);
+	t->fail = false;
+	t->route = BARRACUDA_ROUTE_LOCAL;
+	KUNIT_EXPECT_EQ(test, barracuda_route_begin(b, &selected), 0);
+	KUNIT_EXPECT_TRUE(test, selected);
+	KUNIT_EXPECT_FALSE(test, b->route_failed);
+	KUNIT_EXPECT_TRUE(test, barracuda_route_end(b, selected));
+	mutex_unlock(&b->route_lock);
+}
+
 static void barracuda_test_poweroff(struct kunit *test)
 {
 	static const u8 payload[] = { 0x08, 0x00, 0x02 };
@@ -510,6 +669,9 @@ static void barracuda_test_settings_reply(struct kunit *test)
 static struct kunit_case barracuda_test_cases[] = {
 	KUNIT_CASE(barracuda_test_settings_allowlist),
 	KUNIT_CASE(barracuda_test_settings_reply),
+	KUNIT_CASE(barracuda_test_startup_transaction),
+	KUNIT_CASE(barracuda_test_stopping_transaction),
+	KUNIT_CASE(barracuda_test_failed_route),
 	KUNIT_CASE(barracuda_test_split),
 	KUNIT_CASE(barracuda_test_values),
 	KUNIT_CASE(barracuda_test_link_query),

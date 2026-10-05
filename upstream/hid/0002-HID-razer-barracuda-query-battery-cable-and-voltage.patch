@@ -1,7 +1,7 @@
-From f2a67f56ff6411a8c9dff91ef309b093a8cd6c42 Mon Sep 17 00:00:00 2001
+From 470a7dd0b7451218d88f94b5412dbb15c7fa23bd Mon Sep 17 00:00:00 2001
 From: Luis Atala <luis.atala@gmail.com>
 Date: Thu, 24 Sep 2026 14:13:40 -0300
-Subject: [PATCH 2/3] HID: razer-barracuda: query battery, cable and voltage
+Subject: [PATCH 2/4] HID: razer-barracuda: query battery, cable and voltage
 
 The headset reports its battery percentage only when it changes, and its
 cable state only when the cable is plugged in or out. After the headset
@@ -19,8 +19,10 @@ a cable change and every six minutes while linked:
 - restore the local route (E1 00) and verify it.
 
 If the local route cannot be restored after one retry, stop using the
-route until the next confirmed link. Sequences are serialized by a mutex
-and use their own range of sequence numbers.
+route until an E0 query verifies local mode. Startup E3 exchanges share
+the route mutex and reply matcher, preventing their responses from
+overlapping a remote transaction. Stop admits cleanup only once suspend
+or removal begins.
 
 Replies to the GETs are decoded like the headset's own reports. A cable
 reply after a link is not a cable change, so it does not schedule
@@ -31,14 +33,14 @@ The GET frame layout comes from a userspace tool for the Barracuda 2.4
 (1532:053c).
 
 Link: https://github.com/TarikTopalovic/razer-barracuda-2.4-linux
-Assisted-by: LLM sparse
+Assisted-by: LLM [Codex]
 ---
- drivers/hid/hid-razer-barracuda-test.c | 162 +++++++++++
- drivers/hid/hid-razer-barracuda.c      | 371 ++++++++++++++++++++++++-
- 2 files changed, 521 insertions(+), 12 deletions(-)
+ drivers/hid/hid-razer-barracuda-test.c | 324 +++++++++++++++++++
+ drivers/hid/hid-razer-barracuda.c      | 420 +++++++++++++++++++++++--
+ 2 files changed, 712 insertions(+), 32 deletions(-)
 
 diff --git a/drivers/hid/hid-razer-barracuda-test.c b/drivers/hid/hid-razer-barracuda-test.c
-index d960add29..95182c585 100644
+index d960add..68b8e37 100644
 --- a/drivers/hid/hid-razer-barracuda-test.c
 +++ b/drivers/hid/hid-razer-barracuda-test.c
 @@ -19,6 +19,12 @@ static const u8 barracuda_test_e3[] = {
@@ -54,7 +56,7 @@ index d960add29..95182c585 100644
  static struct barracuda *barracuda_test_alloc(struct kunit *test)
  {
  	struct barracuda *b = kunit_kzalloc(test, sizeof(*b), GFP_KERNEL);
-@@ -237,6 +243,157 @@ static void barracuda_test_supply_action(struct kunit *test)
+@@ -237,7 +243,320 @@ static void barracuda_test_supply_action(struct kunit *test)
  			BARRACUDA_SUPPLY_NOTIFY);
  }
  
@@ -209,10 +211,173 @@ index d960add29..95182c585 100644
 +	KUNIT_EXPECT_EQ(test, b->reply_value, 4200);
 +}
 +
++/* A fake transport checks locking and answers through the real reply matcher. */
++struct barracuda_test_transport {
++	struct barracuda b;
++	struct kunit *test;
++	unsigned int writes;
++	bool fail;
++	u8 route;
++};
++
++static int barracuda_test_output(struct hid_device *hdev, u8 *buf, size_t len)
++{
++	struct barracuda *b = hid_get_drvdata(hdev);
++	struct barracuda_test_transport *t = container_of(b, typeof(*t), b);
++	u8 ack[] = { 0x50, 0x49, 1, 0, 0, 0, 0, 0, 3, 0, 0x0e, 0, 0 };
++	u8 data[] = { 0x50, 0x49, 0x0e, 0, 0, 0, 0, 0, 2, 0, 0, 0 };
++	unsigned long flags;
++
++	KUNIT_EXPECT_TRUE(t->test, mutex_is_locked(&b->route_lock));
++	t->writes++;
++	if (t->fail)
++		return -EIO;
++	ack[11] = buf[6] | 0x80;
++	data[10] = buf[8];
++	switch (buf[8]) {
++	case BARRACUDA_CMD_GET_LINK:
++		data[11] = 1;
++		break;
++	case BARRACUDA_CMD_GET_TRANSPORT:
++		data[11] = BARRACUDA_TRANSPORT_HEADSET;
++		break;
++	case BARRACUDA_CMD_SET_ROUTE:
++		t->route = buf[9];
++		break;
++	case BARRACUDA_CMD_GET_ROUTE:
++		data[11] = t->route;
++		break;
++	}
++	spin_lock_irqsave(&b->lock, flags);
++	barracuda_frame(b, ack, sizeof(ack));
++	barracuda_frame(b, data, sizeof(data));
++	spin_unlock_irqrestore(&b->lock, flags);
++	return len;
++}
++
++static const struct hid_ll_driver barracuda_test_ll = {
++	.output_report = barracuda_test_output,
++};
++
++static void barracuda_test_destroy_hid(void *data)
++{
++	hid_destroy_device(data);
++}
++
++static struct barracuda_test_transport *barracuda_test_transport_alloc(struct kunit *test)
++{
++	struct barracuda_test_transport *t;
++	struct hid_device *hdev;
++	int ret;
++
++	t = kunit_kzalloc(test, sizeof(*t), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, t);
++	hdev = hid_allocate_device();
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, hdev);
++	ret = kunit_add_action_or_reset(test, barracuda_test_destroy_hid, hdev);
++	KUNIT_ASSERT_EQ(test, ret, 0);
++	t->test = test;
++	barracuda_init(&t->b, hdev);
++	hid_set_drvdata(hdev, &t->b);
++	hdev->ll_driver = &barracuda_test_ll;
++	return t;
++}
++
++static void barracuda_test_startup_transaction(struct kunit *test)
++{
++	struct barracuda_test_transport *t = barracuda_test_transport_alloc(test);
++	struct barracuda *b = &t->b;
++	unsigned int i;
++
++	barracuda_link_query(&b->link_work.work);
++	KUNIT_EXPECT_EQ(test, t->writes, 1);
++	KUNIT_EXPECT_EQ(test, b->state.linked, 1);
++	KUNIT_EXPECT_FALSE(test, b->waiting);
++	KUNIT_EXPECT_FALSE(test, delayed_work_pending(&b->link_work));
++
++	barracuda_state_reset(&b->state);
++	b->attempts = 0;
++	t->writes = 0;
++	t->fail = true;
++	for (i = 0; i < BARRACUDA_LINK_ATTEMPTS; i++) {
++		barracuda_link_query(&b->link_work.work);
++		KUNIT_EXPECT_EQ(test, b->state.linked, BARRACUDA_UNKNOWN);
++		KUNIT_EXPECT_EQ(test, delayed_work_pending(&b->link_work),
++				i + 1 < BARRACUDA_LINK_ATTEMPTS);
++		cancel_delayed_work_sync(&b->link_work);
++	}
++	barracuda_link_query(&b->link_work.work);
++	KUNIT_EXPECT_EQ(test, t->writes, BARRACUDA_LINK_ATTEMPTS);
++}
++
++static void barracuda_test_stopping_transaction(struct kunit *test)
++{
++	struct barracuda_test_transport *t = barracuda_test_transport_alloc(test);
++	struct barracuda *b = &t->b;
++
++	b->stopping = true;
++	barracuda_link_query(&b->link_work.work);
++	KUNIT_EXPECT_EQ(test, b->attempts, 0);
++	mutex_lock(&b->route_lock);
++	KUNIT_EXPECT_EQ(test, barracuda_get(b, BARRACUDA_CMD_GET_LINK), -ESHUTDOWN);
++	KUNIT_EXPECT_EQ(test, t->writes, 0);
++	/* Cleanup remains possible while normal requests are rejected. */
++	t->route = BARRACUDA_ROUTE_REMOTE;
++	KUNIT_EXPECT_TRUE(test, barracuda_route_end(b, true));
++	KUNIT_EXPECT_EQ(test, t->writes, 2);
++	KUNIT_EXPECT_EQ(test, t->route, BARRACUDA_ROUTE_LOCAL);
++	KUNIT_EXPECT_FALSE(test, b->restoring_route);
++	mutex_unlock(&b->route_lock);
++}
++
++static void barracuda_test_failed_route(struct kunit *test)
++{
++	struct barracuda_test_transport *t = barracuda_test_transport_alloc(test);
++	struct barracuda *b = &t->b;
++	unsigned long flags;
++	bool selected;
++
++	t->fail = true;
++	mutex_lock(&b->route_lock);
++	KUNIT_EXPECT_FALSE(test, barracuda_route_end(b, true));
++	KUNIT_EXPECT_EQ(test, t->writes, 2);
++	KUNIT_EXPECT_TRUE(test, b->route_failed);
++	KUNIT_EXPECT_FALSE(test, b->restoring_route);
++	mutex_unlock(&b->route_lock);
++	t->fail = false;
++	t->writes = 0;
++	spin_lock_irqsave(&b->lock, flags);
++	barracuda_event(b, BARRACUDA_LINK, 1);
++	spin_unlock_irqrestore(&b->lock, flags);
++	KUNIT_EXPECT_TRUE(test, b->route_failed);
++
++	mutex_lock(&b->route_lock);
++	t->route = BARRACUDA_ROUTE_REMOTE;
++	KUNIT_EXPECT_EQ(test, barracuda_route_begin(b, &selected), -EIO);
++	KUNIT_EXPECT_FALSE(test, selected);
++	KUNIT_EXPECT_TRUE(test, b->route_failed);
++	KUNIT_EXPECT_EQ(test, t->writes, 1);
++	/* A failed verification must not clear the latch either. */
++	t->fail = true;
++	KUNIT_EXPECT_EQ(test, barracuda_route_begin(b, &selected), -EIO);
++	KUNIT_EXPECT_TRUE(test, b->route_failed);
++	t->fail = false;
++	t->route = BARRACUDA_ROUTE_LOCAL;
++	KUNIT_EXPECT_EQ(test, barracuda_route_begin(b, &selected), 0);
++	KUNIT_EXPECT_TRUE(test, selected);
++	KUNIT_EXPECT_FALSE(test, b->route_failed);
++	KUNIT_EXPECT_TRUE(test, barracuda_route_end(b, selected));
++	mutex_unlock(&b->route_lock);
++}
++
  static struct kunit_case barracuda_test_cases[] = {
++	KUNIT_CASE(barracuda_test_startup_transaction),
++	KUNIT_CASE(barracuda_test_stopping_transaction),
++	KUNIT_CASE(barracuda_test_failed_route),
  	KUNIT_CASE(barracuda_test_split),
  	KUNIT_CASE(barracuda_test_values),
-@@ -247,6 +404,11 @@ static struct kunit_case barracuda_test_cases[] = {
+ 	KUNIT_CASE(barracuda_test_link_query),
+@@ -247,6 +566,11 @@ static struct kunit_case barracuda_test_cases[] = {
  	KUNIT_CASE(barracuda_test_recovery),
  	KUNIT_CASE(barracuda_test_state),
  	KUNIT_CASE(barracuda_test_supply_action),
@@ -225,7 +390,7 @@ index d960add29..95182c585 100644
  };
  
 diff --git a/drivers/hid/hid-razer-barracuda.c b/drivers/hid/hid-razer-barracuda.c
-index 6a0a38d20..6cae76c17 100644
+index 6a0a38d..20c7052 100644
 --- a/drivers/hid/hid-razer-barracuda.c
 +++ b/drivers/hid/hid-razer-barracuda.c
 @@ -11,10 +11,12 @@
@@ -282,7 +447,7 @@ index 6a0a38d20..6cae76c17 100644
 +#define BARRACUDA_VOLTAGE_MIN_MV	2500
 +#define BARRACUDA_VOLTAGE_MAX_MV	4500
 +
-+/* Startup link queries use sequence numbers 1..3, refreshes 0x60..0x7f. */
++/* Serialized queries share one sequence range. */
  #define BARRACUDA_LINK_ATTEMPTS		3
 +#define BARRACUDA_SEQ_FIRST		0x60
 +#define BARRACUDA_SEQ_LAST		0x7f
@@ -295,7 +460,7 @@ index 6a0a38d20..6cae76c17 100644
  
  #define BARRACUDA_UNKNOWN		(-1)
  
-@@ -83,18 +105,40 @@ struct barracuda_state {
+@@ -83,18 +105,41 @@ struct barracuda_state {
  struct barracuda {
  	struct hid_device *hdev;
  
@@ -314,7 +479,7 @@ index 6a0a38d20..6cae76c17 100644
  	bool changed;
 +	bool refresh_due;
  	int jack_report;
-+	/* Set when the local route could not be restored, until the next link. */
++	/* Cleared only after the local route has been verified. */
 +	bool route_failed;
 +	/*
 +	 * The one outstanding query, matched in barracuda_match_reply(). Data
@@ -333,11 +498,12 @@ index 6a0a38d20..6cae76c17 100644
 +
 +	/* Serializes query sequences and protects seq. */
 +	struct mutex route_lock;
++	bool restoring_route;
 +	u8 seq;
  
  	/* Serializes battery registration; battery exists only while linked. */
  	struct mutex supply_lock;
-@@ -104,6 +148,7 @@ struct barracuda {
+@@ -104,6 +149,7 @@ struct barracuda {
  
  	struct input_dev *jack;
  	struct delayed_work link_work;
@@ -345,7 +511,7 @@ index 6a0a38d20..6cae76c17 100644
  	struct work_struct supply_work;
  };
  
-@@ -143,6 +188,12 @@ static bool barracuda_state_event(struct barracuda_state *s,
+@@ -143,6 +189,12 @@ static bool barracuda_state_event(struct barracuda_state *s,
  	return true;
  }
  
@@ -358,7 +524,7 @@ index 6a0a38d20..6cae76c17 100644
  /* An unknown link (startup, resume) neither registers nor removes the battery. */
  static enum barracuda_supply_action
  barracuda_supply_action(int linked, bool registered)
-@@ -163,9 +214,48 @@ static int barracuda_link_reply(const u8 *p, unsigned int size, u8 command)
+@@ -163,9 +215,48 @@ static int barracuda_link_reply(const u8 *p, unsigned int size, u8 command)
  	return p[11];
  }
  
@@ -372,9 +538,7 @@ index 6a0a38d20..6cae76c17 100644
 +	return p[13];
 +}
 +
- /*
-- * Decode link, battery and cable messages. Only the E3 reply and the 0x20
-- * report are link evidence.
++/*
 + * Acknowledgment FAMILY SEQ|80 STATUS RESULT. Returns the result length and
 + * sets *result, -1 if unrelated or -2 if the device reported a failure.
 + */
@@ -403,13 +567,15 @@ index 6a0a38d20..6cae76c17 100644
 +	return mv;
 +}
 +
-+/*
+ /*
+- * Decode link, battery and cable messages. Only the E3 reply and the 0x20
+- * report are link evidence.
 + * Decode link, battery and cable messages. Only the E3 reply and the
 + * unsolicited 0x20 report are link evidence; GET replies are not.
   */
  static bool barracuda_decode(const u8 *p, unsigned int size,
  			     enum barracuda_event *event, int *value)
-@@ -178,14 +268,15 @@ static bool barracuda_decode(const u8 *p, unsigned int size,
+@@ -178,14 +269,15 @@ static bool barracuda_decode(const u8 *p, unsigned int size,
  		return true;
  	}
  	if (size != 14 || p[2] != BARRACUDA_FAMILY_CUSTOMER || p[8] != 4 ||
@@ -427,7 +593,7 @@ index 6a0a38d20..6cae76c17 100644
  	case BARRACUDA_PARAM_BATTERY:
  		*event = BARRACUDA_CAPACITY;
  		return p[13] <= 100;
-@@ -200,12 +291,61 @@ static bool barracuda_decode(const u8 *p, unsigned int size,
+@@ -200,12 +292,59 @@ static bool barracuda_decode(const u8 *p, unsigned int size,
  static void barracuda_event(struct barracuda *b, enum barracuda_event event,
  			    int value)
  {
@@ -443,10 +609,8 @@ index 6a0a38d20..6cae76c17 100644
 +		b->refresh_due = true;
 +	if (event == BARRACUDA_LINK) {
  		b->jack_report = value;
-+		if (value == 1 && !b->stopping) {
++		if (value == 1 && !b->stopping)
 +			b->refresh_due = true;
-+			b->route_failed = false;
-+		}
 +	}
 +}
 +
@@ -491,7 +655,7 @@ index 6a0a38d20..6cae76c17 100644
  }
  
  static void barracuda_frame(struct barracuda *b, const u8 *p, unsigned int size)
-@@ -215,6 +355,7 @@ static void barracuda_frame(struct barracuda *b, const u8 *p, unsigned int size)
+@@ -215,6 +354,7 @@ static void barracuda_frame(struct barracuda *b, const u8 *p, unsigned int size)
  
  	if (barracuda_decode(p, size, &event, &value))
  		barracuda_event(b, event, value);
@@ -499,7 +663,7 @@ index 6a0a38d20..6cae76c17 100644
  }
  
  /*
-@@ -264,7 +405,7 @@ static int barracuda_raw_event(struct hid_device *hdev,
+@@ -264,7 +404,7 @@ static int barracuda_raw_event(struct hid_device *hdev,
  {
  	struct barracuda *b = hid_get_drvdata(hdev);
  	unsigned long flags;
@@ -508,7 +672,7 @@ index 6a0a38d20..6cae76c17 100644
  	int jack;
  
  	if (report->type != HID_INPUT_REPORT || size <= 0 ||
-@@ -283,6 +424,8 @@ static int barracuda_raw_event(struct hid_device *hdev,
+@@ -283,6 +423,8 @@ static int barracuda_raw_event(struct hid_device *hdev,
  	barracuda_feed(b, data, size);
  	b->fragment_at = jiffies;
  	changed = b->changed;
@@ -517,7 +681,7 @@ index 6a0a38d20..6cae76c17 100644
  	jack = b->jack_report;
  	b->jack_report = BARRACUDA_UNKNOWN;
  	spin_unlock_irqrestore(&b->lock, flags);
-@@ -295,6 +438,9 @@ static int barracuda_raw_event(struct hid_device *hdev,
+@@ -295,6 +437,9 @@ static int barracuda_raw_event(struct hid_device *hdev,
  	/* Registering and notifying the power supply may sleep. */
  	if (changed)
  		schedule_work(&b->supply_work);
@@ -527,7 +691,7 @@ index 6a0a38d20..6cae76c17 100644
  
  	/* Leave the report to hidraw and the media-key input path. */
  	return 0;
-@@ -303,16 +449,19 @@ static int barracuda_raw_event(struct hid_device *hdev,
+@@ -303,56 +448,251 @@ static int barracuda_raw_event(struct hid_device *hdev,
  static void barracuda_fill(u8 *buf, u8 family, u8 seq, const u8 *payload,
  			   u8 len)
  {
@@ -548,23 +712,28 @@ index 6a0a38d20..6cae76c17 100644
 +	memcpy(buf + start, payload, len);
  }
  
- /*
-@@ -355,11 +504,194 @@ static void barracuda_link_query(struct work_struct *work)
- 	spin_unlock_irqrestore(&b->lock, flags);
- }
- 
+-/*
+- * Ask for the link state (E3) until a valid state is known, at most
+- * BARRACUDA_LINK_ATTEMPTS times. A failed query leaves the state unknown;
+- * unsolicited link reports still update it.
+- */
+-static void barracuda_link_query(struct work_struct *work)
 +/* Send one query and wait for its matching reply. */
 +static int barracuda_request(struct barracuda *b, u8 family, const u8 *payload,
 +			     u8 len, u8 reply_command, u8 reply_param)
-+{
-+	unsigned long flags;
-+	u8 *buf;
-+	int ret;
-+
+ {
+-	struct barracuda *b = container_of(to_delayed_work(work),
+-					   struct barracuda, link_work);
+-	static const u8 query[] = { BARRACUDA_CMD_GET_LINK };
+ 	unsigned long flags;
+ 	u8 *buf;
+ 	int ret;
+ 
 +	lockdep_assert_held(&b->route_lock);
 +
-+	buf = kmalloc(BARRACUDA_REPORT_SIZE, GFP_KERNEL);
-+	if (!buf)
+ 	buf = kmalloc(BARRACUDA_REPORT_SIZE, GFP_KERNEL);
+ 	if (!buf)
+-		return;
 +		return -ENOMEM;
 +	if (b->seq < BARRACUDA_SEQ_FIRST || b->seq >= BARRACUDA_SEQ_LAST)
 +		b->seq = BARRACUDA_SEQ_FIRST;
@@ -572,7 +741,18 @@ index 6a0a38d20..6cae76c17 100644
 +		b->seq++;
 +	barracuda_fill(buf, family, b->seq, payload, len);
 +
-+	spin_lock_irqsave(&b->lock, flags);
+ 	spin_lock_irqsave(&b->lock, flags);
+-	if (b->stopped || b->state.linked != BARRACUDA_UNKNOWN ||
+-	    b->attempts >= BARRACUDA_LINK_ATTEMPTS) {
++	if (b->stopping && !b->restoring_route) {
+ 		spin_unlock_irqrestore(&b->lock, flags);
+ 		kfree(buf);
+-		return;
++		return -ESHUTDOWN;
+ 	}
+-	b->attempts++;
+-	barracuda_fill(buf, BARRACUDA_FAMILY_LINK, b->attempts, query,
+-		       sizeof(query));
 +	b->want_family = family;
 +	b->want_seq = b->seq;
 +	b->want_command = reply_command;
@@ -581,10 +761,10 @@ index 6a0a38d20..6cae76c17 100644
 +	reinit_completion(&b->reply_done);
 +	b->acked = false;
 +	b->waiting = true;
-+	spin_unlock_irqrestore(&b->lock, flags);
-+
-+	ret = hid_hw_output_report(b->hdev, buf, BARRACUDA_REPORT_SIZE);
-+	kfree(buf);
+ 	spin_unlock_irqrestore(&b->lock, flags);
+ 
+ 	ret = hid_hw_output_report(b->hdev, buf, BARRACUDA_REPORT_SIZE);
+ 	kfree(buf);
 +	if (ret == BARRACUDA_REPORT_SIZE)
 +		wait_for_completion_timeout(&b->reply_done,
 +					    BARRACUDA_REPLY_TIMEOUT);
@@ -600,6 +780,40 @@ index 6a0a38d20..6cae76c17 100644
 +{
 +	return barracuda_request(b, BARRACUDA_FAMILY_LINK, &command, 1,
 +				 command, 0);
++}
++
++/* Serialize the entire startup exchange, including its response wait. */
++static void barracuda_link_query(struct work_struct *work)
++{
++	struct barracuda *b = container_of(to_delayed_work(work),
++					   struct barracuda, link_work);
++	unsigned long flags, next, now;
++
++	mutex_lock(&b->route_lock);
++	spin_lock_irqsave(&b->lock, flags);
++	if (b->stopping || b->state.linked != BARRACUDA_UNKNOWN ||
++	    b->attempts >= BARRACUDA_LINK_ATTEMPTS) {
++		spin_unlock_irqrestore(&b->lock, flags);
++		goto out;
++	}
++	b->attempts++;
++	next = jiffies + BARRACUDA_LINK_DELAY;
++	spin_unlock_irqrestore(&b->lock, flags);
++
++	barracuda_get(b, BARRACUDA_CMD_GET_LINK);
+ 
+ 	spin_lock_irqsave(&b->lock, flags);
+-	if (ret == BARRACUDA_REPORT_SIZE && !b->stopped &&
+-	    b->state.linked == BARRACUDA_UNKNOWN &&
++	now = jiffies;
++	if (!b->stopping && b->state.linked == BARRACUDA_UNKNOWN &&
+ 	    b->attempts < BARRACUDA_LINK_ATTEMPTS)
+-		schedule_delayed_work(&b->link_work, BARRACUDA_LINK_DELAY);
++		schedule_delayed_work(&b->link_work,
++				      time_before(now, next) ? next - now : 0);
++	spin_unlock_irqrestore(&b->lock, flags);
++out:
++	mutex_unlock(&b->route_lock);
 +}
 +
 +/* E1 selects the volatile destination of diagnostic queries; E0 reads it. */
@@ -633,8 +847,14 @@ index 6a0a38d20..6cae76c17 100644
 +	spin_lock_irqsave(&b->lock, flags);
 +	failed = b->route_failed;
 +	spin_unlock_irqrestore(&b->lock, flags);
-+	if (failed)
-+		return -EIO;
++	if (failed) {
++		/* A link event is not evidence that route restoration succeeded. */
++		if (barracuda_get(b, BARRACUDA_CMD_GET_ROUTE) != BARRACUDA_ROUTE_LOCAL)
++			return -EIO;
++		spin_lock_irqsave(&b->lock, flags);
++		b->route_failed = false;
++		spin_unlock_irqrestore(&b->lock, flags);
++	}
 +	transport = barracuda_get(b, BARRACUDA_CMD_GET_TRANSPORT);
 +	if (transport < 0 || !(transport & BARRACUDA_TRANSPORT_HEADSET) ||
 +	    barracuda_get(b, BARRACUDA_CMD_GET_ROUTE) != BARRACUDA_ROUTE_LOCAL)
@@ -645,7 +865,7 @@ index 6a0a38d20..6cae76c17 100644
 +
 +/*
 + * Restore the local route, retrying once. If that fails, stop using the
-+ * route until the next confirmed link. Returns false on failure.
++ * route until a query verifies it is local. Returns false on failure.
 + */
 +static bool barracuda_route_end(struct barracuda *b, bool selected)
 +{
@@ -656,9 +876,17 @@ index 6a0a38d20..6cae76c17 100644
 +
 +	if (!selected)
 +		return true;
-+	for (attempt = 0; attempt < 2; attempt++)
-+		if (!barracuda_set_route(b, BARRACUDA_ROUTE_LOCAL))
++	b->restoring_route = true;
++	for (attempt = 0; attempt < 2; attempt++) {
++		if (!barracuda_set_route(b, BARRACUDA_ROUTE_LOCAL)) {
++			spin_lock_irqsave(&b->lock, flags);
++			b->route_failed = false;
++			spin_unlock_irqrestore(&b->lock, flags);
++			b->restoring_route = false;
 +			return true;
++		}
++	}
++	b->restoring_route = false;
 +	spin_lock_irqsave(&b->lock, flags);
 +	b->route_failed = true;
 +	spin_unlock_irqrestore(&b->lock, flags);
@@ -689,7 +917,7 @@ index 6a0a38d20..6cae76c17 100644
 +
 +	spin_lock_irqsave(&b->lock, flags);
 +	wanted = !b->stopping && b->state.linked == 1;
-+	spin_unlock_irqrestore(&b->lock, flags);
+ 	spin_unlock_irqrestore(&b->lock, flags);
 +	return wanted;
 +}
 +
@@ -733,10 +961,10 @@ index 6a0a38d20..6cae76c17 100644
 +	if (restored && barracuda_refresh_wanted(b))
 +		queue_delayed_work(system_long_wq, &b->refresh_work,
 +				   BARRACUDA_POLL_INTERVAL);
-+}
-+
+ }
+ 
  static const enum power_supply_property barracuda_properties[] = {
- 	POWER_SUPPLY_PROP_PRESENT,
+@@ -360,6 +700,7 @@ static const enum power_supply_property barracuda_properties[] = {
  	POWER_SUPPLY_PROP_STATUS,
  	POWER_SUPPLY_PROP_CAPACITY,
  	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
@@ -744,7 +972,7 @@ index 6a0a38d20..6cae76c17 100644
  	POWER_SUPPLY_PROP_SCOPE,
  	POWER_SUPPLY_PROP_MODEL_NAME,
  	POWER_SUPPLY_PROP_MANUFACTURER,
-@@ -409,6 +741,12 @@ static int barracuda_get_property(struct power_supply *psy,
+@@ -409,6 +750,12 @@ static int barracuda_get_property(struct power_supply *psy,
  		 */
  		val->intval = POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN;
  		break;
@@ -757,7 +985,7 @@ index 6a0a38d20..6cae76c17 100644
  	case POWER_SUPPLY_PROP_SCOPE:
  		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
  		break;
-@@ -513,11 +851,15 @@ static void barracuda_init(struct barracuda *b, struct hid_device *hdev)
+@@ -513,11 +860,15 @@ static void barracuda_init(struct barracuda *b, struct hid_device *hdev)
  {
  	b->hdev = hdev;
  	spin_lock_init(&b->lock);
@@ -773,20 +1001,24 @@ index 6a0a38d20..6cae76c17 100644
  	INIT_WORK(&b->supply_work, barracuda_supply_work);
  }
  
-@@ -576,8 +918,13 @@ static void barracuda_stop(struct barracuda *b)
+@@ -576,11 +927,16 @@ static void barracuda_stop(struct barracuda *b)
  {
  	unsigned long flags;
  
 +	/* A running refresh still needs replies to restore the route. */
  	spin_lock_irqsave(&b->lock, flags);
  	b->stopping = true;
-+	spin_unlock_irqrestore(&b->lock, flags);
+-	b->stopped = true;
+ 	spin_unlock_irqrestore(&b->lock, flags);
+ 	cancel_delayed_work_sync(&b->link_work);
 +	cancel_delayed_work_sync(&b->refresh_work);
 +
 +	spin_lock_irqsave(&b->lock, flags);
- 	b->stopped = true;
- 	spin_unlock_irqrestore(&b->lock, flags);
- 	cancel_delayed_work_sync(&b->link_work);
++	b->stopped = true;
++	spin_unlock_irqrestore(&b->lock, flags);
+ 	cancel_work_sync(&b->supply_work);
+ }
+ 
 -- 
-2.55.0
+2.56.0
 

@@ -1,5 +1,19 @@
 # Change history
 
+## Unreleased
+
+- Serialize startup E3 exchanges with telemetry and explicit kernel controls,
+  retaining up to three attempts at least two seconds apart and unknown link
+  state after failures.
+- Require verified local route state before clearing a restoration failure;
+  reconnection alone no longer clears it. Reject new normal requests during
+  suspension/removal while allowing bounded cleanup to finish.
+- Require the matching ACK before accepting a pairing route-command reply.
+  Raw pairing still lacks arbitration with automatic driver queries.
+- Retain the existing kernel control interfaces and defer userspace separation;
+  document the hidraw ownership limitation and a reproducible source probe.
+
+
 ## v0.5.1
 
 - Turn the Plasma widget into **Barracuda Headset**, focused on the headset

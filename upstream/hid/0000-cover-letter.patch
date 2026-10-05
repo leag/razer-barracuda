@@ -43,15 +43,17 @@ Two userspace consumers use the link state:
   to alsa-devel once this driver is accepted.
 
 Testing:
-- KUnit: 13 tests after patch 1, 18 after patch 2, under QEMU x86_64
-  with KASAN, UBSAN and lockdep. The complete series passes 23 tests,
-  including power-off guards, native settings and read-length validation.
+- KUnit: 13 tests after patch 1, 21 after patch 2, under QEMU x86_64
+  with KASAN, UBSAN and lockdep. The complete series passes 26 tests,
+  including startup serialization, failed-route recovery, stopping guards,
+  power-off guards, native settings and read-length validation.
 - W=1 and sparse (C=2) builds without warnings, built-in and as a module.
 - Hardware: an out-of-tree version of this driver with the same protocol
   handling has been in use with a Razer Barracuda X (RZ04-04430-100) on
   v7.2.6. That covered headset power cycles, cable plug and unplug, the
   battery and cable GETs, and UPower and KDE listing the battery.
-  Suspend and resume have not been tested on hardware.
+  Suspend and resume have not been tested on hardware. The latest startup
+  serialization and route-recovery hardening also await hardware testing.
 
 Razer does not document the protocol. It was derived from USB captures of
 the vendor's Windows software and from the dongle firmware.
@@ -63,7 +65,8 @@ captures, the out-of-tree driver, and restructuring it for submission:
 a single file, KUnit tests instead of a userspace test, a hid_is_usb()
 check, and removal of the module parameters. checkpatch and sparse were
 run on the result. OpenAI Codex assisted with the serialized power-off and
-native-settings additions, their tests and protocol documentation.
+native-settings additions, startup serialization, route-recovery hardening,
+their tests and protocol documentation.
 
 Luis Atala (4):
   HID: razer-barracuda: add driver for the Razer Barracuda X (2022)

@@ -1,7 +1,7 @@
-From f9bd0bf51823dda92c08ed342d413fe01f073f43 Mon Sep 17 00:00:00 2001
+From 6577847376421fbfba2b474cdb8d23e9d2dccb2a Mon Sep 17 00:00:00 2001
 From: Luis Atala <luis.atala@gmail.com>
 Date: Tue, 29 Sep 2026 22:17:15 -0300
-Subject: [PATCH] HID: razer-barracuda: serialize native headset settings
+Subject: [PATCH 4/4] HID: razer-barracuda: serialize native headset settings
 
 Expose a bounded settings mailbox sharing the battery route mutex. Only
 explicit writes query or change headset settings; reads return a token and
@@ -43,10 +43,10 @@ index d7de28e..3ca5c4d 100644
 +                Firmware/storage/reset commands and arbitrary HID writes are
 +                not supported. Writes may change persistent headset settings.
 diff --git a/drivers/hid/hid-razer-barracuda-test.c b/drivers/hid/hid-razer-barracuda-test.c
-index 787520b..34a1dce 100644
+index 0f5695d..15c9758 100644
 --- a/drivers/hid/hid-razer-barracuda-test.c
 +++ b/drivers/hid/hid-razer-barracuda-test.c
-@@ -454,7 +454,62 @@ static void barracuda_test_read_length_ack(struct kunit *test)
+@@ -613,7 +613,62 @@ static void barracuda_test_read_length_ack(struct kunit *test)
  	KUNIT_EXPECT_EQ(test, b->reply_value, -EPROTO);
  }
  
@@ -106,11 +106,11 @@ index 787520b..34a1dce 100644
  static struct kunit_case barracuda_test_cases[] = {
 +	KUNIT_CASE(barracuda_test_settings_allowlist),
 +	KUNIT_CASE(barracuda_test_settings_reply),
- 	KUNIT_CASE(barracuda_test_split),
- 	KUNIT_CASE(barracuda_test_values),
- 	KUNIT_CASE(barracuda_test_link_query),
+ 	KUNIT_CASE(barracuda_test_startup_transaction),
+ 	KUNIT_CASE(barracuda_test_stopping_transaction),
+ 	KUNIT_CASE(barracuda_test_failed_route),
 diff --git a/drivers/hid/hid-razer-barracuda.c b/drivers/hid/hid-razer-barracuda.c
-index 86fdaba..a413b26 100644
+index 7ae2284..aeb858e 100644
 --- a/drivers/hid/hid-razer-barracuda.c
 +++ b/drivers/hid/hid-razer-barracuda.c
 @@ -14,6 +14,7 @@
@@ -201,7 +201,7 @@ index 86fdaba..a413b26 100644
  /*
   * Acknowledgment FAMILY SEQ|80 STATUS RESULT. Returns the result length and
   * sets *result, -1 if unrelated or -2 if the device reported a failure.
-@@ -320,7 +387,9 @@ static void barracuda_match_reply(struct barracuda *b, const u8 *p,
+@@ -318,7 +385,9 @@ static void barracuda_match_reply(struct barracuda *b, const u8 *p,
  
  	if (!b->waiting)
  		return;
@@ -212,7 +212,7 @@ index 86fdaba..a413b26 100644
  		/* The value itself reaches the state through barracuda_decode(). */
  		ret = barracuda_customer_reply(p, size, b->want_param);
  	} else if (!b->acked) {
-@@ -754,8 +823,89 @@ out:
+@@ -757,8 +826,89 @@ static ssize_t headset_poweroff_store(struct device *dev,
  }
  static DEVICE_ATTR_WO(headset_poweroff);
  
@@ -303,5 +303,5 @@ index 86fdaba..a413b26 100644
  };
  ATTRIBUTE_GROUPS(barracuda);
 -- 
-2.55.0
+2.56.0
 
