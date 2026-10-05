@@ -95,7 +95,7 @@ Item {
                     compare(button.contentItem.width, size)
                     compare(button.contentItem.height, size)
                     const artwork = button.contentItem.children[0]
-                    compare(artwork.width, Math.min(size, Kirigami.Units.iconSizes.medium))
+                    compare(artwork.width, Math.min(size, Kirigami.Units.iconSizes.smallMedium))
                     compare(artwork.height, artwork.width)
                     compare(artwork.x, (size - artwork.width) / 2)
                     compare(artwork.y, (size - artwork.height) / 2)

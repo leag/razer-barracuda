@@ -149,8 +149,8 @@ PlasmoidItem {
         // Panel icons have no button frame on hover; retain the theme's keyboard focus.
         background.visible: visualFocus
         focusPolicy: Qt.TabFocus
-        implicitWidth: Kirigami.Units.iconSizes.medium
-        implicitHeight: Kirigami.Units.iconSizes.medium
+        implicitWidth: Kirigami.Units.iconSizes.smallMedium
+        implicitHeight: Kirigami.Units.iconSizes.smallMedium
         // Keep the full click target while sizing artwork independently.
         topPadding: 0
         bottomPadding: 0
@@ -163,7 +163,7 @@ PlasmoidItem {
         contentItem: Item {
             HeadsetArtwork {
                 anchors.centerIn: parent
-                width: Math.min(parent.width, parent.height, Kirigami.Units.iconSizes.medium)
+                width: Math.min(parent.width, parent.height, Kirigami.Units.iconSizes.smallMedium)
                 height: width
                 connected: root.connected
                 slashed: root.slashed
