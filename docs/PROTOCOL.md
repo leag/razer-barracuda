@@ -4,6 +4,84 @@ These are empirical observations, not an official Razer protocol specification.
 They cover the Barracuda X (2022) dongle identified as USB `1532:0552`
 (model observed: `RZ04-04430-100`, product: `Razer Barracuda X 2.4`).
 
+## Protocol overview
+
+The diagram summarizes link detection, passive notifications, telemetry refresh
+and explicitly requested pairing. Commands use HID report ID `01`, padded to
+64 bytes. See the sections below for complete validation rules and framing.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant H as Linux host
+    participant D as USB dongle
+    participant S as Barracuda headset
+
+    Note over H,D: HID interface 3 · OUT 0x03 · IN 0x84<br/>Request: 01 80 LEN 50 41 FAMILY SEQ ...
+    Note over H,D: Family 0e ACK echoes host SEQ<br/>Data uses a device counter; accept after matching ACK<br/>Reassemble fragmented data before parsing
+
+    rect rgb(235, 245, 255)
+        Note over H,D: Initial wireless-link query
+        H->>D: 01 80 06 50 41 0e SS 01 e3
+        D-->>H: ACK: family 0e, SS OR 0x80, status
+        D-->>H: E3 data: e3 00 / e3 01
+        Note over H: Validate prefix 01 80 0c 50 49 0e<br/>and bytes 11–13 = 02 00 e3<br/>Byte 14: 00 disconnected, 01 connected
+        Note over H,D: Maximum 3 attempts, 2 seconds apart<br/>Stop on valid status; timeout leaves link unknown
+    end
+
+    rect rgb(240, 255, 240)
+        Note over D,S: Passive notifications
+        S-->>D: Wireless-link transition
+        D-->>H: Validated transition report
+        Note over H: Validate prefix 01 80 0e 50 49<br/>and bytes 11–15 = 04 00 20 02 01<br/>Byte 16: 00 disconnected, 01 connected
+        S-->>D: Battery / cable update
+        D-->>H: Family 08: 21 02 01 VV / 2a 02 01 VV
+        Note over H: Battery: 0–100%; cable: 00 / 01<br/>Neither is link evidence
+    end
+
+    opt Telemetry refresh with confirmed link
+        H->>D: Family 0e: E6 transport status, E0 route
+        D-->>H: Matching ACKs, then data
+        H->>D: Family 0e: E1 01 — select headset route
+        D-->>H: Matching ACK, then response
+        H->>D: Family 08: 21 00 00 — GET battery
+        D->>S: Forward battery request
+        S-->>D: Battery percentage
+        D-->>H: 21 01 01 VV — no separate ACK
+        H->>D: Family 08: 2a 00 00 — GET cable
+        D->>S: Forward cable request
+        S-->>D: Cable state
+        D-->>H: 2a 01 01 VV — no separate ACK
+        H->>D: Family 06: 0x31 — GET voltage
+        D->>S: Forward voltage request
+        S-->>D: Voltage
+        D-->>H: Voltage result in ACK
+        H->>D: Always E1 00 — restore local route
+        H->>D: E0 — verify local route
+    end
+
+    opt Explicit user-requested pairing
+        H->>D: Handshake: 01 40
+        D-->>H: 01 40 01 01
+        H->>D: Family 06: READ_MAX_LEN — 240 bytes
+        H->>D: E0 — require local mode 00
+        H->>D: Family 06: 43 c4 — read model ID
+        H->>D: F0 01 — start inquiry
+        D->>S: Bluetooth inquiry
+        D-->>H: F0 results: address, class, RSSI, name
+        Note over H,D: Inquiry restarts every 2 seconds
+        H->>D: E5 00 ff ADDR6 — connect chosen headset
+        D->>S: Establish pairing
+        H->>D: E6 — poll pairing connection status
+        D-->>H: E6 status — not wireless-link evidence
+        H->>D: F0 00 — stop inquiry
+        H->>D: E1 00 — restore local mode
+        Note over H,S: User power-cycles headset after pairing<br/>Validated E3 or transition establishes link state
+    end
+
+    Note over H,D: USB presence, E6, ACKs and silence do not establish link state<br/>Audio routing remains with WirePlumber
+```
+
 ## USB and HID interfaces
 
 The observed composite device has audio-control interface 0, audio-streaming
