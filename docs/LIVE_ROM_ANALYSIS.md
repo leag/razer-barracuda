@@ -153,6 +153,19 @@ an unsuccessful internal query with an untouched result buffer. Selector 11's
 exact DSP schema is still unresolved. Read `72` must not be treated as an
 enable-state getter or a reliable confirmation of applied gain.
 
+## Additional static cross-check
+
+An independent review supports the Gaming guard and confirms that a separate
+callback updates the value returned by GET `14`. The callback also has
+conditional follow-up paths, whose effect is not established. The internal
+Gaming flag and the reported value therefore remain distinct. The guard's
+per-entry condition still lacks a confirmed meaning or a value observed during
+the failed USB transaction.
+
+Some instruction effects remain opaque in the available tooling. These findings
+do not resolve the active operating mode or establish a measurable Gaming
+effect.
+
 ## Remaining boundary
 
 The missing MCU ROM routines and EX9 table are now available. The remaining
