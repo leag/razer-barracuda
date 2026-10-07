@@ -209,6 +209,11 @@ report; the rest of its buffer must not be interpreted as such.
 This explains the earlier zero-filled `HIDIOCGINPUT(64)` observation without
 requiring a broken device or a missing HID permission.
 
+Additional static review confirmed that this path caps the returned length at
+64 bytes and reports only pending flow-control state. It does not provide a
+wireless-link status. The exact tunnel framing remains based on the
+instruction-level analysis above.
+
 ### Companion processor to host
 
 Routine **`0x2b8a`** parses the incoming serial stream. It synchronizes on `50 49`
