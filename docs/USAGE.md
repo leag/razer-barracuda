@@ -24,13 +24,22 @@ there is no tray monitor, graphical pairing dialog or background audio router.
 
 ## Barracuda Headset widget
 
-Add **Barracuda Headset** (**Auricular Barracuda**) to a Plasma 6 panel or
-desktop. A widget already added by an earlier version keeps working after an update.
-The panel shows KDE Breeze's detailed headset artwork. It is drawn at full
-opacity while the headset link is confirmed and dimmed otherwise. A thin red
-diagonal slash, cut into the artwork like Breeze's `camera-off` icon, marks a
-disconnected headset or a missing adapter; with Qt Quick's software renderer the
-slash is drawn over the uncut artwork. A small corner emblem
+Enable **Barracuda Headset** (**Auricular Barracuda**) in the system tray
+(**Configure System Tray… → Entries**), or add it to a Plasma 6 panel or
+desktop. Installing does not enable it in the tray or change any panel. A widget
+already added by an earlier version keeps working after an update.
+
+In the system tray the icon stays visible while the link is confirmed or not yet
+confirmed, and while pairing or power-off runs. A disconnected headset, a
+missing adapter or an unavailable helper moves it to the tray's hidden items; a
+low battery asks for attention. The tray's own visibility settings override this.
+
+Panel and tray icons use the theme's symbolic headset glyph, recolored like the
+neighboring icons. It is drawn at full opacity while the headset link is
+confirmed and dimmed otherwise. A thin red diagonal slash, cut into the glyph
+like Breeze's `camera-off` icon, marks a disconnected headset or a missing
+adapter; with Qt Quick's software renderer the slash is drawn over the uncut
+glyph. A small corner emblem
 shows a question mark when the link is not confirmed, and a warning at 10%
 battery or less while not charging. Hover shows the connection state and battery. Text
 follows the desktop locale (English/Spanish). The icon has no button frame on
@@ -38,12 +47,20 @@ pointer hover; keyboard navigation retains the theme's focus indicator.
 
 Click opens the connection summary:
 
-- **State**: Connected (USB dongle, Bluetooth, or both), Disconnected, Link not
-  confirmed, Adapter not detected, or Status unavailable, with a short hint.
-- **Details**: whether the USB dongle is detected, the 2.4 GHz link, the paired
-  Bluetooth connection, and while the dongle link is confirmed the charging
-  cable and battery voltage last reported by the driver.
-- **Battery**: percentage and charging state.
+- **State and battery**, beside the headset artwork: Connected (USB dongle,
+  Bluetooth, or both), Disconnected, Link not confirmed, Adapter not detected,
+  or Status unavailable, with a short hint; below it the battery percentage
+  and charging state. A connected state shows a USB dongle icon, or a
+  Bluetooth icon when only Bluetooth is linked.
+- **Do Not Disturb** and **Bluetooth gaming mode**, with a confirmed link.
+- **Details**, folded by default: whether the USB dongle is detected, the
+  2.4 GHz link, the paired Bluetooth connection, and while the dongle link is
+  confirmed the charging cable and battery voltage last reported by the driver.
+- **Configure Audio Devices…** at the bottom. The system tray gives all its
+  applets one popup size, which you can change by dragging the popup edge; the
+  widget keeps its actions at the bottom of that space. Outside the system tray it is
+  followed by **Configure Barracuda Headset…**; in the tray that action is the
+  configure button of the tray heading.
 
 The state comes from `barracuda-headset --request '{"op":"link"}'`, a finite,
 read-only query. It reads the driver's USB `wireless_status` attribute and
@@ -61,10 +78,11 @@ The default output is not link evidence. It only selects the native-control
 transport when both or neither link is confirmed; otherwise headset settings
 follow the confirmed USB or Bluetooth link.
 
-Artwork is read from `/usr/share/icons/breeze/devices/64/audio-headset.svg`,
-supplied by `breeze-icons`; no icons are bundled or copied. This deliberately
-bypasses the theme's small monochrome variants. The icon is centered and capped
-at KDE's medium icon size (32 logical pixels), shrinking to fit smaller panels.
+The popup's detailed artwork is read from
+`/usr/share/icons/breeze/devices/64/audio-headset.svg`, supplied by
+`breeze-icons`; no icons are bundled or copied. The tray sizes its own icons; a
+panel icon outside the tray is centered and capped at KDE's small-medium icon
+size, shrinking to fit smaller panels.
 
 The battery comes from KDE's power-management service, or from the driver's
 published value when KDE does not list it. It is the last reported percentage
@@ -73,7 +91,9 @@ type, excluding computer and mouse batteries. It sends no battery queries.
 Unknown charging state remains unknown; a connected cable does not by itself
 prove that charging has completed.
 
-**More actions → Pair Barracuda…** opens a native confirmation inside the widget. Connect the
+**Pair Barracuda…** in the widget's action menu opens a native confirmation in
+the popup. The action menu is the **More actions** button of the popup heading
+in the system tray or a panel, and the widget's right-click menu. Connect the
 Barracuda dongle, put the headset in pairing mode, and choose **Pair** to confirm
 replacing the current pairing, or **Cancel** to leave it unchanged. Only after
 confirmation does the widget run `barracuda-pair --yes --timeout 60`, in the desktop
@@ -89,8 +109,8 @@ pairing operation continues. Pairing is
 specific to Barracuda X (2022), not a generic Bluetooth pairing interface.
 
 The widget never writes audio state. Only explicitly launched pairing accesses
-raw HID; power-off uses the serialized driver interface. **Sound settings…**
-opens KDE's audio controls; keep KDE's volume widget for volume and device
+raw HID; power-off uses the serialized driver interface. **Configure Audio
+Devices…** opens KDE's audio controls; keep KDE's volume widget for volume and device
 selection, which this widget does not replace.
 
 The WirePlumber rule still advertises `audio-headphones` to other audio clients.
@@ -105,19 +125,42 @@ To keep playback going when an output disappears, see
 This is a separate audio-policy preference for all outputs in your WirePlumber
 session, not a widget option.
 
-Choose **More actions → Help** for explanations of the widget and headset
-controls, including Do Not Disturb. Help is also available from the headset settings
-view and follows the desktop language (English or Spanish). Opening Help does
-not query or change headset settings.
+Help follows KDE's standard pattern: an **ⓘ** button explains on hover or
+click, with at most one per view. In the popup it sits next to the connection
+state and also covers the battery; on the **Equalizer** page it sits next to
+**Sound profile** and explains custom EQ. Other controls carry a short description
+instead. The text follows the desktop language.
+It follows the desktop language (English or Spanish). Opening Help does not query or change headset settings.
+
+## Do Not Disturb and Bluetooth gaming mode
+
+With a confirmed link, the popup shows **Do Not Disturb** and **Bluetooth gaming
+mode** (low-latency audio): On, Off, Reading… or Unknown. Each time the popup
+opens it reads the headset settings once, the same read the configuration
+window makes; this is the only settings read the popup performs. A failed read
+shows Unknown.
+
+The widget's action menu (right-click, or **More actions** in the popup heading)
+has a checkbox for each, showing the last value read. Choosing one sets the
+opposite value, and the checkbox follows what the headset confirms. Before the
+first reading it opens the popup, which reads them. Bluetooth gaming mode is
+read through either transport but can be changed only over Bluetooth; through
+the USB dongle its checkbox is disabled.
 
 ## Headset settings
 
-Choose **Headset settings…** to open the native headset EQ directly. The applied
-preset is shown in the **Profile** selector. Selecting a profile applies it
-immediately; the selector updates after headset confirmation. Choose **Custom**
-to reveal its bands, then use **Apply changes** to save adjustments. **More settings**
-contains Gaming, DND, idle shutdown and Bluetooth Quick Connect. Unknown or failed
-values disable their controls; click Refresh to read again. Session buffer and
+Choose **Configure Barracuda Headset…** in the popup, in the right-click menu
+or with the configure button of the system tray heading; all three open the
+widget's configuration window and use Plasma's own name for it. Settings live
+there rather than in the popup, so the popup keeps a stable size. Each page
+reads the headset when it opens. The window opens on **Equalizer**; **Power saving** holds
+idle shutdown and **Quick Connect** lists the Bluetooth sources the headset
+knows, with a **Switch** button for each inactive one. Do Not Disturb and Bluetooth gaming mode are in the popup. On the **Equalizer** page, the applied preset is shown in the
+**Sound profile** selector. Selecting a profile applies it immediately; the selector
+updates after headset confirmation. Choose **Custom** to reveal its
+bands, then use the window's **Apply** or **OK** button to send them. Unknown or failed
+values disable their controls; the notice offers
+**Refresh** to read again. Session buffer and
 sample-rate tuning are no longer exposed in the plasmoid. Software EQ and
 sidetone are removed.
 If legacy filters are enabled or loaded, use the explicit cleanup button; it
@@ -131,12 +174,9 @@ A short press of the headset's power/play button sends a standard HID media key.
 Linux and the desktop forward it to the selected media player; neither the CLI
 nor widget intercepts it. Only single-press play/pause has been validated.
 
-The compact overview shows the connection state, its details and a battery row. Sound settings
-and **Headset settings…** are at the bottom; pairing is under **More actions**.
-Pairing displays an inline confirmation and progress message. **Back** returns
-from effects to the overview while preserving pending edits.
-The effects editor marks unsaved changes above its Apply button; preset names
-follow the desktop language (English or Spanish).
+Pairing and power-off are in the action menu. Pairing displays an inline confirmation and progress message.
+Preset names in the headset settings follow the desktop language (English or
+Spanish).
 
 The headset battery uses Plasma's native BatteryIcon component, a percentage and
 a state label for charging, full charge or an unknown charge state. A normal
@@ -146,7 +186,8 @@ establish wireless link state.
 
 ## Headset power-off
 
-Choose **More actions → Turn off headset…**, then **Turn off**. The action always
+Choose **Turn off headset…** from the widget's action menu, then **Turn off** in
+the popup. The action always
 addresses the Barracuda headset, independently of the desktop's default output.
 The CLI equivalent is:
 

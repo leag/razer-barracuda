@@ -21,7 +21,8 @@ select outputs, change volume, or control the microphone.
 - **English and Spanish:** CLIs default to English and support `--language es`;
   the widget follows the desktop locale with English fallback.
 
-Pairing, settings changes and power-off run only on user request. There is no
+Pairing, settings changes and power-off run only on user request. The widget is
+a native Plasma applet that can live in the system tray; there is no separate
 tray application or background Python monitor. A missing adapter, an unknown
 link and a confirmed disconnection are reported as distinct states; USB presence
 alone does not establish a headset connection.
@@ -86,8 +87,8 @@ To install the Plasma widget with its dependencies already available:
 kpackagetool6 --type Plasma/Applet --install plasmoid
 ```
 
-Then add **Barracuda Headset** (**Auricular Barracuda**) from Plasma's widget
-picker. Use `--upgrade plasmoid` for an existing user installation. Installing
+Then enable **Barracuda Headset** (**Auricular Barracuda**) in the system tray
+settings, or add it from Plasma's widget picker. Use `--upgrade plasmoid` for an existing user installation. Installing
 the widget does not change panel layouts.
 
 Follow the [installation guide](docs/INSTALL.md) for other checkout options and
@@ -109,17 +110,28 @@ barracuda-pair --language es   # Use Spanish prompts.
 
 Pairing replaces the dongle's existing headset pairing and asks for confirmation.
 After success, **power the headset off and on**. You can also pair through
-**More actions → Pair Barracuda…** in the widget.
+**Pair Barracuda…** in the widget's action menu.
 
 ### Use the Plasma widget
 
-Hover over the panel icon for connection and battery status. Click to view the
-USB dongle, wireless link, Bluetooth connection and available battery telemetry.
+Enable the widget in the system tray (**Configure System Tray… → Entries**) or
+add it to a panel. In the tray it hides among the hidden items while the headset
+is off or the adapter is missing. Hover over the icon for connection and battery
+status. Click to view the USB dongle, wireless link, Bluetooth connection and
+available battery telemetry.
 
-- **Sound settings…** opens KDE's audio controls.
-- **Headset settings…** opens native EQ; **More settings** contains gaming mode,
-  Do Not Disturb, idle shutdown and Bluetooth Quick Connect.
-- **More actions** provides pairing, headset power-off and help.
+- **Configure Audio Devices…** opens KDE's audio controls, as in KDE's volume
+  widget.
+- **Configure Barracuda Headset…**, the same action as in the right-click menu,
+  opens the widget's configuration window: the **Power saving** page holds idle
+  shutdown, the **Equalizer** page holds the native EQ and
+  the **Quick Connect** page switches Bluetooth sources.
+- The action menu (**More actions** in the popup heading, or right-click)
+  provides pairing and headset power-off, each confirmed in the popup.
+- With a confirmed link, the popup also shows **Do Not Disturb** and
+  **Bluetooth gaming mode** (low-latency audio), read from the headset each
+  time the popup opens; the action menu has a checkbox for each. Gaming mode
+  can be changed only over Bluetooth.
 
 Status reads do not send commands to the headset. Native controls require the
 appropriate helpers, permissions and supported transport. Software EQ and
@@ -129,7 +141,7 @@ for dependencies, behavior and validation limits.
 
 ### Turn off the headset
 
-Use **More actions → Turn off headset…**, or run:
+Use **Turn off headset…** from the widget's action menu, or run:
 
 ```bash
 barracuda-power --off

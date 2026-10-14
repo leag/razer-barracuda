@@ -11,7 +11,9 @@
         "License": "MIT",
         "Version": "0.5.1",
         "Website": "https://github.com/leag/razer-barracuda",
-        "Authors": [{"Name": "Barracuda Linux contributors"}]
+        "Authors": [{"Name": "Luis Atala", "Email": "luis.atala@gmail.com"}]
     },
-    "X-Plasma-API-Minimum-Version": "6.0"
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-NotificationArea": "true",
+    "X-Plasma-NotificationAreaCategory": "Hardware"
 }

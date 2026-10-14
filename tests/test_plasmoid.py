@@ -1,6 +1,7 @@
 """Package and isolated QML checks, without connecting to the audio server."""
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -17,6 +18,16 @@ class PlasmoidTests(unittest.TestCase):
         self.assertEqual(metadata['KPackageStructure'], 'Plasma/Applet')
         from barracuda_pair import __version__
         self.assertEqual(metadata['KPlugin']['Version'], __version__)
+
+    def test_tray_can_expand_the_applet(self):
+        # The system tray opens its popup only for applets without a preferred
+        # representation; forcing the compact one leaves left clicks inert.
+        metadata = json.loads((ROOT / 'plasmoid/metadata.json').read_text())
+        self.assertEqual(metadata['X-Plasma-NotificationArea'], 'true')
+        source = (ROOT / 'plasmoid/contents/ui/main.qml').read_text()
+        binding = re.search(r'\n    preferredRepresentation:(.*?)\n    \S', source, re.S).group(1)
+        self.assertEqual(' '.join(binding.split()),
+                         'Plasmoid.formFactor === PlasmaCore.Types.Planar ? fullRepresentation : null')
 
     def test_arch_package(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -62,6 +73,7 @@ import "UI_DIR"
 Item {
     id: root
     property int formFactor: PlasmaCore.Types.Horizontal
+    property bool inTray: false
     property string statusText: "Test"
     property bool connected: false
     property bool slashed: false
@@ -87,15 +99,18 @@ Item {
             verify(!button.background.visible)
         }
         function test_sizes_and_icons() {
+            for (const tray of [false, true])
             for (const direction of [PlasmaCore.Types.Horizontal, PlasmaCore.Types.Vertical]) {
                 root.formFactor = direction
+                root.inTray = tray
                 for (const size of [22, 32, 48]) {
                     button.width = size
                     button.height = size
                     compare(button.contentItem.width, size)
                     compare(button.contentItem.height, size)
                     const artwork = button.contentItem.children[0]
-                    compare(artwork.width, Math.min(size, Kirigami.Units.iconSizes.smallMedium))
+                    // The tray sizes its icons; a loose panel icon is capped.
+                    compare(artwork.width, tray ? size : Math.min(size, Kirigami.Units.iconSizes.smallMedium))
                     compare(artwork.height, artwork.width)
                     compare(artwork.x, (size - artwork.width) / 2)
                     compare(artwork.y, (size - artwork.height) / 2)
@@ -103,13 +118,22 @@ Item {
                     verify(button.implicitHeight > 0)
                 }
             }
+            root.inTray = false
+            button.width = 22
+            button.height = 22
             const artwork = button.contentItem.children[0]
             const glyph = findChild(artwork, "headsetGlyph")
             const picture = findChild(artwork, "headsetPicture")
+            const symbol = findChild(artwork, "headsetSymbol")
             const slash = findChild(artwork, "disconnectedSlash")
             const badge = findChild(artwork, "connectionEmblem")
-            tryCompare(picture, "status", Image.Ready)
-            verify(picture.visible)
+            // Panel and tray icons use the theme's symbolic glyph, not the
+            // detailed artwork.
+            verify(artwork.symbolic)
+            compare(symbol.source, "audio-headset-symbolic")
+            verify(symbol.visible)
+            verify(!picture.visible)
+            compare(String(picture.source), "")
             for (const state of [{connected: true, slashed: false, emblem: ""},
                                  {connected: false, slashed: true, emblem: ""},
                                  {connected: false, slashed: false, emblem: "emblem-question"},
@@ -117,14 +141,14 @@ Item {
                 root.connected = state.connected
                 root.slashed = state.slashed
                 root.emblem = state.emblem
-                compare(picture.opacity, state.connected ? 1 : 0.5)
+                compare(symbol.opacity, state.connected ? 1 : 0.5)
                 compare(slash.visible, state.slashed)
                 // The software scene graph used by these tests cannot cut the
                 // gap, so the glyph must stay visible and unlayered.
                 verify(glyph.visible)
                 verify(!glyph.layer.enabled)
                 compare(badge.visible, state.emblem !== "")
-                verify(badge.width <= picture.width / 2)
+                verify(badge.width <= symbol.width / 2)
                 // Breeze's proportions: inside the artwork, at least 1 px wide.
                 const reach = (slash.width * Math.SQRT1_2 + slash.height * Math.SQRT1_2) / 2
                 verify(reach <= artwork.width / 2)

@@ -148,11 +148,12 @@ Do not reload the kernel module to refresh widget artwork.
 
 ## Icon missing or too small
 
-Check that the detailed KDE artwork is installed:
+Panel and tray icons use the theme's `audio-headset-symbolic`; the popup uses
+the detailed artwork. Check that both are installed:
 
 ```bash
 ls /usr/share/icons/breeze/devices/64/audio-headset.svg
-ls /usr/share/icons/breeze/devices/64/audio-speakers.svg
+ls /usr/share/icons/breeze/devices/22/audio-headset-symbolic.svg
 journalctl --user -u plasma-plasmashell.service -b --since "5 minutes ago"
 ```
 

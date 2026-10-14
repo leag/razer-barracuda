@@ -17,15 +17,20 @@
   Pure JavaScript turns the result into distinct connected, disconnected,
   unconfirmed, missing-adapter and unavailable states, and into detail rows.
   `Server.defaultSink` only chooses the native-control transport when the link
-  reports do not. KDE opens its own Sound settings as a secondary action. Explicit pairing uses
+  reports do not. **Configure Audio Devices…** opens KDE's audio settings as a secondary action. Explicit pairing uses
   Plasma5Support's executable engine to run the existing CLI with `--yes` only
   after native UI confirmation. The widget shows activity and the final result;
   only the read-only link query runs when it loads. The powermanagement data engine supplies the
   Barracuda battery published by the driver through UPower/Solid, without HID reads.
-  The compact view loads KDE's detailed headset/speaker SVGs with Qt Quick
-  `Image`, avoiding theme recoloring and small symbolic variants. Other device
-  icons use Kirigami's theme lookup. The package depends on `breeze-icons`
-  rather than bundling artwork.
+  The popup loads KDE's detailed headset SVG with Qt Quick `Image`; panel and
+  system tray icons use the theme's symbolic glyph through Kirigami. The package
+  depends on `breeze-icons` rather than bundling artwork. The widget declares
+  itself a system tray entry (category Hardware, not enabled by default), sets
+  its tray status from the link state and exposes pairing and power-off as
+  contextual actions. The popup holds only the summary; native headset settings
+  are the Equalizer, Power saving and Quick Connect pages of the widget's configuration window
+  (`contents/config`). Help is
+  one `Kirigami.ContextualHelpButton` per view at most.
 - `packaging/`: hidraw and battery udev rules, ALSA profile/path and
   WirePlumber device-icon rule.
 - `scripts/install.py`: isolated user installation of the pairing CLI.
@@ -36,8 +41,8 @@
 - `tests/`: simulated pairing, installer, packaging and QML checks.
 
 Only the kernel driver monitors wireless state. WirePlumber owns routing.
-The CLI pairs only on explicit request. The summary reads published link state; the optional
-effects tab invokes finite helper commands only on user actions. There are no
+The CLI pairs only on explicit request. The summary reads published link state; the
+headset settings page invokes finite helper commands only on user actions. There are no
 background Python workers, saved previous outputs, or autostart entries.
 See [audio effects](AUDIO_EFFECTS.md) for configuration ownership and activation.
 

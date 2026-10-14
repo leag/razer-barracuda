@@ -2,13 +2,16 @@ import QtQuick
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PC3
-import "../code/output.js" as Output
 
+// The popup holds only the connection summary and its explicit actions, sized to
+// its content. The headset settings open in the widget's configuration
+// window, so the popup never switches pages or jumps in height.
 ColumnLayout {
     id: panel
     property var status: null
     property var target: ({transport: "usb"})
     property bool activeView: true
+    property bool showHeader: true
     property bool pairingBusy: false
     property string pairingError: ""
     property string pairingResult: ""
@@ -16,109 +19,79 @@ ColumnLayout {
     property string powerError: ""
     property string powerResult: ""
     property var battery: null
+    property var dndState: null
+    property var gamingState: null
+    property bool gamingSettable: false
+    property string configureText: ""
+    property bool settingsBusy: false
     property string localeName: Qt.locale().name
-    property bool helpOpen: false
-    property bool effectsOpen: false
-    readonly property bool detailOpen: effectsOpen || helpOpen
-    property var audioController: audio
-    property var headsetController: headset
+    // A one-shot confirmation requested from the applet's actions: "pairing" or
+    // "power-off". The summary asks before anything runs.
+    property string request: ""
+    signal requestHandled()
     signal settingsRequested()
+    signal headsetSettingsRequested()
     signal pairingRequested()
     signal powerOffRequested()
-    Layout.minimumWidth: Kirigami.Units.gridUnit * 22
-    Layout.preferredWidth: Kirigami.Units.gridUnit * 24
-    Layout.minimumHeight: detailOpen ? Math.min(Kirigami.Units.gridUnit * 20, panel.Layout.preferredHeight)
-        : panel.Layout.preferredHeight
-    Layout.preferredHeight: helpOpen ? Kirigami.Units.gridUnit * 24
-        : effectsOpen ? Math.min(Kirigami.Units.gridUnit * 24,
-            navigation.implicitHeight + effects.contentHeight + spacing + Kirigami.Units.largeSpacing * 2)
-        : overview.implicitHeight + Kirigami.Units.largeSpacing * 2
-    // Fit short pages to their content; longer effects pages scroll within the cap.
-    Layout.maximumHeight: helpOpen ? Infinity : panel.Layout.preferredHeight
-    onActiveViewChanged: {
-        if (!activeView) {
-            effectsOpen = false;
-            helpOpen = false;
-        }
+    signal settingChangeRequested(string feature, bool enabled)
+    Layout.minimumWidth: Kirigami.Units.gridUnit * 18
+    Layout.preferredWidth: Kirigami.Units.gridUnit * 22
+    Layout.preferredHeight: overview.implicitHeight + Kirigami.Units.largeSpacing * 2
+    Layout.minimumHeight: panel.Layout.preferredHeight
+    // A panel popup fits its content; the system tray gives every applet the
+    // same size, which the summary fills.
+    Layout.maximumHeight: showHeader ? panel.Layout.preferredHeight : Infinity
+
+    function applyRequest() {
+        if (request === "")
+            return;
+        overview.confirm(request);
+        // Clearing the request rewrites this binding's source; do it after the
+        // current change has been handled.
+        Qt.callLater(panel.requestHandled);
     }
-    function openEffects() {
-        helpOpen = false;
-        effectsOpen = true;
-        if (!audioController.response && !audioController.busy)
-            audioController.request({op: "status"});
-        if (!headsetController.busy)
-            headsetController.request({op: "status"});
-    }
-    AudioController { id: audio; objectName: "audioController" }
-    HeadsetController {
-        id: headset
-        objectName: "headsetController"
-        target: panel.target
-        activeView: panel.effectsOpen && !panel.helpOpen
-    }
-    RowLayout {
-        id: navigation
-        visible: panel.detailOpen
-        Layout.fillWidth: true
-        PC3.ToolButton {
-            objectName: "backToOverview"
-            icon.name: "go-previous"
-            text: Output.text("Back", "Volver", panel.localeName)
-            onClicked: { panel.effectsOpen = false; panel.helpOpen = false; }
-        }
-        PC3.Label {
-            Layout.fillWidth: true
-            text: panel.helpOpen ? Output.text("Help", "Ayuda", panel.localeName)
-                : Output.text("Headset settings", "Ajustes del auricular", panel.localeName)
-            font.bold: true
-        }
-        PC3.ToolButton {
-            objectName: "effectsHelpButton"
-            visible: !panel.helpOpen
-            icon.name: "help-contents"
-            text: Output.text("Help", "Ayuda", panel.localeName)
-            onClicked: panel.helpOpen = true
-        }
-    }
-    StackLayout {
+    onRequestChanged: applyRequest()
+    // The popup may be created by the same action that made the request.
+    Component.onCompleted: applyRequest()
+
+    PC3.ScrollView {
+        id: overviewScroll
         Layout.fillWidth: true
         Layout.fillHeight: true
-        currentIndex: panel.helpOpen ? 2 : panel.effectsOpen ? 1 : 0
-        PC3.ScrollView {
-            id: overviewScroll
-            implicitWidth: 0
-            PC3.ScrollBar.horizontal.policy: PC3.ScrollBar.AlwaysOff
-            PC3.ScrollBar.vertical.policy: PC3.ScrollBar.AsNeeded
-            // Keep wrapping stable while the vertical scrollbar changes visibility.
-            contentWidth: width
-            ConnectionSummary {
-                id: overview
-                objectName: "connectionOverview"
-                width: overviewScroll.width
-                status: panel.status
-                target: panel.target
-                activeView: panel.activeView && !panel.detailOpen
-                localeName: panel.localeName
-                pairingBusy: panel.pairingBusy
-                pairingError: panel.pairingError
-                pairingResult: panel.pairingResult
-                powerBusy: panel.powerBusy
-                powerError: panel.powerError
-                powerResult: panel.powerResult
-                battery: panel.battery
-                onSettingsRequested: panel.settingsRequested()
-                onPairingRequested: panel.pairingRequested()
-                onPowerOffRequested: panel.powerOffRequested()
-                onEffectsRequested: panel.openEffects()
-                onHelpRequested: panel.helpOpen = true
-            }
-        }
-        HeadsetSettings {
-            id: effects
+        implicitWidth: 0
+        PC3.ScrollBar.horizontal.policy: PC3.ScrollBar.AlwaysOff
+        PC3.ScrollBar.vertical.policy: PC3.ScrollBar.AsNeeded
+        // Keep wrapping stable while the vertical scrollbar changes visibility.
+        contentWidth: width
+        ConnectionSummary {
+            id: overview
+            objectName: "connectionOverview"
+            width: overviewScroll.width
+            // Fill a taller popup (the system tray's fixed size) without
+            // making the content scroll.
+            height: Math.max(implicitHeight, overviewScroll.availableHeight)
+            status: panel.status
+            target: panel.target
+            activeView: panel.activeView
+            showHeader: panel.showHeader
             localeName: panel.localeName
-            controller: panel.headsetController
-            audioController: panel.audioController
+            pairingBusy: panel.pairingBusy
+            pairingError: panel.pairingError
+            pairingResult: panel.pairingResult
+            powerBusy: panel.powerBusy
+            powerError: panel.powerError
+            powerResult: panel.powerResult
+            battery: panel.battery
+            dndState: panel.dndState
+            gamingState: panel.gamingState
+            gamingSettable: panel.gamingSettable
+            configureText: panel.configureText
+            settingsBusy: panel.settingsBusy
+            onSettingsRequested: panel.settingsRequested()
+            onHeadsetSettingsRequested: panel.headsetSettingsRequested()
+            onPairingRequested: panel.pairingRequested()
+            onPowerOffRequested: panel.powerOffRequested()
+            onSettingChangeRequested: (feature, enabled) => panel.settingChangeRequested(feature, enabled)
         }
-        HelpPage { localeName: panel.localeName }
     }
 }

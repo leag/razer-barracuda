@@ -20,11 +20,22 @@ ColumnLayout {
     property string powerResult: ""
     property bool confirmingPowerOff: false
     property bool confirmingPairing: false
+    // Settings read when the popup opens: null until the headset answers.
+    property var dndState: null
+    property var gamingState: null
+    property bool settingsBusy: false
+    // Bluetooth gaming mode can be changed only over Bluetooth.
+    property bool gamingSettable: false
     property bool activeView: true
+    // Diagnostic rows (dongle, link, cable, voltage) stay folded by default.
+    property bool showDetails: false
+    // The system tray draws its own heading with the applet's actions.
+    property bool showHeader: true
     onActiveViewChanged: {
         if (!activeView) {
             confirmingPairing = false;
             confirmingPowerOff = false;
+            showDetails = false;
             moreActions.close();
         }
     }
@@ -33,7 +44,8 @@ ColumnLayout {
     readonly property var connection: Output.connection(status)
     readonly property bool connected: connection.state === "connected"
     readonly property bool showBattery: batteryAvailable || connected
-    readonly property string statusText: Output.connectionText(connection, localeName)
+    // The transport icon beside it says how; the text says whether.
+    readonly property string statusText: Output.connectionText(connection, localeName, false)
     readonly property string hintText: Output.connectionHint(status, connection, localeName)
     readonly property var details: Output.connectionDetails(status, localeName)
     readonly property bool viaBluetooth: target.transport === "bluetooth"
@@ -45,14 +57,26 @@ ColumnLayout {
         if (connected)
             confirmingPairing = false;
     }
-    signal helpRequested()
-    signal effectsRequested()
+    signal headsetSettingsRequested()
+    // Text of Plasma's own "Configure …" action, so the button and the context
+    // menu name the same window identically. Empty outside Plasma.
+    property string configureText: ""
     signal settingsRequested()
     signal pairingRequested()
     signal powerOffRequested()
+    signal settingChangeRequested(string feature, bool enabled)
 
     function label(english, spanish) {
         return Output.text(english, spanish, localeName)
+    }
+    // Shows the inline confirmation for "pairing" or "power-off"; nothing runs
+    // until it is accepted.
+    function confirm(action) {
+        if (pairingBusy || powerBusy)
+            return;
+        confirmingPairing = action === "pairing";
+        confirmingPowerOff = action === "power-off";
+
     }
 
     Layout.minimumWidth: Kirigami.Units.gridUnit * 16
@@ -61,6 +85,8 @@ ColumnLayout {
     spacing: Kirigami.Units.largeSpacing
 
     RowLayout {
+        objectName: "summaryHeader"
+        visible: summary.showHeader
         Layout.fillWidth: true
         Layout.leftMargin: Kirigami.Units.largeSpacing
         Layout.rightMargin: Kirigami.Units.largeSpacing
@@ -89,10 +115,7 @@ ColumnLayout {
                         : summary.label("Pair Barracuda…", "Emparejar Barracuda…")
                     icon.name: "network-wireless"
                     enabled: !summary.pairingBusy && !summary.powerBusy
-                    onTriggered: {
-                        summary.confirmingPowerOff = false;
-                        summary.confirmingPairing = true;
-                    }
+                    onTriggered: summary.confirm("pairing")
                 }
                 PC3.MenuItem {
                     objectName: "powerOffButton"
@@ -101,18 +124,39 @@ ColumnLayout {
                         : summary.label("Turn off headset…", "Apagar auricular…")
                     icon.name: "system-shutdown"
                     enabled: !summary.pairingBusy && !summary.powerBusy
+                    onTriggered: summary.confirm("power-off")
+                }
+                PC3.MenuItem {
+                    objectName: "dndMenuItem"
+                    text: summary.label("Do Not Disturb", "No molestar")
+                    icon.name: "notifications-disabled"
+                    checkable: true
+                    // Shows only the value the headset reported.
+                    checked: summary.dndState === true
+                    enabled: summary.connected && summary.dndState !== null && !summary.settingsBusy
+                        && !summary.pairingBusy && !summary.powerBusy
                     onTriggered: {
-                        summary.confirmingPairing = false;
-                        summary.confirmingPowerOff = true;
+                        const value = checked;
+                        checked = Qt.binding(() => summary.dndState === true);
+                        summary.settingChangeRequested("dnd", value);
                     }
                 }
-                PC3.MenuSeparator {}
                 PC3.MenuItem {
-                    objectName: "helpMenuItem"
-                    text: summary.label("Help", "Ayuda")
-                    icon.name: "help-contents"
-                    onTriggered: summary.helpRequested()
+                    objectName: "gamingMenuItem"
+                    text: summary.label("Bluetooth gaming mode", "Modo gaming Bluetooth")
+                    icon.name: "input-gamepad"
+                    checkable: true
+                    checked: summary.gamingState === true
+                    enabled: summary.connected && summary.gamingSettable && summary.gamingState !== null
+                        && !summary.settingsBusy && !summary.pairingBusy && !summary.powerBusy
+                    onTriggered: {
+                        const value = checked;
+                        checked = Qt.binding(() => summary.gamingState === true);
+                        summary.settingChangeRequested("gaming", value);
+                    }
                 }
+
+
             }
         }
     }
@@ -137,16 +181,37 @@ ColumnLayout {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
             spacing: Kirigami.Units.smallSpacing
-            PC3.Label {
-                objectName: "connectionState"
+            RowLayout {
                 Layout.fillWidth: true
-                text: summary.statusText
-                textFormat: Text.PlainText
-                wrapMode: Text.Wrap
-                font.bold: true
-                color: summary.connected ? Kirigami.Theme.positiveTextColor
-                    : summary.connection.state === "unavailable" ? Kirigami.Theme.negativeTextColor
-                    : Kirigami.Theme.textColor
+                spacing: Kirigami.Units.smallSpacing
+                Kirigami.Icon {
+                    objectName: "transportIcon"
+                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                    Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                    source: Output.transportIcon(summary.connection)
+                    visible: source !== ""
+                    color: Kirigami.Theme.positiveTextColor
+                    isMask: true
+                    Accessible.role: Accessible.Graphic
+                    Accessible.name: Output.transportText(summary.connection.transport, summary.localeName)
+                }
+                PC3.Label {
+                    objectName: "connectionState"
+                    Layout.fillWidth: true
+                    text: summary.statusText
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                    font.bold: true
+                    color: summary.connected ? Kirigami.Theme.positiveTextColor
+                        : summary.connection.state === "unavailable" ? Kirigami.Theme.negativeTextColor
+                        : Kirigami.Theme.textColor
+                }
+                Kirigami.ContextualHelpButton {
+                    objectName: "connectionHelp"
+                    toolTipText: summary.label(
+                        "Shows how the headset is connected and its last battery reading. “Link not confirmed” means the connection is not known yet, not that the headset is off.\n\nDo Not Disturb keeps calls from a phone connected by Bluetooth from interrupting the dongle audio. It does not silence desktop notifications.\n\nBluetooth gaming mode lowers audio delay. It can only be changed while the headset is connected by Bluetooth.",
+                        "Muestra cómo está conectado el auricular y su última lectura de batería. «Conexión no confirmada» significa que aún no se sabe si está conectado, no que esté apagado.\n\nNo molestar evita que las llamadas de un teléfono conectado por Bluetooth interrumpan el audio del dongle. No silencia las notificaciones del escritorio.\n\nEl modo gaming Bluetooth reduce el retraso del audio. Solo se puede cambiar cuando el auricular está conectado por Bluetooth.")
+                }
             }
             PC3.Label {
                 objectName: "connectionHint"
@@ -157,21 +222,106 @@ ColumnLayout {
                 wrapMode: Text.Wrap
                 opacity: 0.75
             }
+            RowLayout {
+                objectName: "headsetBatteryRow"
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+                visible: summary.showBattery
+                WorkspaceComponents.BatteryIcon {
+                    objectName: "headsetBatteryIcon"
+                    Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                    Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                    batteryType: ""
+                    hasBattery: summary.batteryAvailable
+                    percent: summary.battery ? summary.battery.percent : 0
+                    pluggedIn: summary.battery !== null && summary.battery.state === "Charging"
+                    Accessible.name: summary.label("Barracuda battery", "Batería del Barracuda")
+                    Accessible.description: Output.batteryText(summary.battery, summary.localeName)
+                }
+                PC3.Label {
+                    objectName: "batteryPercentage"
+                    text: summary.battery ? summary.battery.percent + "%"
+                        : summary.label("Battery unknown", "Batería desconocida")
+                    textFormat: Text.PlainText
+                }
+                PC3.Label {
+                    visible: batteryStatus.visible
+                    text: "·"
+                    opacity: 0.75
+                }
+                PC3.Label {
+                    id: batteryStatus
+                    objectName: "batteryStatus"
+                    visible: summary.battery !== null
+                        && ["Charging", "FullyCharged"].includes(summary.battery.state)
+                    text: Output.batteryState(summary.battery, summary.localeName)
+                    textFormat: Text.PlainText
+                    elide: Text.ElideRight
+                    opacity: 0.75
+                }
+                Item { Layout.fillWidth: true }
+            }
         }
     }
 
+    Kirigami.Separator {
+        visible: summary.connected
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+    }
+
+    // Headset settings read when the popup opens; each is changed from its
+    // action in the menu.
+    SettingRow {
+        objectName: "dnd"
+        visible: summary.connected
+        iconName: "notifications-disabled-symbolic"
+        text: summary.label("Do Not Disturb", "No molestar")
+        value: summary.dndState
+        busy: summary.settingsBusy
+        localeName: summary.localeName
+    }
+    SettingRow {
+        objectName: "gaming"
+        visible: summary.connected
+        iconName: "input-gamepad-symbolic"
+        text: summary.label("Bluetooth gaming mode", "Modo gaming Bluetooth")
+        value: summary.gamingState
+        busy: summary.settingsBusy
+        localeName: summary.localeName
+    }
+
+    PC3.ToolButton {
+        objectName: "detailsToggle"
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        visible: summary.details.length > 0
+        icon.name: summary.showDetails ? "arrow-down" : "arrow-right"
+        text: summary.label("Details", "Detalles")
+        Accessible.checkable: true
+        Accessible.checked: summary.showDetails
+        onClicked: summary.showDetails = !summary.showDetails
+    }
     ColumnLayout {
         objectName: "connectionDetails"
         Layout.fillWidth: true
         Layout.leftMargin: Kirigami.Units.largeSpacing
         Layout.rightMargin: Kirigami.Units.largeSpacing
         spacing: Kirigami.Units.smallSpacing
-        visible: summary.details.length > 0
+        visible: summary.showDetails && summary.details.length > 0
         Repeater {
             model: summary.details
             RowLayout {
                 required property var modelData
                 Layout.fillWidth: true
+                spacing: Kirigami.Units.largeSpacing
+                Kirigami.Icon {
+                    objectName: "detailIcon"
+                    // Same size and column as the setting rows above.
+                    Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                    Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                    source: modelData[2]
+                }
                 PC3.Label {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
@@ -190,78 +340,6 @@ ColumnLayout {
         }
     }
 
-    Kirigami.Separator {
-        visible: summary.showBattery
-        Layout.fillWidth: true
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-    }
-
-    RowLayout {
-        Layout.fillWidth: true
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        spacing: Kirigami.Units.gridUnit
-        objectName: "headsetBatteryRow"
-        visible: summary.showBattery
-
-        WorkspaceComponents.BatteryIcon {
-            objectName: "headsetBatteryIcon"
-            Layout.alignment: Qt.AlignTop
-            Layout.preferredWidth: Kirigami.Units.iconSizes.medium
-            Layout.preferredHeight: Kirigami.Units.iconSizes.medium
-            batteryType: ""
-            hasBattery: summary.batteryAvailable
-            percent: summary.battery ? summary.battery.percent : 0
-            pluggedIn: summary.battery !== null && summary.battery.state === "Charging"
-            Accessible.name: summary.label("Barracuda battery", "Batería del Barracuda")
-            Accessible.description: Output.batteryText(summary.battery, summary.localeName)
-        }
-
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Kirigami.Units.smallSpacing
-            RowLayout {
-                Layout.fillWidth: true
-                PC3.Label {
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 0
-                    text: summary.label("Battery", "Batería")
-                    textFormat: Text.PlainText
-                    wrapMode: Text.Wrap
-                }
-                PC3.Label {
-                    objectName: "batteryPercentage"
-                    text: summary.battery ? summary.battery.percent + "%"
-                        : summary.label("Unknown", "Desconocido")
-                    horizontalAlignment: Text.AlignRight
-                    textFormat: Text.PlainText
-                }
-            }
-            PC3.Label {
-                objectName: "batteryStatus"
-                visible: summary.battery !== null
-                    && ["Charging", "FullyCharged"].includes(summary.battery.state)
-                Layout.fillWidth: true
-                text: Output.batteryState(summary.battery, summary.localeName)
-                textFormat: Text.PlainText
-                wrapMode: Text.Wrap
-                opacity: 0.75
-            }
-        }
-    }
-
-    PC3.Label {
-        objectName: "batteryUnavailableHint"
-        Layout.fillWidth: true
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        visible: summary.showBattery && !summary.batteryAvailable
-        text: summary.label("No battery reading is available yet.",
-                            "Aún no hay una lectura de batería disponible.")
-        wrapMode: Text.Wrap
-        opacity: 0.7
-    }
 
     Kirigami.InlineMessage {
         Layout.fillWidth: true
@@ -357,27 +435,39 @@ ColumnLayout {
         }
     }
 
+    // In the system tray the popup has a fixed size; keep the actions at the
+    // bottom and leave the free space above them.
+    Item {
+        objectName: "footerSpacer"
+        Layout.fillHeight: true
+    }
+
     Kirigami.Separator { Layout.fillWidth: true }
 
     GridLayout {
         objectName: "overviewActions"
         Layout.fillWidth: true
         Layout.margins: Kirigami.Units.largeSpacing
-        columns: width < Kirigami.Units.gridUnit * 20 ? 1 : 2
-        columnSpacing: Kirigami.Units.smallSpacing
-        rowSpacing: Kirigami.Units.smallSpacing
+        // Stacked: both labels are long and must not be cut.
+        columns: 1
+        rowSpacing: 0
         PC3.ToolButton {
-            Layout.fillWidth: true
             objectName: "soundSettingsButton"
-            icon.name: "configure"
-            text: summary.label("Sound settings…", "Ajustes de sonido…")
+            icon.name: "audio-card-symbolic"
+            // KDE's own name for this action in its volume applet.
+            text: summary.label("Configure Audio Devices…", "Configurar dispositivos de sonido…")
             onClicked: summary.settingsRequested()
         }
-        PC3.Button {
-            Layout.fillWidth: true
-            objectName: "configureEffectsButton"
-            text: summary.label("Headset settings…", "Ajustes del auricular…")
-            onClicked: summary.effectsRequested()
+        PC3.ToolButton {
+            id: headsetSettingsButton
+            objectName: "headsetSettingsButton"
+            // In the system tray the heading already has this configure button.
+            visible: summary.showHeader
+            icon.name: "configure"
+            // Drop the keyboard accelerator marker of the menu action.
+            text: summary.configureText.length > 0 ? summary.configureText.replace(/&(?!&)/g, "")
+                : summary.label("Configure Barracuda Headset…", "Configurar Auricular Barracuda…")
+            onClicked: summary.headsetSettingsRequested()
         }
     }
 }

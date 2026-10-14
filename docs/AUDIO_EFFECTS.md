@@ -1,7 +1,8 @@
 # Native headset controls and Linux audio tuning
 
-The widget opens native headset controls directly. Secondary controls are
-collapsed under **More settings**; there is no System tab. Software output EQ,
+The widget's configuration window has an **Equalizer** page for the native EQ,
+a **Power saving** page for idle shutdown and a **Quick Connect** page for
+Bluetooth source switching; there is no System tab. Software output EQ,
 microphone EQ and sidetone are removed. Native sidetone is not exposed because
 its audible effect and gain semantics remain unresolved.
 
@@ -18,8 +19,8 @@ There is no raw HID fallback, periodic settings polling or background service.
 | --- | --- |
 | EQ presets | Default, Game, Music, Movie and Custom; applied preset shown in bold |
 | Custom EQ | Ten bands from 31 Hz to 16 kHz; relative levels -5 to +5, encoded as 0–10 |
-| Gaming | Experimental native mode; USB SET was accepted without changing GET state; separate from Game EQ |
-| Do Not Disturb | Native Boolean setting |
+| Bluetooth gaming mode | Low-latency Bluetooth audio; readable through USB and Bluetooth; settable only over Bluetooth (USB SET was accepted without changing GET state); the widget's checkbox is disabled through the dongle; separate from Game EQ |
+| Do Not Disturb | Native Boolean setting, stored through USB or Bluetooth; firmware applies it to the connected Bluetooth link, or when that link connects |
 | Idle shutdown | Never, 5, 15, 30, 45 or 60 minutes |
 | Quick Connect | Switch only to a Bluetooth address returned by the headset |
 

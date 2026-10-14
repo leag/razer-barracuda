@@ -86,7 +86,7 @@ that Bluetooth sample; the compact row shows its percentage without claiming
 charging or full-charge status. Source removal drops the reading.
 
 The Bluetooth overview uses the detailed headset icon, a clean device name and
-a Bluetooth transport label. Dongle pairing/power actions remain accessible under More actions for a
+a Bluetooth transport label. Dongle pairing/power actions remain accessible in the widget's action menu for a
 Bluetooth output, with labels identifying the required USB dongle. These two
 actions still use the dongle transport. These presentation choices do not establish physical
 connectivity; battery data and default audio selection remain distinct.

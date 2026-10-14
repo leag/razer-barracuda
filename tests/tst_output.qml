@@ -8,6 +8,13 @@ TestCase {
         return {ok: true, usb: {adapter: "present", driver: true, link: link, battery: battery || null},
                 bluetooth: bluetooth === undefined ? null : bluetooth};
     }
+    function test_mac_address_format() {
+        compare(Output.macAddress("0a0b0c0d0e0f"), "0A:0B:0C:0D:0E:0F");
+        compare(Output.macAddress("01:02:03:04:05:06"), "01:02:03:04:05:06");
+        // Anything that is not six bytes is shown unchanged.
+        compare(Output.macAddress("abc"), "abc");
+        compare(Output.macAddress(undefined), "");
+    }
     function test_link_parsing_and_command() {
         compare(Output.linkCommand(), "barracuda-headset --request '{\"op\":\"link\"}'");
         compare(Output.parseLink("").ok, false);
@@ -43,6 +50,9 @@ TestCase {
     function test_connection_text_and_hints() {
         compare(Output.connectionText(Output.connection(linked("connected")), "en_US"), "Connected · USB dongle");
         compare(Output.connectionText(Output.connection(linked("connected")), "es_CL"), "Conectado · Dongle USB");
+        // The popup omits the transport, which its icon shows.
+        compare(Output.connectionText(Output.connection(linked("connected")), "en_US", false), "Connected");
+        compare(Output.connectionText(Output.connection(linked("disconnected")), "en_US", false), "Disconnected");
         compare(Output.connectionText({state: "connected", transport: "both"}, "es_CL"),
                 "Conectado · Dongle USB y Bluetooth");
         compare(Output.connectionText({state: "disconnected"}, "es_CL"), "Desconectado");
@@ -60,28 +70,34 @@ TestCase {
         verify(Output.connectionHint({ok: false}, {state: "unavailable"}, "en_US").includes("barracuda-headset"));
         verify(Output.connectionHint(linked("disconnected"), {state: "disconnected"}, "es_CL").includes("Enciende"));
     }
+    // Label and value of each details row; icons are checked separately.
+    function pairs(rows) { return rows.map(row => row.slice(0, 2)); }
     function test_connection_details() {
         compare(Output.connectionDetails(null, "en_US"), []);
         compare(Output.connectionDetails({ok: false}, "en_US"), []);
-        compare(Output.connectionDetails({ok: true, usb: {adapter: "missing"}, bluetooth: null}, "en_US"),
+        compare(pairs(Output.connectionDetails({ok: true, usb: {adapter: "missing"}, bluetooth: null}, "en_US")),
                 [["USB dongle", "Not detected"]]);
-        compare(Output.connectionDetails(linked("disconnected", {state: "disconnected", address: "x"}), "es_CL"),
+        compare(pairs(Output.connectionDetails(linked("disconnected", {state: "disconnected", address: "x"}), "es_CL")),
                 [["Dongle USB", "Detectado"], ["Enlace 2,4 GHz", "Desconectado"], ["Bluetooth", "No conectado"]]);
-        compare(Output.connectionDetails({ok: true, usb: {adapter: "present", driver: false, link: "unknown"},
-                                          bluetooth: {state: "unknown"}}, "en_US"),
+        compare(pairs(Output.connectionDetails({ok: true, usb: {adapter: "present", driver: false, link: "unknown"},
+                                          bluetooth: {state: "unknown"}}, "en_US")),
                 [["USB dongle", "Detected"], ["2.4 GHz link", "Driver required"], ["Bluetooth", "Unknown"]]);
         const battery = {percent: 65, status: "Charging", cable: true, voltage_mv: 4123};
-        compare(Output.connectionDetails(linked("connected", null, battery), "en_US"),
+        compare(pairs(Output.connectionDetails(linked("connected", null, battery), "en_US")),
                 [["USB dongle", "Detected"], ["2.4 GHz link", "Connected"],
                  ["Charging cable", "Connected"], ["Battery voltage", "4.12 V"]]);
-        compare(Output.connectionDetails(linked("connected", null, battery), "es_CL")[3],
+        compare(pairs(Output.connectionDetails(linked("connected", null, battery), "es_CL"))[3],
                 ["Voltaje de batería", "4,12 V"]);
         battery.cable = null;
         battery.voltage_mv = null;
-        compare(Output.connectionDetails(linked("connected", null, battery), "en_US").slice(2),
+        compare(pairs(Output.connectionDetails(linked("connected", null, battery), "en_US")).slice(2),
                 [["Charging cable", "Unknown"]]);
         // Retained values are not shown as current while the link is not confirmed.
-        compare(Output.connectionDetails(linked("unknown", null, battery), "en_US").length, 2);
+        compare(pairs(Output.connectionDetails(linked("unknown", null, battery), "en_US")).length, 2);
+        compare(Output.connectionDetails(linked("connected", {state: "connected"}, {percent: 5, cable: true, voltage_mv: 4000}), "en_US")
+                    .map(row => row[2]),
+                ["drive-removable-media-usb-pendrive-symbolic", "network-wireless-symbolic", "network-bluetooth-symbolic",
+                 "battery-full-charging-symbolic", "battery-full-symbolic"]);
     }
     function test_driver_battery_fallback() {
         compare(Output.driverBattery(null), null);
@@ -109,6 +125,27 @@ TestCase {
         compare(Output.emblem({state: "connected"}, {percent: 10, state: "Discharging"}), "emblem-warning");
         compare(Output.emblem({state: "connected"}, {percent: 10, state: "Charging"}), "");
         compare(Output.emblem({state: "connected"}, {percent: 11, state: "Discharging"}), "");
+    }
+    function test_transport_icon() {
+        compare(Output.transportIcon({state: "connected", transport: "usb"}), "drive-removable-media-usb-pendrive-symbolic");
+        // With both links the dongle wins.
+        compare(Output.transportIcon({state: "connected", transport: "both"}), "drive-removable-media-usb-pendrive-symbolic");
+        compare(Output.transportIcon({state: "connected", transport: "bluetooth"}), "network-bluetooth-symbolic");
+        for (const state of ["disconnected", "unknown", "no-adapter", "unavailable", "checking"])
+            compare(Output.transportIcon({state: state, transport: "usb"}), "");
+    }
+    function test_tray_status() {
+        compare(Output.trayStatus({state: "connected"}, null, false), "active");
+        compare(Output.trayStatus({state: "unknown"}, null, false), "active");
+        for (const state of ["disconnected", "no-adapter", "unavailable", "checking"]) {
+            compare(Output.trayStatus({state: state}, null, false), "passive");
+            // A running pairing or power-off keeps the icon reachable.
+            compare(Output.trayStatus({state: state}, null, true), "active");
+        }
+        compare(Output.trayStatus({state: "connected"}, {percent: 10, state: "Discharging"}, false), "attention");
+        compare(Output.trayStatus({state: "connected"}, {percent: 10, state: "Charging"}, false), "active");
+        // A stale low reading without a confirmed link does not ask for attention.
+        compare(Output.trayStatus({state: "disconnected"}, {percent: 5, state: "Discharging"}, false), "passive");
     }
     function test_pairing_command_after_ui_confirmation() {
         compare(Output.powerOffCommand("es_CL"), "barracuda-power --off --yes --language es");

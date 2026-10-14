@@ -39,7 +39,7 @@ Plasma5Support.DataSource {
             "route-failed": label("Could not restore the adapter route. Reconnect the dongle.", "No se pudo restaurar la ruta del adaptador. Reconecta el dongle."),
             "rejected": label("The headset rejected this change.", "El auricular rechazó este cambio."),
             "unconfirmed": label("The change could not be confirmed. Refresh before trying again.", "No se pudo confirmar el cambio. Actualiza antes de volver a intentarlo."),
-            "gaming-active": label("Turn Gaming off before switching Bluetooth devices.", "Desactiva Gaming antes de cambiar de dispositivo Bluetooth."),
+            "gaming-active": label("Turn Bluetooth gaming mode off before switching Bluetooth devices.", "Desactiva el modo gaming Bluetooth antes de cambiar de dispositivo Bluetooth."),
             "gaming-not-applied": label("The headset accepted the Gaming request but did not change its mode. Activation over USB is unverified; this does not enable the Game EQ preset.", "El auricular aceptó la solicitud Gaming, pero no cambió de modo. Su activación por USB no está confirmada; esto no activa el perfil EQ Juegos.")
         };
         return labels[code] || label("This control is unavailable on the current headset.", "Este control no está disponible en el auricular actual.");

@@ -1,12 +1,12 @@
 import QtQuick
 import org.kde.kirigami as Kirigami
-import org.kde.plasma.components as PC3
+import QtQuick.Controls as QQC2
 
-PC3.Slider {
+QQC2.Slider {
     required property var scrollItem
     wheelEnabled: false
 
-    // Plasma's slider handles wheels in its own MouseArea, independently of
+    // Some styles handle wheels in their own MouseArea, independently of
     // wheelEnabled. Consume the event first and scroll the surrounding view.
     MouseArea {
         anchors.fill: parent

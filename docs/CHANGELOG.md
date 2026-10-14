@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Make the widget a system tray entry and move native headset settings to its
+  configuration window: **Equalizer** (profiles with icons and a vertical
+  graphic EQ sent with the window's Apply), **Power saving** (idle shutdown) and
+  **Quick Connect** (known Bluetooth sources with formatted addresses and an
+  explanation when gaming mode blocks switching). Do Not Disturb and Bluetooth
+  gaming mode are in the popup; the separate help page is replaced by contextual
+  help buttons.
 - Serialize startup E3 exchanges with telemetry and explicit kernel controls,
   retaining up to three attempts at least two seconds apart and unknown link
   state after failures.

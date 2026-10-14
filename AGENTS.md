@@ -10,8 +10,17 @@ user in their conversation language. Read README.md and docs/PROTOCOL.md first.
 
 ## Layout
 
-- plasmoid/: read-only Plasma 6 default-output widget and icon selection.
-  Detailed headset/speaker artwork is loaded from the installed KDE Breeze theme.
+- plasmoid/: Plasma 6 system tray/panel widget. The popup shows read-only
+  status, including Do Not Disturb and Bluetooth gaming mode (one settings
+  read each time the popup opens with a confirmed link, and checkable actions
+  that set them; gaming mode only over Bluetooth), and
+  confirms explicit pairing/power-off;
+  native headset settings are
+  the Equalizer, Power saving and Quick Connect configuration pages
+  (contents/config). Help uses
+  at most one Kirigami.ContextualHelpButton per view, not a help page. Panel
+  and tray icons use the theme's symbolic glyph; the popup loads detailed
+  Breeze headset artwork.
 - barracuda_pair/pairing.py: pairing sequence, `barracuda-pair` CLI and hidraw lookup.
 - barracuda_pair/i18n.py: explicit UI translations.
 - tests/: hardware-independent unittest suite.

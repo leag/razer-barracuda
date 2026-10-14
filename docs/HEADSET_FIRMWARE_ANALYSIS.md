@@ -96,7 +96,7 @@ Names are cross-checked against the exact T3 Android providers documented in
 | EQ preset | `13` / `93` | `0x1ffb75a4` / `0x1ffb784c` | Converts internal presets 1/2/3 to app IDs 7/8/9 and inversely on SET; changed selection reaches the EQ application and configuration-write paths |
 | Gaming | `14` / `94` | `0x1ffb75e6` / `0x1ffb7394` | GET reads GP+31708; SET consumes request byte 3 and calls `0x1ffb5542` |
 | Custom EQ | `15` / `95` | `0x1ffb7238` / `0x1ffb794a` | GET returns ten bytes; SET requires length byte 10, copies ten values and reaches EQ recalculation |
-| Do Not Disturb | `27` / `a7` | `0x1ffb76b6` / `0x1ffb79a4` | GET and SET share GP+31771; SET saves configuration and invokes a conditional Bluetooth-related path at `0x1ffb5858` |
+| Do Not Disturb | `27` / `a7` | `0x1ffb76b6` / `0x1ffb79a4` | GET and SET share GP+31771 with no transport check; SET saves configuration and calls `0x1ffb5858`, which acts on the Bluetooth link at GP+30208 only while GP+30209 marks it connected; link events near `0x1ffb5900` read GP+31771 again |
 | Auto standby | `2c` / `ac` | `0x1ffb776a` / `0x1ffb7b0a` | GET reads GP+31854; SET stores byte 3, schedules further processing and calls the configuration writer, with state-dependent behavior |
 | Quick Connect | `2d` / `ad` | `0x1ffb7776` / `0x1ffb7b72` | GET constructs a variable device list; SET consumes six address bytes, reverses their order internally, and conditionally schedules the connection action |
 

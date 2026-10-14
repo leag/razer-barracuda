@@ -63,37 +63,60 @@ Item {
             const selector = findChild(nativeSettings, "nativeProfileSelector");
             compare(selector.currentIndex, 1);
             compare(selector.currentText, "Game");
-            compare(findChild(nativeSettings, "toggleHeadsetOptions").text, "More settings");
+            compare(nativeSettings.confirmedPresetIcon, "input-gamepad");
+            // The equalizer section shows only EQ controls.
+            verify(findChild(nativeSettings, "equalizerSection").visible);
+            verify(!findChild(nativeSettings, "powerSaving").visible);
             verify(!selector.wheelEnabled);
             selector.activated(3);
             compare(fakeHeadset.requests[0].feature, "preset");
             compare(fakeHeadset.requests[0].value, 9);
             compare(nativeSettings.state.preset, 7);
             compare(selector.currentIndex, 1);
-            verify(!findChild(nativeSettings, "nativeDnd").enabled);
-            verify(!nativeSettings.showOptions);
-            findChild(nativeSettings, "toggleHeadsetOptions").clicked();
-            verify(findChild(nativeSettings, "headsetOptions").visible);
+            // Do Not Disturb lives in the popup, not on this page.
+            compare(findChild(nativeSettings, "nativeDnd"), null);
+            nativeSettings.section = "powerSaving";
+            verify(findChild(nativeSettings, "powerSaving").visible);
+            verify(!findChild(nativeSettings, "equalizerSection").visible);
+            // Power saving and Quick Connect are separate sections.
+            verify(!findChild(nativeSettings, "quickConnect").visible);
             const standby = findChild(nativeSettings, "nativeStandby");
             verify(!standby.wheelEnabled);
             compare(standby.currentIndex, 2);
             standby.activated(3);
             compare(fakeHeadset.requests[1].value, 30);
-            const gaming = findChild(nativeSettings, "nativeGaming");
-            verify(gaming.text.includes("experimental"));
-            mouseClick(gaming);
-            compare(fakeHeadset.requests[2].feature, "gaming");
-            compare(fakeHeadset.requests[2].value, true);
-            compare(nativeSettings.state.gaming, false);
-            verify(findChild(nativeSettings, "nativeGamingHint").text.includes("Bluetooth"));
+            // Bluetooth gaming mode lives in the popup, not on this page.
+            compare(findChild(nativeSettings, "nativeGaming"), null);
+            // Quick Connect is blocked while gaming mode is on.
+            nativeSettings.section = "quickConnect";
+            verify(findChild(nativeSettings, "quickConnect").visible);
+            verify(!findChild(nativeSettings, "powerSaving").visible);
+            fakeHeadset.response = {ok: true, state: Object.assign({}, result.state, {
+                gaming: true, devices: [{address: "01:02:03:04:05:06", name: "Phone", active: false}]})};
+            const device = () => findChild(findChild(nativeSettings, "quickConnectDevices").children
+                .find(child => child.text === "Phone"), "quickConnectButton");
+            verify(!device().enabled);
+            verify(findChild(nativeSettings, "quickConnectBlocked").visible);
+            fakeHeadset.response = {ok: true, state: Object.assign({}, result.state, {
+                devices: [{address: "01:02:03:04:05:06", name: "Phone", active: false}]})};
+            verify(device().enabled);
+            verify(!findChild(nativeSettings, "quickConnectBlocked").visible);
+            device().clicked();
+            compare(fakeHeadset.requests[fakeHeadset.requests.length - 1].value, "01:02:03:04:05:06");
+            // The active source has no switch button; an empty list explains itself.
+            fakeHeadset.response = {ok: true, state: Object.assign({}, result.state, {
+                devices: [{address: "01:02:03:04:05:06", name: "Phone", active: true}]})};
+            verify(!device().visible);
+            verify(!findChild(nativeSettings, "quickConnectEmpty").visible);
+            fakeHeadset.response = result;
+            verify(findChild(nativeSettings, "quickConnectEmpty").visible);
+            nativeSettings.section = "equalizer";
             fakeHeadset.busy = true;
             verify(!selector.enabled);
             fakeHeadset.busy = false;
             nativeSettings.localeName = "es_CL";
             tryCompare(selector, "currentText", "Juegos");
-            compare(findChild(nativeSettings, "toggleHeadsetOptions").text, "Más ajustes");
             fakeHeadset.response = null;
-            verify(!findChild(nativeSettings, "nativeGaming").enabled);
             compare(selector.currentIndex, 1);
             verify(!selector.enabled);
             nativeSettings.applyingPreset = false;
@@ -105,8 +128,21 @@ Item {
                 preset: "unknown-link", bands: "unknown-link", gaming: "unknown-link",
                 dnd: "unknown-link", standby: "unknown-link", devices: "unknown-link"}};
             compare(nativeSettings.settingsError, "unknown-link");
-            verify(findChild(nativeSettings, "nativeSettingsError").text.startsWith("unknown-link\n"));
-            verify(!findChild(nativeSettings, "toggleHeadsetOptions").visible);
+            const notice = findChild(nativeSettings, "nativeSettingsError");
+            compare(notice.text, "unknown-link");
+            // Refresh is offered inside the notice, not as a separate row.
+            compare(notice.actions.length, 1);
+            compare(notice.actions[0].objectName, "refreshNativeSettings");
+            notice.actions[0].trigger();
+            compare(fakeHeadset.requests[fakeHeadset.requests.length - 1].op, "status");
+            // Each section reports only its own errors.
+            fakeHeadset.response = {state: {preset: null}, errors: {preset: "unknown-link", standby: "timeout"}};
+            compare(nativeSettings.settingsError, "unknown-link");
+            nativeSettings.section = "powerSaving";
+            compare(nativeSettings.settingsError, "timeout");
+            nativeSettings.section = "quickConnect";
+            compare(nativeSettings.settingsError, "");
+            nativeSettings.section = "equalizer";
             fakeHeadset.response = {state: {preset: null}, errors: {preset: "unknown-link", bands: "timeout"}};
             verify(nativeSettings.settingsError.includes("Equalizer: unknown-link"));
             verify(nativeSettings.settingsError.includes("Custom EQ: timeout"));
@@ -141,9 +177,16 @@ Item {
             verify(custom.visible);
             findChild(nativeSettings, "resetNativeBands").clicked();
             verify(!nativeSettings.bandsDirty);
+            // Bands are sent by the configuration window's Apply, not a page button.
+            compare(findChild(nativeSettings, "applyNativeBands"), null);
+            compare(findChild(nativeSettings, "bandsUnit").text, "Hz");
+            verify(!nativeSettings.unsavedBands);
+            nativeSettings.applyBands();
+            compare(fakeHeadset.requests.length, 1);
             nativeSettings.bands = [1,0,0,0,0,0,0,0,0,0];
             nativeSettings.bandsDirty = true;
-            findChild(nativeSettings, "applyNativeBands").clicked();
+            verify(nativeSettings.unsavedBands);
+            nativeSettings.applyBands();
             compare(fakeHeadset.requests[1].feature, "bands");
             compare(fakeHeadset.requests[1].value[0], 1);
             selector.activated(0);
@@ -184,6 +227,48 @@ Item {
             compare(nativeBackend.response.state.preset, 0);
             nativeBackend.target = {transport: "usb"};
             nativeBackend.requestedKey = nativeBackend.targetKey;
+        }
+        function test_contextual_help_translation() {
+            nativeSettings.visible = true;
+            const result = {ok: true, state: {preset: 7, bands: [0,0,0,0,0,0,0,0,0,0],
+                                             gaming: false, dnd: false, standby: 15, devices: []}};
+            fakeHeadset.response = result;
+            fakeHeadset.loaded(result);
+            // One help button in the equalizer section, none in the other.
+            for (const name of ["dndHelp", "standbyHelp", "quickConnectHelp", "refreshHelp"])
+                compare(findChild(nativeSettings, name), null);
+            const profile = findChild(nativeSettings, "profileHelp");
+            verify(profile.visible);
+            for (const locale of ["en_US", "es_CL"]) {
+                nativeSettings.localeName = locale;
+                verify(profile.toolTipText.includes(locale === "en_US" ? "select Apply" : "selecciona Aplicar"));
+            }
+            nativeSettings.section = "powerSaving";
+            verify(!findChild(nativeSettings, "profileHelp").visible);
+            nativeSettings.section = "equalizer";
+            nativeSettings.localeName = "en_US";
+            fakeHeadset.response = null;
+            nativeSettings.visible = false;
+        }
+        function test_refresh_only_when_needed() {
+            nativeSettings.visible = true;
+            const ok = {ok: true, state: {preset: 7, bands: [0,0,0,0,0,0,0,0,0,0], devices: []}};
+            fakeHeadset.response = ok;
+            fakeHeadset.message = "";
+            fakeHeadset.error = "";
+            verify(!findChild(nativeSettings, "nativeSettingsError").visible);
+            verify(!findChild(nativeSettings, "nativeSettingsMessage").visible);
+            // A confirmed change needs no refresh.
+            fakeHeadset.response = Object.assign({sent: "preset"}, ok);
+            fakeHeadset.message = "Change confirmed";
+            compare(findChild(nativeSettings, "nativeSettingsMessage").actions.length, 0);
+            // A device switch request offers it.
+            fakeHeadset.response = Object.assign({sent: "devices"}, ok);
+            fakeHeadset.message = "Connection switch requested";
+            compare(findChild(nativeSettings, "nativeSettingsMessage").actions.length, 1);
+            fakeHeadset.message = "";
+            fakeHeadset.response = null;
+            nativeSettings.visible = false;
         }
         function test_command_quotes_profile_names() {
             const command = Output.audioCommand({op: "save", name: "My ' $(touch nope) profile"});

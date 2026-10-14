@@ -67,10 +67,12 @@ function transportText(transport, locale) {
     }
 }
 
-function connectionText(value, locale) {
+// The popup omits the transport, which its icon shows; tooltips keep it.
+function connectionText(value, locale, withTransport = true) {
     switch (value.state) {
     case "connected":
-        return text("Connected", "Conectado", locale) + " · " + transportText(value.transport, locale);
+        return text("Connected", "Conectado", locale)
+            + (withTransport ? " · " + transportText(value.transport, locale) : "");
     case "disconnected":
         return text("Disconnected", "Desconectado", locale);
     case "unknown":
@@ -114,7 +116,7 @@ function voltageText(millivolts, locale) {
     return (/^es([_-]|$)/i.test(locale) ? volts.replace(".", ",") : volts) + " V";
 }
 
-// Label/value rows for the details list; empty until a status has been read.
+// Label/value/icon rows for the details list; empty until a status has been read.
 function connectionDetails(status, locale) {
     if (!status || !status.ok)
         return [];
@@ -122,27 +124,31 @@ function connectionDetails(status, locale) {
     const rows = [[text("USB dongle", "Dongle USB", locale),
         usb.adapter === "present" ? text("Detected", "Detectado", locale)
             : usb.adapter === "multiple" ? text("More than one", "Más de uno", locale)
-            : text("Not detected", "No detectado", locale)]];
+            : text("Not detected", "No detectado", locale),
+        "drive-removable-media-usb-pendrive-symbolic"]];
     if (usb.adapter === "present")
         rows.push([text("2.4 GHz link", "Enlace 2,4 GHz", locale),
             !usb.driver ? text("Driver required", "Requiere driver", locale)
                 : usb.link === "connected" ? text("Connected", "Conectado", locale)
                 : usb.link === "disconnected" ? text("Disconnected", "Desconectado", locale)
-                : text("Not confirmed", "No confirmado", locale)]);
+                : text("Not confirmed", "No confirmado", locale),
+            "network-wireless-symbolic"]);
     const bt = status.bluetooth;
     if (bt)
         rows.push(["Bluetooth", bt.state === "connected" ? text("Connected", "Conectado", locale)
             : bt.state === "disconnected" ? text("Not connected", "No conectado", locale)
-            : text("Unknown", "Desconocido", locale)]);
+            : text("Unknown", "Desconocido", locale),
+            "network-bluetooth-symbolic"]);
     const battery = usb.adapter === "present" && usb.link === "connected" ? usb.battery : null;
     if (battery) {
         rows.push([text("Charging cable", "Cable de carga", locale),
             battery.cable === true ? text("Connected", "Conectado", locale)
                 : battery.cable === false ? text("Not connected", "No conectado", locale)
-                : text("Unknown", "Desconocido", locale)]);
+                : text("Unknown", "Desconocido", locale),
+            "battery-full-charging-symbolic"]);
         if (typeof battery.voltage_mv === "number" && battery.voltage_mv > 0)
             rows.push([text("Battery voltage", "Voltaje de batería", locale),
-                       voltageText(battery.voltage_mv, locale)]);
+                       voltageText(battery.voltage_mv, locale), "battery-full-symbolic"]);
     }
     return rows;
 }
@@ -168,6 +174,14 @@ function headsetTarget(sink, status) {
     return bluetooth(sink) ? {transport: "bluetooth", address: bluetoothAddress(sink)} : {transport: "usb"};
 }
 
+// Icon of the confirmed transport; the USB dongle wins when both are linked.
+function transportIcon(value) {
+    if (value.state !== "connected")
+        return "";
+    return value.transport === "bluetooth" ? "network-bluetooth-symbolic"
+        : "drive-removable-media-usb-pendrive-symbolic";
+}
+
 // Disconnected and missing-adapter states strike the artwork through.
 function slashed(value) {
     return value.state === "disconnected" || value.state === "no-adapter";
@@ -181,6 +195,18 @@ function emblem(value, battery) {
             && !["Charging", "FullyCharged"].includes(battery.state))
         return "emblem-warning";
     return "";
+}
+
+// System tray visibility. A confirmed or unconfirmed link and a running action
+// keep the icon shown; a disconnected headset, a missing adapter and an
+// unavailable helper move it to the tray's hidden items. A low battery asks for
+// attention.
+function trayStatus(value, battery, busy) {
+    if (emblem(value, battery) === "emblem-warning")
+        return "attention";
+    if (busy || value.state === "connected" || value.state === "unknown")
+        return "active";
+    return "passive";
 }
 
 function pairingCommand(locale) {
@@ -264,6 +290,14 @@ function text(english, spanish, locale) {
 
 // Select KDE Breeze's detailed variants, not its small monochrome variants.
 // Files remain owned by breeze-icons; no theme artwork is copied into this package.
+// Bluetooth addresses arrive as 12 hex digits; show them as AA:BB:CC:DD:EE:FF.
+function macAddress(address) {
+    const hex = String(address || "").replace(/[^0-9a-fA-F]/g, "");
+    if (hex.length !== 12)
+        return String(address || "");
+    return hex.toUpperCase().match(/../g).join(":");
+}
+
 function artwork(iconName) {
     if (/^audio-(headphones|headset)(-|$)/.test(iconName))
         return "file:///usr/share/icons/breeze/devices/64/audio-headset.svg";

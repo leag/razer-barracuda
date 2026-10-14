@@ -3,11 +3,14 @@ import QtQuick.Effects
 import org.kde.kirigami as Kirigami
 import "../code/output.js" as Output
 
-// KDE's detailed headset artwork with the connection overlay: dimmed without a
-// confirmed link, a red slash when disconnected or without an adapter, and an
-// optional corner emblem for the remaining states.
+// KDE's headset artwork with the connection overlay: dimmed without a confirmed
+// link, a red slash when disconnected or without an adapter, and an optional
+// corner emblem for the remaining states. Panel and system tray icons use the
+// theme's symbolic glyph, recolored like the neighboring icons; the popup uses
+// the detailed artwork.
 Item {
     id: headset
+    property bool symbolic: false
     property bool connected: false
     property bool slashed: false
     property string emblem: ""
@@ -36,17 +39,19 @@ Item {
             id: picture
             objectName: "headsetPicture"
             anchors.fill: parent
-            source: Output.artwork("audio-headset")
+            // Not loaded at all for the symbolic glyph.
+            source: headset.symbolic ? "" : Output.artwork("audio-headset")
             sourceSize.width: 64
             sourceSize.height: 64
             fillMode: Image.PreserveAspectFit
-            visible: status === Image.Ready
+            visible: !headset.symbolic && status === Image.Ready
             opacity: headset.connected ? 1 : 0.5
         }
         Kirigami.Icon {
+            objectName: "headsetSymbol"
             anchors.fill: parent
-            source: "audio-headset"
-            visible: picture.status !== Image.Ready
+            source: headset.symbolic ? "audio-headset-symbolic" : "audio-headset"
+            visible: headset.symbolic || picture.status !== Image.Ready
             opacity: picture.opacity
         }
     }

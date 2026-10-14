@@ -1,0 +1,3 @@
+HeadsetConfigPage {
+    section: "powerSaving"
+}
