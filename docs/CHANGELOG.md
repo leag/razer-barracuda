@@ -1,6 +1,6 @@
 # Change history
 
-## Unreleased
+## v0.6.0
 
 - Make the widget a system tray entry and move native headset settings to its
   configuration window: **Equalizer** (profiles with icons and a vertical
