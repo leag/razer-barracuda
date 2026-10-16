@@ -205,10 +205,20 @@ Item {
             summary.visible = false
             panel.visible = true
             panel.activeView = true
-            verify(findChild(panel, "summaryHeader").visible)
+            const heading = findChild(panel, "summaryHeader")
+            const overview = findChild(panel, "connectionOverview")
+            verify(heading.visible)
+            // The heading stays outside the scrolling body and counts in the
+            // popup's size, even while the popup is hidden.
+            verify(heading.mapToItem(panel, 0, 0).y < overview.mapToItem(panel, 0, 0).y)
+            const withHeading = panel.Layout.preferredHeight
+            panel.visible = false
+            compare(panel.Layout.preferredHeight, withHeading)
+            panel.visible = true
             // The system tray draws its own heading.
             panel.showHeader = false
-            verify(!findChild(panel, "summaryHeader").visible)
+            verify(!heading.visible)
+            verify(panel.Layout.preferredHeight < withHeading)
             panel.showHeader = true
             panel.visible = false
             summary.visible = true

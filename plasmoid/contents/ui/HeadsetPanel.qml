@@ -50,7 +50,9 @@ ColumnLayout {
 
     Layout.minimumWidth: Kirigami.Units.gridUnit * 18
     Layout.preferredWidth: Kirigami.Units.gridUnit * 22
-    Layout.preferredHeight: (heading.visible ? heading.implicitHeight + spacing : 0)
+    // From showHeader, not the heading's visibility, which is false while the
+    // popup itself is hidden and Plasma sizes it.
+    Layout.preferredHeight: (showHeader ? heading.implicitHeight + spacing : 0)
         + overview.implicitHeight + Kirigami.Units.largeSpacing * 2
     Layout.minimumHeight: panel.Layout.preferredHeight
     // A panel popup fits its content; the system tray gives every applet the

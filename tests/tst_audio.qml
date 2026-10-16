@@ -72,6 +72,10 @@ Item {
             verify(!standby.wheelEnabled);
             compare(standby.currentIndex, 2);
             compare(standby.currentText, "15 min");
+            compare(standby.Accessible.name, "Turn off when idle");
+            nativeSettings.localeName = "es_CL";
+            compare(standby.Accessible.name, "Apagar por inactividad");
+            nativeSettings.localeName = "en_US";
             nativeSettings.section = "equalizer";
             fakeHeadset.busy = true;
             verify(!selector.enabled);
@@ -269,8 +273,7 @@ Item {
             fakeHeadset.response = {state: {preset: 7}, errors: {devices: "timeout", dnd: "timeout", gaming: "timeout"}};
             compare(nativeSettings.settingsError, "");
             fakeHeadset.response = {state: {preset: null}, errors: {preset: "unknown-link", bands: "timeout"}};
-            verify(nativeSettings.settingsError.includes("Equalizer: unknown-link"));
-            verify(nativeSettings.settingsError.includes("Custom EQ: timeout"));
+            compare(nativeSettings.settingsError, "Equalizer: unknown-link Custom EQ: timeout");
             nativeSettings.localeName = "es_CL";
             verify(nativeSettings.settingsError.includes("Ecualizador:"));
             fakeHeadset.response = null;

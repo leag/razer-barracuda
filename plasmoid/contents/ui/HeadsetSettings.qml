@@ -83,7 +83,9 @@ ColumnLayout {
         const codes = keys.map(key => errors[key]);
         if (codes.every(code => code === codes[0]))
             return controller.errorLabel(codes[0]);
-        return keys.map(key => labels[key] + ": " + controller.errorLabel(errors[key])).join("\n");
+        // One paragraph: Kirigami's InlineMessage with an action loops on
+        // short lines split by a hard line break.
+        return keys.map(key => labels[key] + ": " + controller.errorLabel(errors[key])).join(" ");
     }
     // The page's setting has no reading, and nothing else explains why.
     readonly property string staleText: busy || controller.error !== "" || settingsError !== "" ? ""
