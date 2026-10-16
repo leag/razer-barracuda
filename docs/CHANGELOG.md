@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fix the **Equalizer** page showing every custom band at 0: the headset's
+  stored curve now reaches the sliders, so pressing Apply no longer overwrites
+  it with a flat curve.
 - Make the system tray the widget's main place: the plugin is enabled by default,
   so the tray shows it without configuration. The tray icon no longer hides when
   the headset is disconnected or the adapter is missing. Without a connection

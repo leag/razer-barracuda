@@ -75,8 +75,11 @@ ColumnLayout {
             page.applyingPreset = false;
             if (page.bandsDirty && result.sent !== "bands")
                 return;
-            if (Array.isArray(result.state.bands))
-                page.bands = result.state.bands.slice();
+            // A var signal argument is no longer a JavaScript array, so
+            // Array.isArray() rejects it; copy any list of ten values.
+            const bands = result.state ? result.state.bands : null;
+            if (bands && bands.length === 10)
+                page.bands = Array.from(bands);
             page.bandsDirty = false;
         }
     }

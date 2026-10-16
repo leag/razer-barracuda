@@ -178,6 +178,37 @@ Item {
             fakeHeadset.error = "";
             nativeSettings.visible = false;
         }
+        function test_loaded_custom_bands_reach_the_sliders() {
+            nativeSettings.visible = true;
+            nativeSettings.bandsDirty = false;
+            const curve = [2, 1, 0, -1, 0, 1, 2, 3, 1, 0];
+            const result = {ok: true, state: {preset: 255, bands: curve.slice()}};
+            fakeHeadset.response = result;
+            // The reply reaches the page as a var signal argument.
+            fakeHeadset.loaded(result);
+            compare(nativeSettings.bands, curve);
+            verify(Array.isArray(nativeSettings.bands));
+            const custom = findChild(nativeSettings, "nativeCustomBands");
+            verify(custom.visible);
+            const sliders = [];
+            const collect = item => {
+                if (item.orientation === Qt.Vertical && item.from === -5)
+                    sliders.push(item);
+                for (const child of item.children)
+                    collect(child);
+            };
+            collect(custom);
+            compare(sliders.length, 10);
+            compare(sliders.map(slider => slider.value), curve);
+            // A reply without ten values keeps the current curve.
+            const partial = {ok: true, state: {preset: 255, bands: [1, 2]}};
+            fakeHeadset.response = partial;
+            fakeHeadset.loaded(partial);
+            compare(nativeSettings.bands, curve);
+            fakeHeadset.response = null;
+            nativeSettings.bands = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+            nativeSettings.visible = false;
+        }
         function test_native_error_clears_confirmed_state() {
             nativeBackend.response = {state: {preset: 7}};
             nativeBackend.newData("fake", {stdout: JSON.stringify({ok: false, error: "unconfirmed"})});
