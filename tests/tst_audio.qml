@@ -8,20 +8,6 @@ Item {
     width: 600
     height: 700
     QtObject {
-        id: fake
-        property bool busy: false
-        property string error: ""
-        property string message: ""
-        property var response: null
-        property var requests: []
-        signal loaded(var result)
-        function request(value) { requests = requests.concat([value]); }
-    }
-    AudioController {
-        id: backend
-        engine: ""
-    }
-    QtObject {
         id: fakeHeadset
         property bool busy: false
         property var response: null
@@ -37,23 +23,13 @@ Item {
         anchors.fill: parent
         visible: false
         controller: fakeHeadset
-        audioController: fake
     }
     HeadsetController { id: nativeBackend; engine: "" }
     TestCase {
         name: "HeadsetSettings"
         when: windowShown
-        function test_helper_errors_are_visible() {
-            backend.newData("fake", {stdout: "", "exit code": 127});
-            verify(backend.error.length > 0);
-            backend.newData("fake", {stdout: JSON.stringify({ok: false, error: "missing-microphone"}), "exit code": 1});
-            verify(backend.error.length > 0);
-            verify(!backend.busy);
-        }
         function test_native_readback_and_unavailable_controls() {
             nativeSettings.visible = true;
-            const eq = {enabled: false};
-            fake.response = {state: {equalizers: {output: eq, microphone: eq}, sidetone: {enabled: false}}};
             const result = {ok: true, state: {preset: 7, bands: [0,0,0,0,0,0,0,0,0,0],
                                              gaming: false, dnd: null, standby: 15, devices: []},
                             errors: {dnd: "timeout"}};
@@ -270,9 +246,9 @@ Item {
             fakeHeadset.response = null;
             nativeSettings.visible = false;
         }
-        function test_command_quotes_profile_names() {
-            const command = Output.audioCommand({op: "save", name: "My ' $(touch nope) profile"});
-            verify(command.startsWith("barracuda-audio --request '"));
+        function test_command_quotes_arguments() {
+            const command = Output.headsetCommand({op: "status"}, {transport: "bluetooth", address: "' $(touch nope)"});
+            verify(command.startsWith("barracuda-headset --request '"));
             verify(command.includes("'\\''"));
         }
     }

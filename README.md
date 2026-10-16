@@ -135,7 +135,7 @@ available battery telemetry.
 
 Status reads do not send commands to the headset. Native controls require the
 appropriate helpers, permissions and supported transport. Software EQ and
-sidetone are no longer provided; legacy filters have an explicit cleanup action.
+sidetone are no longer provided.
 See [usage](docs/USAGE.md) and [headset controls and audio tuning](docs/AUDIO_EFFECTS.md)
 for dependencies, behavior and validation limits.
 

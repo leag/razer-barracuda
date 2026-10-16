@@ -43,7 +43,7 @@ map; its setter and physical latency effect have not yet been validated.
 | Family 8 customer GET | Several responses captured, most parameter meanings unknown | Preserve raw research evidence; no user-facing controls or corresponding SET until semantics are validated |
 | MMI gaming mode, tone, voice prompt and language | Shared SDK events, no Barracuda-specific effect confirmed | Research candidates, not implementation-ready; language changes may persist |
 | MMI microphone mute, volume, media and call controls | Generic Bluetooth/MMI definitions, no model-specific validation | Do not duplicate desktop controls; physical microphone effects need separate validation |
-| DSP EQ, mic NR, mic selection, ANC, hear-through, surround and profiles | Generic SDK support does not establish hardware capability or payload semantics | No native implementation yet; keep current software effects separate |
+| DSP EQ, mic NR, mic selection, ANC, hear-through, surround and profiles | Generic SDK support does not establish hardware capability or payload semantics | No native implementation yet |
 | Link disconnect, advertising, BLE, GRS/handover, DUT and RF tests | Can disturb links or enter test modes; many target different hardware | Exclude from ordinary UI; existing documented pairing remains explicit |
 | GPIO, LED, I2C, ATB and register access | Peripheral addresses, electrical effects and read side effects unresolved | Exclude from application; even GET is not automatically harmless |
 | MP/NVDS/identity writes, pairing deletion and factory reset | Persistent manufacturing/configuration or pairing changes | Exclude |

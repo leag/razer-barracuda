@@ -1,16 +1,12 @@
 .pragma library
 
-function audioCommand(request) {
-    // Quote JSON as one POSIX shell argument, including user profile names.
-    return "barracuda-audio --request '" + JSON.stringify(request).replace(/'/g, "'\\''") + "'";
-}
-
 function headsetCommand(request, target) {
     const command = Object.assign({}, request);
     if (target && target.transport === "bluetooth") {
         command.transport = "bluetooth";
         command.address = target.address || "";
     }
+    // Quote JSON as one POSIX shell argument.
     return "barracuda-headset --request '" + JSON.stringify(command).replace(/'/g, "'\\''") + "'";
 }
 

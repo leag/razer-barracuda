@@ -3,8 +3,8 @@
 - `barracuda_pair/pairing.py`: validated pairing and `barracuda-pair` CLI.
   Both the Python module (`barracuda_pair`) and distribution (`barracuda-pair`)
   use the pairing name; there is no `barracuda-status` executable.
-- `barracuda_pair/audio.py`: JSON helper for explicit Linux audio tuning and
-  removal of legacy software EQ/sidetone; it never opens HID.
+- `barracuda_pair/audio.py`: CLI-only JSON helper for explicit Linux audio
+  tuning and microphone control; it never opens HID and the widget does not use it.
 - `barracuda_pair/headset.py`: finite native settings requests through the
   driver's bounded, serialized sysfs mailbox, and the read-only `link` request
   (driver `wireless_status`, power-supply values and BlueZ connection). No raw

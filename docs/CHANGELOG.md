@@ -1,5 +1,13 @@
 # Change history
 
+## Unreleased
+
+- Remove the legacy software-effects cleanup. The widget no longer runs
+  `barracuda-audio`, and headset settings no longer wait for it.
+  `barracuda-audio` drops `remove_effects`/`remove_eq`, legacy filter detection
+  and stored software EQ/sidetone data, and stops managing
+  `90-barracuda-effects.conf`. Linux tuning and microphone requests remain.
+
 ## v0.6.0
 
 - Make the widget a system tray entry and move native headset settings to its

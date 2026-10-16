@@ -18,8 +18,8 @@ pkgname = barracuda-pair
 	pkgdesc = Command-line pairing utility for the Razer Barracuda X (2022)
 	depends = python
 	optdepends = hid-razer-barracuda-dkms: native battery reporting and jack detection
-	optdepends = pipewire: optional software equalizers and monitoring
-	optdepends = wireplumber: optional smart filter routing
+	optdepends = pipewire: optional barracuda-audio Linux tuning
+	optdepends = wireplumber: optional barracuda-audio suspend and headroom policy
 	optdepends = libpulse: optional microphone controls
 
 pkgname = hid-razer-barracuda-dkms

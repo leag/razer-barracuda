@@ -12,7 +12,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--language', choices=('en', 'es'), default='en')
     parser.add_argument('--audio-controls', action='store_true',
-                        help='also install the optional barracuda-audio helper; does not enable effects')
+                        help='also install the optional barracuda-audio tuning helper; changes no audio settings')
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     data = Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local/share'))

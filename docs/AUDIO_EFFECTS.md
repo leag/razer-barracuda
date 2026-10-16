@@ -42,31 +42,19 @@ measured dB scale.
 
 ## Installation
 
-Install the updated HID driver, its headset-control permissions rule,
-`barracuda-headset` and `barracuda-audio`. For the userspace helpers:
+Install the updated HID driver, its headset-control permissions rule and
+`barracuda-headset`. For the userspace helpers:
 
 ```sh
-python scripts/install.py --audio-controls
+python scripts/install.py
 ```
 
-Installation does not activate filters or restart audio. The mailbox requires
+Installation does not change audio settings or restart audio. The mailbox requires
 the new driver to be loaded; old drivers show an upgrade message instead of
 falling back to unsynchronized device writes. The installed plasmoid must also
 be updated independently. Packaging includes all helpers and QML components.
 
-## Removing legacy effects
-
-The widget detects saved or loaded software EQ and sidetone. Its explicit
-**Remove software effects and restart audio** action clears their enabled flags,
-writes an empty managed filter-chain fragment and briefly restarts PipeWire,
-PipeWire-Pulse and WirePlumber. It preserves Linux tuning and legacy curve data
-for configuration compatibility; those curves can no longer create filters.
-No native headset setting is changed by cleanup. Foreign files and symlinks
-are not overwritten. Native EQ remains blocked until cleanup completes.
-
-```sh
-barracuda-audio --request '{"op":"remove_effects","confirmed":true}'
-```
+## Transports
 
 Native controls use the USB driver when the dongle is selected, and Bluetooth
 SPP when the headset is the Bluetooth output. Bluetooth Gaming, presets, custom
@@ -75,12 +63,15 @@ bands, DND and standby have physical setter/readback validation. See
 
 ## Linux system settings
 
-The CLI retains explicit session buffer, optional 48 kHz sample rate,
-Barracuda keep-awake policy and output headroom. These are Linux audio settings,
-not firmware features. Smaller buffers may crackle. Use system defaults first.
-These controls are available through the CLI only. Structural changes require
-explicit restart confirmation; removing the widget controls does not reset
-existing session settings. WirePlumber
+`barracuda-audio` (installed with `--audio-controls`) retains explicit session
+buffer, optional 48 kHz sample rate, Barracuda keep-awake policy and output
+headroom. These are Linux audio settings, not firmware features. Smaller buffers
+may crackle. Use system defaults first. These controls are available through the
+CLI only. Changes require explicit restart confirmation. Keys written by older
+versions for software EQ and sidetone are ignored and dropped on the next save;
+a fragment those versions left at
+`~/.config/pipewire/pipewire.conf.d/90-barracuda-effects.conf` is no longer
+managed and can be deleted. WirePlumber
 continues to own routing; native controls do not select outputs, change volume,
 change card profiles or modify microphone state.
 

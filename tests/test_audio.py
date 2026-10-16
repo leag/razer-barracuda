@@ -1,4 +1,4 @@
-"""Software-effects tests; all audio commands are mocked and files isolated."""
+"""Linux audio tuning tests; all audio commands are mocked and files isolated."""
 import json
 import os
 from pathlib import Path
@@ -45,23 +45,34 @@ class AudioTests(unittest.TestCase):
         with self.assertRaisesRegex(audio.AudioError, 'ambiguous-device'):
             audio.device(DEVICES + [node(99, 'second-headset', 'Audio/Sink')], 'Audio/Sink')
 
-    def test_invalid_gains_and_profiles(self):
-        for values in ([0] * 9, [13] * 10, [float('nan')] * 10, [True] * 10, ['1'] * 10):
-            with self.assertRaises(audio.AudioError):
-                audio.gains(values)
-        state = audio.defaults()
-        state['equalizers']['output']['custom']['__proto__'] = [0] * 10
-        with self.assertRaisesRegex(audio.AudioError, 'invalid-profile'):
-            audio.normalize(state)
+    def test_invalid_tuning_is_rejected(self):
+        for key, value in (('quantum', 100), ('quantum', True), ('headroom', 64),
+                           ('fixed_rate', 1), ('never_suspend', 'yes')):
+            state = audio.defaults()
+            state['tuning'][key] = value
+            with self.assertRaisesRegex(audio.AudioError, 'invalid-settings'):
+                audio.normalize(state)
+        with self.assertRaisesRegex(audio.AudioError, 'invalid-settings'):
+            audio.normalize({'version': 1})
 
-    def test_filter_graphs_and_scoped_policy(self):
+    def test_older_settings_load_without_software_filters(self):
+        older = audio.defaults()
+        older['tuning']['quantum'] = 256
+        older['equalizers'] = {'output': {'enabled': True, 'gains': [6] * 10, 'custom': {}, 'favorites': []}}
+        older['sidetone'] = {'enabled': True, 'level': 17}
+        state = audio.normalize(older)
+        self.assertEqual(state, {**audio.defaults(), 'tuning': {**audio.defaults()['tuning'], 'quantum': 256}})
+        documents = json.dumps({str(p): doc for p, doc in audio.documents(state).items()})
+        self.assertNotIn('filter-chain', documents)
+        self.assertNotIn('effects', documents)
+        with self.assertRaisesRegex(audio.AudioError, 'invalid-request'):
+            audio.dispatch({'op': 'remove_effects', 'confirmed': True})
+
+    def test_scoped_policy(self):
         state = audio.defaults()
-        for eq in state['equalizers'].values():
-            eq['enabled'] = True
-            eq['gains'][2] = 6
         state['tuning'].update(never_suspend=True, quantum=512, fixed_rate=True, headroom=1024)
-        documents = {p.name: doc for p, doc in audio.documents(state, DEVICES).items()}
-        self.assertEqual(documents['90-barracuda-effects.conf']['context.modules'], [])
+        documents = {p.name: doc for p, doc in audio.documents(state).items()}
+        self.assertEqual(set(documents), {'91-barracuda-latency.conf', '90-barracuda-audio.conf'})
         rules = documents['90-barracuda-audio.conf']['monitor.alsa.rules']
         self.assertTrue(all(rule['matches'][0]['alsa.components'] == 'USB1532:0552' for rule in rules))
         self.assertNotIn('api.alsa.headroom', rules[1]['actions']['update-props'])
@@ -72,7 +83,7 @@ class AudioTests(unittest.TestCase):
             state = audio.defaults()
             state['tuning'].update(quantum=frames, headroom=frames)
             state = audio.normalize(state)
-            documents = {p.name: doc for p, doc in audio.documents(state, DEVICES).items()}
+            documents = {p.name: doc for p, doc in audio.documents(state).items()}
             self.assertEqual(documents['91-barracuda-latency.conf']['context.properties']['default.clock.quantum'], frames)
             rules = documents['90-barracuda-audio.conf']['monitor.alsa.rules']
             self.assertEqual(rules[0]['actions']['update-props']['api.alsa.headroom'], frames)
@@ -85,57 +96,11 @@ class AudioTests(unittest.TestCase):
         self.commands.assert_called_once_with('pw-dump')
         self.assertTrue(audio.state_path().exists())
         self.assertEqual(audio.load(), result['state'])
-        self.assertEqual(len(list(Path(self.directory.name).rglob('*.conf'))), 3)
+        self.assertEqual(len(list(Path(self.directory.name).rglob('*.conf'))), 2)
         self.assertNotIn('set-default', str(self.commands.call_args_list))
 
-    def test_legacy_eq_is_detected_and_removed_only_on_explicit_request(self):
-        state = audio.defaults()
-        state['equalizers']['output']['enabled'] = True
-        audio.state_path().parent.mkdir(parents=True)
-        audio.state_path().write_text(json.dumps(state))
-        legacy = DEVICES + [node(500, 'barracuda.effects.output', 'Audio/Sink', '')]
-        self.assertTrue(audio.snapshot(state, legacy)['legacy_eq_loaded'])
-        with self.assertRaisesRegex(audio.AudioError, 'confirmation-required'):
-            audio.dispatch({'op': 'remove_eq'})
-        self.assertNotIn('systemctl', str(self.commands.call_args_list))
-        result = audio.dispatch({'op': 'remove_eq', 'confirmed': True})
-        self.assertFalse(result['state']['equalizers']['output']['enabled'])
-        self.assertNotIn('filter-chain', (Path(self.directory.name) / 'pipewire/pipewire.conf.d/90-barracuda-effects.conf').read_text())
-        self.commands.assert_any_call('systemctl', '--user', 'restart', 'pipewire.service',
-                                     'pipewire-pulse.service', 'wireplumber.service')
-
-    def test_removed_sidetone_does_not_generate_a_filter(self):
-        state = audio.defaults()
-        state['sidetone'].update(enabled=True, level=17)
-        document = next(iter(audio.documents(state, DEVICES).values()))
-        self.assertEqual(document['context.modules'], [])
-        result = audio.dispatch({'op': 'save', 'state': state})
-        self.assertFalse(result['state']['sidetone']['enabled'])
-
-    def test_sidetone_status_distinguishes_loaded_and_running(self):
-        state = audio.defaults()
-        self.assertFalse(audio.snapshot(state, DEVICES)['sidetone_loaded'])
-        capture = node(201, audio.effect_name('sidetone'), 'Stream/Input/Audio', '')
-        playback = node(202, audio.effect_name('sidetone') + '.stream', 'Stream/Output/Audio', '')
-        current = DEVICES + [capture, playback]
-        self.assertTrue(audio.snapshot(state, current)['sidetone_loaded'])
-        self.assertFalse(audio.snapshot(state, current)['sidetone_running'])
-        capture['info']['state'] = playback['info']['state'] = 'running'
-        self.assertTrue(audio.snapshot(state, current)['sidetone_running'])
-        self.assertFalse(audio.snapshot(state, current[:-1])['sidetone_running'])
-
-    def test_profiles_and_favorites_persist(self):
-        state = audio.defaults()
-        state['equalizers']['output']['custom']["Música '$(touch nope)'"] = [1] * 10
-        state['equalizers']['output']['favorites'] = ["Música '$(touch nope)'", 'Flat', 'missing']
-        audio.dispatch({'op': 'save', 'state': state})
-        saved = audio.load()
-        self.assertEqual(saved['equalizers']['output']['favorites'], ["Música '$(touch nope)'"])
-        self.assertFalse(saved['pending_restart'])
-        self.commands.assert_called_once_with('pw-dump')
-
     def test_foreign_config_and_symlinks_are_not_overwritten(self):
-        target = next(iter(audio.documents(audio.defaults(), DEVICES)))
+        target = next(iter(audio.documents(audio.defaults())))
         target.parent.mkdir(parents=True)
         target.write_text('existing user configuration')
         with self.assertRaisesRegex(audio.AudioError, 'foreign-config'):
@@ -177,11 +142,10 @@ class AudioTests(unittest.TestCase):
 
     def test_disable_restores_empty_owned_fragments(self):
         state = audio.defaults()
-        state['equalizers']['output']['enabled'] = True
         state['tuning']['never_suspend'] = True
         audio.dispatch({'op': 'save', 'state': state})
         audio.dispatch({'op': 'save', 'state': audio.defaults()})
-        for path, value in audio.documents(audio.defaults(), DEVICES).items():
+        for path, value in audio.documents(audio.defaults()).items():
             self.assertEqual(path.read_text(), audio.OWNER + audio.spa_config(value))
             self.assertTrue(all(not item for item in value.values()))
 

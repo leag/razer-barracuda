@@ -74,7 +74,7 @@ report rejection, malformed lengths, disconnects, identity restrictions and
 absence of USB access on Bluetooth requests. CLI and QML tests cover bounded
 setters, readback mismatch, transport/address selection and output changes.
 Bluetooth requires Linux Python with Bluetooth socket support and `busctl`.
-Use `/usr/bin/python scripts/install.py --audio-controls` for the local helper;
+Use `/usr/bin/python scripts/install.py` for the local helpers;
 some managed Python distributions omit Bluetooth socket support.
 
 Bluetooth battery reporting already works independently: BlueZ/UPower exposes

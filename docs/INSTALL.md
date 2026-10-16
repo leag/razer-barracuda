@@ -121,6 +121,7 @@ on the desktop session's `PATH`. The user CLI installer does not add its
 
 ## Optional audio controls
 
-`python scripts/install.py --audio-controls` also installs `barracuda-audio` without
-enabling effects or restarting audio. The Python wheel includes both CLIs.
+`python scripts/install.py --audio-controls` also installs the CLI-only
+`barracuda-audio` tuning helper without changing audio settings or restarting
+audio. The widget does not need it. The Python wheel includes all CLIs.
 See [audio effects](AUDIO_EFFECTS.md) for dependencies and persistent configuration.

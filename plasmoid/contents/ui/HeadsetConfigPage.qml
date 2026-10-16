@@ -22,9 +22,6 @@ KCM.AbstractKCM {
         if (!shown)
             return;
         link.refresh();
-        // Only the equalizer depends on the legacy software effects state.
-        if (section === "equalizer")
-            audio.request({op: "status"});
         headset.request({op: "status"});
     }
     onShownChanged: load()
@@ -38,7 +35,6 @@ KCM.AbstractKCM {
         running: page.shown
         onTriggered: link.refresh()
     }
-    AudioController { id: audio; objectName: "audioController" }
     HeadsetController {
         id: headset
         objectName: "headsetController"
@@ -54,6 +50,5 @@ KCM.AbstractKCM {
         anchors.fill: parent
         section: page.section
         controller: headset
-        audioController: audio
     }
 }

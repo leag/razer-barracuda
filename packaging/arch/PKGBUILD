@@ -24,8 +24,8 @@ package_barracuda-pair() {
   pkgdesc="Command-line pairing utility for the Razer Barracuda X (2022)"
   depends=(python)
   optdepends=('hid-razer-barracuda-dkms: native battery reporting and jack detection'
-              'pipewire: optional software equalizers and monitoring'
-              'wireplumber: optional smart filter routing'
+              'pipewire: optional barracuda-audio Linux tuning'
+              'wireplumber: optional barracuda-audio suspend and headroom policy'
               'libpulse: optional microphone controls')
   cd "razer-barracuda-$pkgver"
   python -m installer --destdir="$pkgdir" dist/*.whl

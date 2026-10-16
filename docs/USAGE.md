@@ -163,9 +163,7 @@ values disable their controls; the notice offers
 **Refresh** to read again. Session buffer and
 sample-rate tuning are no longer exposed in the plasmoid. Software EQ and
 sidetone are removed.
-If legacy filters are enabled or loaded, use the explicit cleanup button; it
-briefly restarts audio before native EQ can be used.
-See [audio effects](AUDIO_EFFECTS.md) for activation, dependencies and how to revert.
+See [audio effects](AUDIO_EFFECTS.md) for native control details, dependencies and CLI-only Linux tuning.
 Use KDE Sound settings for microphone mute and volume.
 
 ## Play/pause

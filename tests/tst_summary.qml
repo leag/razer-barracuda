@@ -162,11 +162,10 @@ Item {
                 verify(!page.unsavedChanges)
                 page.saveConfig()
                 wait(20)
-                for (const name of ["headsetController", "audioController"]) {
-                    const controller = findChild(page, name)
-                    verify(!controller.busy)
-                    compare(controller.connectedSources.length, 0)
-                }
+                const controller = findChild(page, "headsetController")
+                verify(!controller.busy)
+                compare(controller.connectedSources.length, 0)
+                verify(findChild(page, "audioController") === null)
                 page.destroy()
             }
         }

@@ -8,7 +8,6 @@ ColumnLayout {
     id: page
     objectName: "headsetSettings"
     required property var controller
-    required property var audioController
     readonly property real contentHeight: settingsContent.implicitHeight + implicitHeight
     property string localeName: Qt.locale().name
     property var bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -32,11 +31,7 @@ ColumnLayout {
     readonly property var state: controller.response ? controller.response.state : null
     // Do Not Disturb and Bluetooth gaming mode are in the popup and its action
     // menu. Quick Connect still needs gaming mode off.
-    readonly property bool legacyEq: audioController.response !== null &&
-        (audioController.response.legacy_effects_loaded ||
-         audioController.response.state.equalizers.output.enabled ||
-         audioController.response.state.equalizers.microphone.enabled)
-    readonly property bool busy: controller.busy || audioController.busy
+    readonly property bool busy: controller.busy
     function label(en, es) { return Output.text(en, es, localeName); }
     function available(feature) { return state !== null && state[feature] !== null && state[feature] !== undefined; }
     function apply(feature, value) { controller.request({op: "set", feature: feature, value: value}); }
@@ -99,22 +94,6 @@ ColumnLayout {
             id: settingsContent
             width: scroll.availableWidth
             spacing: Kirigami.Units.largeSpacing
-            QQC2.Label {
-                Layout.fillWidth: true
-                Layout.margins: Kirigami.Units.smallSpacing
-                wrapMode: Text.Wrap
-                visible: page.section === "equalizer" && page.legacyEq
-                text: page.label("Remove the previous software effects before using the headset EQ. This briefly interrupts playback and calls.",
-                                 "Quita los efectos de software anteriores antes de usar el EQ del auricular. Esto interrumpe brevemente la reproducción y las llamadas.")
-            }
-            QQC2.Button {
-                objectName: "removeSoftwareEq"
-                Layout.fillWidth: true
-                visible: page.section === "equalizer" && page.legacyEq
-                enabled: !page.busy
-                text: page.label("Remove software effects and restart audio", "Quitar efectos de software y reiniciar audio")
-                onClicked: page.audioController.request({op: "remove_effects", confirmed: true})
-            }
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.margins: Kirigami.Units.smallSpacing
@@ -123,7 +102,6 @@ ColumnLayout {
                     objectName: "equalizerSection"
                     Layout.fillWidth: true
                     visible: page.section === "equalizer"
-                    enabled: !page.legacyEq && page.audioController.response !== null
                     spacing: Kirigami.Units.largeSpacing
                     Kirigami.FormLayout {
                         Layout.fillWidth: true
@@ -412,7 +390,6 @@ ColumnLayout {
         type: Kirigami.MessageType.Warning
         visible: text.length > 0
         text: page.controller.error || page.settingsError
-            || (page.section === "equalizer" ? page.audioController.error : "")
         actions: [refreshAction]
     }
     Kirigami.InlineMessage {
