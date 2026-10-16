@@ -266,5 +266,6 @@ PlasmoidItem {
         onPowerOffRequested: root.turnOffHeadset()
         onSettingChangeRequested: (feature, enabled) => root.setSetting(feature, enabled)
         onSettingsRefreshRequested: root.readSettings()
+        onSourceSwitchRequested: address => root.setSetting("devices", address)
     }
 }

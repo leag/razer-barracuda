@@ -7,8 +7,9 @@ import "../code/output.js" as Output
 
 // The popup body, top to bottom: how the headset is (state, hint, battery),
 // what can be done to it now (Pair, Turn Off, each confirmed right below), how
-// its connection behaves and, folded, the diagnostic details. Feedback
-// appears under the control that caused it.
+// its connection behaves (Do Not Disturb, Bluetooth gaming mode), which
+// Bluetooth device it serves (Quick Connect) and, folded, the diagnostic
+// details. Feedback appears under the control that caused it.
 ColumnLayout {
     id: summary
 
@@ -45,6 +46,16 @@ ColumnLayout {
     readonly property string modesError: settings === null ? ""
         : settings.error.length > 0 && settings.requestFeature !== "devices" ? settings.error
         : featureError(["dnd", "gaming"])
+    // Feedback for Quick Connect: a failed switch request, or a read error of
+    // the device list that the modes' notice does not already give.
+    readonly property string quickConnectError: settings === null ? ""
+        : settings.requestFeature === "devices" ? settings.error
+        : settings.error.length > 0 || featureError(["devices"]) === modesError ? ""
+        : featureError(["devices"])
+    // A switch request does not confirm the new active device; only a new
+    // read can, so its notice offers Refresh.
+    readonly property string switchMessage: settings !== null && settings.response
+        && settings.response.sent === "devices" ? settings.message : ""
     function featureName(feature) {
         return ({dnd: label("Do Not Disturb", "No molestar"),
                  gaming: label("Bluetooth Gaming Mode", "Modo gaming Bluetooth"),
@@ -106,6 +117,7 @@ ColumnLayout {
     signal powerOffRequested()
     signal settingChangeRequested(string feature, bool enabled)
     signal settingsRefreshRequested()
+    signal sourceSwitchRequested(string address)
 
     function label(english, spanish) {
         return Output.text(english, spanish, localeName)
@@ -434,6 +446,154 @@ ColumnLayout {
         type: Kirigami.MessageType.Warning
         visible: text.length > 0
         text: summary.modesError
+        actions: [refreshAction]
+    }
+
+    // Which Bluetooth device the headset serves, from the same status read.
+    // The active marker moves only when a new reading says so.
+    ColumnLayout {
+        id: quickConnect
+        objectName: "quickConnect"
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        spacing: Kirigami.Units.smallSpacing
+        readonly property var devices: summary.settingsState !== null && summary.settingsState.devices
+            && summary.settingsState.devices.length !== undefined ? summary.settingsState.devices : null
+        // Switching needs Bluetooth gaming mode known to be off.
+        readonly property bool blocked: devices !== null && devices.length > 0 && summary.gamingState !== false
+        Kirigami.Heading {
+            objectName: "quickConnectHeading"
+            Layout.fillWidth: true
+            level: 4
+            // Razer's name for the feature, in every language.
+            text: "Quick Connect"
+            textFormat: Text.PlainText
+        }
+        PC3.Label {
+            objectName: "quickConnectDescription"
+            Layout.fillWidth: true
+            text: summary.label("Move the headset's Bluetooth connection to a device it already knows. Switching may interrupt audio.",
+                                "Mueve la conexión Bluetooth del auricular a un dispositivo que ya conoce. El cambio puede interrumpir el audio.")
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+            font: Kirigami.Theme.smallFont
+            opacity: 0.75
+        }
+        PC3.Label {
+            objectName: "quickConnectBlocked"
+            Layout.fillWidth: true
+            visible: quickConnect.blocked
+            text: summary.label("Turn off Bluetooth Gaming Mode above to switch devices.",
+                                "Desactiva el modo gaming Bluetooth (arriba) para cambiar de dispositivo.")
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+        }
+        ColumnLayout {
+            objectName: "quickConnectDevices"
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            visible: quickConnect.devices !== null && quickConnect.devices.length > 0
+            Repeater {
+                model: quickConnect.devices !== null ? quickConnect.devices : []
+                RowLayout {
+                    id: deviceRow
+                    required property var modelData
+                    readonly property string text: modelData.name || Output.macAddress(modelData.address)
+                    objectName: "quickConnectDevice"
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.largeSpacing
+                    Kirigami.Icon {
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                        source: "network-bluetooth"
+                        opacity: deviceRow.modelData.active ? 1 : 0.6
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        PC3.Label {
+                            objectName: "quickConnectName"
+                            Layout.fillWidth: true
+                            text: deviceRow.text
+                            textFormat: Text.PlainText
+                            elide: Text.ElideRight
+                            font.bold: deviceRow.modelData.active === true
+                        }
+                        PC3.Label {
+                            objectName: "quickConnectDetail"
+                            Layout.fillWidth: true
+                            // A nameless device already shows its address as its title.
+                            visible: text !== ""
+                            text: deviceRow.modelData.active ? summary.label("Active source", "Fuente activa")
+                                : deviceRow.modelData.name ? Output.macAddress(deviceRow.modelData.address) : ""
+                            textFormat: Text.PlainText
+                            elide: Text.ElideRight
+                            font: Kirigami.Theme.smallFont
+                            opacity: 0.75
+                        }
+                    }
+                    Kirigami.Icon {
+                        objectName: "quickConnectActive"
+                        visible: deviceRow.modelData.active === true
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                        source: "checkmark"
+                        color: Kirigami.Theme.positiveTextColor
+                        isMask: true
+                    }
+                    PC3.Button {
+                        objectName: "quickConnectButton"
+                        visible: deviceRow.modelData.active !== true
+                        icon.name: "network-connect"
+                        text: summary.label("Switch", "Cambiar")
+                        Accessible.name: summary.label("Switch to ", "Cambiar a ") + deviceRow.text
+                        enabled: summary.settingsEnabled && !quickConnect.blocked
+                        onClicked: summary.sourceSwitchRequested(deviceRow.modelData.address)
+                    }
+                }
+            }
+        }
+        PC3.Label {
+            objectName: "quickConnectEmpty"
+            Layout.fillWidth: true
+            visible: quickConnect.devices !== null && quickConnect.devices.length === 0
+            text: summary.label("No known Bluetooth devices. Pair the headset with a phone or computer first.",
+                                "No hay dispositivos Bluetooth conocidos. Primero empareja el auricular con un teléfono o computador.")
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+            opacity: 0.75
+        }
+        PC3.Label {
+            objectName: "quickConnectUnread"
+            Layout.fillWidth: true
+            visible: quickConnect.devices === null
+            text: summary.connected && summary.settingsBusy ? summary.label("Reading…", "Leyendo…")
+                : summary.label("Known devices appear once the headset is connected and read.",
+                                "Los dispositivos conocidos aparecen cuando el auricular está conectado y se ha leído.")
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+            opacity: 0.75
+        }
+    }
+    Kirigami.InlineMessage {
+        objectName: "quickConnectMessage"
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        type: Kirigami.MessageType.Information
+        visible: text.length > 0
+        text: summary.switchMessage
+        actions: [refreshAction]
+    }
+    Kirigami.InlineMessage {
+        objectName: "quickConnectError"
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        type: Kirigami.MessageType.Warning
+        visible: text.length > 0
+        text: summary.quickConnectError
         actions: [refreshAction]
     }
 

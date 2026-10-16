@@ -87,6 +87,15 @@ Item {
         signalName: "settingsRefreshRequested"
     }
     SignalSpy {
+        id: switchSpy
+        target: summary
+        signalName: "sourceSwitchRequested"
+    }
+    SignalSpy {
+        id: panelSpy
+        target: panel
+    }
+    SignalSpy {
         id: actionSpy
         target: audioAction
         signalName: "triggered"
@@ -245,6 +254,190 @@ Item {
                 const component = Qt.createComponent(page)
                 compare(component.status, Component.Ready, component.errorString())
             }
+        }
+        function test_quick_connect_in_the_popup() {
+            summary.localeName = "en_US"
+            const section = findChild(summary, "quickConnect")
+            const description = findChild(summary, "quickConnectDescription")
+            const unread = findChild(summary, "quickConnectUnread")
+            const empty = findChild(summary, "quickConnectEmpty")
+            const blocked = findChild(summary, "quickConnectBlocked")
+            const list = findChild(summary, "quickConnectDevices")
+            const rows = () => findChildren(list, "quickConnectDevice")
+            const top = name => findChild(summary, name).mapToItem(summary, 0, 0).y
+            // Always laid out; without a reading it says when devices appear.
+            summary.status = linked("disconnected")
+            verify(section.visible)
+            compare(findChild(summary, "quickConnectHeading").text, "Quick Connect")
+            compare(description.text, "Move the headset's Bluetooth connection to a device it already knows. "
+                    + "Switching may interrupt audio.")
+            verify(unread.visible)
+            compare(unread.text, "Known devices appear once the headset is connected and read.")
+            verify(!list.visible)
+            verify(!empty.visible)
+            verify(!blocked.visible)
+            summary.status = linked("connected")
+            fakeSettings.busy = true
+            compare(unread.text, "Reading…")
+            fakeSettings.busy = false
+            // Below the connection modes, above the details.
+            tryVerify(() => top("quickConnect") > top("connectionModes"))
+            verify(top("quickConnect") < top("detailsToggle"))
+            // Device rows come from the same status read.
+            const phone = {address: "0a0b0c0d0e0f", name: "Phone", active: true}
+            const laptop = {address: "010203040506", name: "", active: false}
+            read({gaming: false, devices: [phone, laptop]})
+            verify(list.visible)
+            verify(!unread.visible)
+            verify(!blocked.visible)
+            tryCompare(rows(), "length", 2)
+            const name = findChild(rows()[0], "quickConnectName")
+            compare(name.text, "Phone")
+            verify(name.font.bold)
+            compare(findChild(rows()[0], "quickConnectDetail").text, "Active source")
+            verify(findChild(rows()[0], "quickConnectActive").visible)
+            verify(!findChild(rows()[0], "quickConnectButton").visible)
+            // A nameless device shows its formatted address once.
+            compare(findChild(rows()[1], "quickConnectName").text, "01:02:03:04:05:06")
+            verify(!findChild(rows()[1], "quickConnectDetail").visible)
+            verify(!findChild(rows()[1], "quickConnectActive").visible)
+            const button = findChild(rows()[1], "quickConnectButton")
+            verify(button.visible)
+            verify(button.enabled)
+            compare(button.text, "Switch")
+            compare(button.Accessible.name, "Switch to 01:02:03:04:05:06")
+            switchSpy.clear()
+            mouseClick(button)
+            compare(switchSpy.count, 1)
+            compare(switchSpy.signalArguments[0][0], "010203040506")
+            // The active marker moves only with a new reading.
+            verify(findChild(rows()[0], "quickConnectActive").visible)
+            verify(!findChild(rows()[1], "quickConnectActive").visible)
+            // Disabled while any request or command runs.
+            fakeSettings.busy = true
+            verify(!button.enabled)
+            fakeSettings.busy = false
+            summary.powerBusy = true
+            verify(!button.enabled)
+            summary.powerBusy = false
+            verify(button.enabled)
+            // Gaming mode on or unknown blocks switching, with one line
+            // pointing at its switch above.
+            read({gaming: true, devices: [phone, laptop]})
+            verify(blocked.visible)
+            compare(blocked.text, "Turn off Bluetooth Gaming Mode above to switch devices.")
+            verify(!findChild(rows()[1], "quickConnectButton").enabled)
+            read({gaming: null, devices: [phone, laptop]})
+            verify(blocked.visible)
+            verify(!findChild(rows()[1], "quickConnectButton").enabled)
+            read({gaming: false, devices: [{address: "a1b2c3d4e5f6", name: "Pixel", active: false}]})
+            tryCompare(rows(), "length", 1)
+            compare(findChild(rows()[0], "quickConnectDetail").text, "A1:B2:C3:D4:E5:F6")
+            // An empty list explains itself.
+            read({gaming: false, devices: []})
+            verify(empty.visible)
+            verify(!list.visible)
+            verify(!blocked.visible)
+            compare(empty.text, "No known Bluetooth devices. Pair the headset with a phone or computer first.")
+            summary.localeName = "es_CL"
+            compare(findChild(summary, "quickConnectHeading").text, "Quick Connect")
+            compare(description.text, "Mueve la conexión Bluetooth del auricular a un dispositivo que ya conoce. "
+                    + "El cambio puede interrumpir el audio.")
+            compare(empty.text, "No hay dispositivos Bluetooth conocidos. Primero empareja el auricular con un "
+                    + "teléfono o computador.")
+            read({gaming: true, devices: [phone, laptop]})
+            compare(blocked.text, "Desactiva el modo gaming Bluetooth (arriba) para cambiar de dispositivo.")
+            tryCompare(rows(), "length", 2)
+            compare(findChild(rows()[0], "quickConnectDetail").text, "Fuente activa")
+            compare(findChild(rows()[1], "quickConnectButton").text, "Cambiar")
+            compare(findChild(rows()[1], "quickConnectButton").Accessible.name, "Cambiar a 01:02:03:04:05:06")
+            fakeSettings.response = null
+            compare(unread.text, "Los dispositivos conocidos aparecen cuando el auricular está conectado y se ha leído.")
+            fakeSettings.busy = true
+            compare(unread.text, "Leyendo…")
+            fakeSettings.busy = false
+            summary.localeName = "en_US"
+            // Without a confirmed link an earlier list is not shown.
+            read({gaming: false, devices: [phone]})
+            verify(list.visible)
+            summary.status = linked("unknown")
+            verify(!list.visible)
+            verify(unread.visible)
+            fakeSettings.response = null
+            summary.status = null
+        }
+        function test_quick_connect_feedback() {
+            summary.localeName = "en_US"
+            summary.status = linked("connected")
+            const message = findChild(summary, "quickConnectMessage")
+            const error = findChild(summary, "quickConnectError")
+            const modesError = findChild(summary, "connectionModesError")
+            const top = name => findChild(summary, name).mapToItem(summary, 0, 0).y
+            verify(!message.visible)
+            verify(!error.visible)
+            // A switch request is not a confirmed switch: its notice under
+            // Quick Connect offers Refresh.
+            fakeSettings.requestFeature = "devices"
+            fakeSettings.response = {ok: true, sent: "devices", transport: "usb", errors: {},
+                                     state: {gaming: false, devices: [{address: "010203040506", name: "Phone", active: false}]}}
+            fakeSettings.message = "Connection switch requested. Refresh to check the active device."
+            verify(message.visible)
+            compare(message.type, Kirigami.MessageType.Information)
+            compare(message.text, "Connection switch requested. Refresh to check the active device.")
+            compare(message.actions.length, 1)
+            compare(message.actions[0].objectName, "refreshSettings")
+            tryVerify(() => top("quickConnectMessage") > top("quickConnect"))
+            verify(top("quickConnectMessage") < top("detailsToggle"))
+            refreshSpy.clear()
+            message.actions[0].trigger()
+            compare(refreshSpy.count, 1)
+            verify(!modesError.visible)
+            // A failed switch: a warning with Refresh under Quick Connect.
+            fakeSettings.response = null
+            fakeSettings.message = ""
+            fakeSettings.error = "Turn off Bluetooth Gaming Mode before switching Bluetooth devices."
+            verify(!message.visible)
+            verify(error.visible)
+            compare(error.type, Kirigami.MessageType.Warning)
+            compare(error.text, "Turn off Bluetooth Gaming Mode before switching Bluetooth devices.")
+            compare(error.actions.length, 1)
+            compare(error.actions[0].objectName, "refreshSettings")
+            verify(!modesError.visible)
+            // A failed read is reported once, under the modes.
+            fakeSettings.requestFeature = ""
+            verify(!error.visible)
+            verify(modesError.visible)
+            fakeSettings.error = ""
+            // A read error of only the device list shows here.
+            fakeSettings.response = {ok: true, transport: "usb", state: {dnd: true, gaming: false, devices: null},
+                                     errors: {devices: "timeout"}}
+            verify(error.visible)
+            compare(error.text, "label:timeout")
+            verify(!modesError.visible)
+            // The same error for every feature appears once, under the modes.
+            fakeSettings.response = {ok: true, transport: "usb", state: {dnd: null, gaming: null, devices: null},
+                                     errors: {dnd: "unknown-link", gaming: "unknown-link", devices: "unknown-link"}}
+            verify(modesError.visible)
+            verify(!error.visible)
+            fakeSettings.response = null
+            summary.status = null
+        }
+        function test_panel_relays_requests() {
+            const overview = findChild(panel, "connectionOverview")
+            for (const [name, args] of [["pairingRequested", []], ["powerOffRequested", []],
+                                        ["settingChangeRequested", ["dnd", true]],
+                                        ["sourceSwitchRequested", ["010203040506"]],
+                                        ["settingsRefreshRequested", []]]) {
+                panelSpy.signalName = name
+                panelSpy.clear()
+                overview[name](...args)
+                compare(panelSpy.count, 1)
+                compare(Array.from(panelSpy.signalArguments[0]), args)
+            }
+            // The panel hands its settings controller to the summary.
+            panel.settings = fakeSettings
+            compare(overview.settings, fakeSettings)
+            panel.settings = null
         }
         function test_transport_icon_beside_state() {
             const icon = findChild(summary, "transportIcon")

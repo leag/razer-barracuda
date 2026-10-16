@@ -84,6 +84,21 @@ class PlasmoidTests(unittest.TestCase):
                       'Plasmoid.formFactor === PlasmaCore.Types.Planar', source)
         self.assertIn('readonly property bool settingsWanted: viewShown && connected', source)
 
+    def test_popup_requests_reach_the_settings_controller(self):
+        source = (ROOT / 'plasmoid/contents/ui/main.qml').read_text()
+        panel = source.split('fullRepresentation: HeadsetPanel {', 1)[1]
+        self.assertIn('settings: settingsController', panel)
+        self.assertIn('onSettingChangeRequested: (feature, enabled) => root.setSetting(feature, enabled)', panel)
+        self.assertIn('onSourceSwitchRequested: address => root.setSetting("devices", address)', panel)
+        self.assertIn('onSettingsRefreshRequested: root.readSettings()', panel)
+        self.assertIn('menuActions: root.menuActions', panel)
+        self.assertIn('title: Plasmoid.title', panel)
+        self.assertIn('showHeader: !root.inTray', panel)
+        # Settings are sent only with a confirmed link and while nothing runs.
+        set_setting = source.split('function setSetting(feature, value) {', 1)[1].split('\n    }', 1)[0]
+        self.assertIn('connected && !settingsController.busy && !pairingBusy && !powerBusy', set_setting)
+        self.assertIn('settingsController.request({op: "set", feature: feature, value: value})', set_setting)
+
     def test_arch_package(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
