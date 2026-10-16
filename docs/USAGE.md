@@ -24,15 +24,17 @@ there is no tray monitor, graphical pairing dialog or background audio router.
 
 ## Barracuda Headset widget
 
-Enable **Barracuda Headset** (**Auricular Barracuda**) in the system tray
-(**Configure System Tray… → Entries**), or add it to a Plasma 6 panel or
-desktop. Installing does not enable it in the tray or change any panel. A widget
-already added by an earlier version keeps working after an update.
+The system tray is the widget's main place. It enables **Barracuda Headset**
+(**Auricular Barracuda**) by itself the first time it finds it, at the next
+Plasma start, and remembers if you disable it in **Configure System Tray… →
+Entries**. You can also add it to a Plasma 6 panel or desktop; installing does
+not change any panel. A widget already added by an earlier version keeps working
+after an update.
 
-In the system tray the icon stays visible while the link is confirmed or not yet
-confirmed, and while pairing or power-off runs. A disconnected headset, a
-missing adapter or an unavailable helper moves it to the tray's hidden items; a
-low battery asks for attention. The tray's own visibility settings override this.
+In the system tray the icon stays visible in every state, including a
+disconnected headset or a missing adapter, so the pairing controls stay
+reachable. A low battery asks for attention. The tray's own visibility settings
+override this.
 
 Panel and tray icons use the theme's symbolic headset glyph, recolored like the
 neighboring icons. It is drawn at full opacity while the headset link is

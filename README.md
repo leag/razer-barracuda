@@ -87,9 +87,11 @@ To install the Plasma widget with its dependencies already available:
 kpackagetool6 --type Plasma/Applet --install plasmoid
 ```
 
-Then enable **Barracuda Headset** (**Auricular Barracuda**) in the system tray
-settings, or add it from Plasma's widget picker. Use `--upgrade plasmoid` for an existing user installation. Installing
-the widget does not change panel layouts.
+The system tray is the main place for the widget: it enables **Barracuda
+Headset** (**Auricular Barracuda**) by itself the first time it finds it, at the
+next Plasma start. You can also add it to a panel from Plasma's widget picker.
+Use `--upgrade plasmoid` for an existing user installation. Installing the widget
+does not change panel layouts.
 
 Follow the [installation guide](docs/INSTALL.md) for other checkout options and
 the [driver guide](docs/DKMS.md) for DKMS setup. Checkout edits do not update
@@ -114,9 +116,9 @@ After success, **power the headset off and on**. You can also pair through
 
 ### Use the Plasma widget
 
-Enable the widget in the system tray (**Configure System Tray… → Entries**) or
-add it to a panel. In the tray it hides among the hidden items while the headset
-is off or the adapter is missing. Hover over the icon for connection and battery
+The widget lives in the system tray (or a panel, if you add it there). Its icon
+stays visible in every state, so the pairing controls are always one click away
+when the headset is not connected. Hover over the icon for connection and battery
 status. Click to view the USB dongle, wireless link, Bluetooth connection and
 available battery telemetry.
 

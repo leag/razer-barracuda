@@ -97,9 +97,11 @@ kpackagetool6 --type Plasma/Applet --install plasmoid
 ```
 
 For an existing user installation use `--upgrade plasmoid` instead.
-Enable **Barracuda Headset** in **Configure System Tray… → Entries**, or add it
-from the panel's **Add Widgets** menu. Installing does not alter your panel
-layout or enable the tray entry. Plasma can cache QML even after removing and
+The system tray enables **Barracuda Headset** by itself the first time it finds
+it (the plugin is enabled by default), at the next Plasma start; you can disable it
+in **Configure System Tray… → Entries**. You can also add it from a panel's **Add
+Widgets** menu; if you do, disable the tray entry to avoid two copies. Installing
+does not alter your panel layout. Plasma can cache QML even after removing and
 re-adding a widget; follow the [reload instructions](TROUBLESHOOTING.md#widget-update-not-visible)
 after upgrading. Do not install both a user copy and the Arch widget package.
 

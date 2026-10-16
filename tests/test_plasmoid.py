@@ -24,6 +24,8 @@ class PlasmoidTests(unittest.TestCase):
         # representation; forcing the compact one leaves left clicks inert.
         metadata = json.loads((ROOT / 'plasmoid/metadata.json').read_text())
         self.assertEqual(metadata['X-Plasma-NotificationArea'], 'true')
+        # The system tray enables the entry once, when it first finds it.
+        self.assertIs(metadata['KPlugin']['EnabledByDefault'], True)
         source = (ROOT / 'plasmoid/contents/ui/main.qml').read_text()
         binding = re.search(r'\n    preferredRepresentation:(.*?)\n    \S', source, re.S).group(1)
         self.assertEqual(' '.join(binding.split()),

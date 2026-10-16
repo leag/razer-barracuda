@@ -80,7 +80,7 @@ PlasmoidItem {
         pendingRequest = action;
     }
     function openPairing() {
-        if (pairingBusy || powerBusy)
+        if (pairingBusy || powerBusy || Output.adapterMissing(linkStatus))
             return;
         pairingError = "";
         pairingResult = "";
@@ -89,7 +89,7 @@ PlasmoidItem {
     }
 
     function turnOffHeadset() {
-        if (pairingBusy || powerBusy)
+        if (pairingBusy || powerBusy || Output.adapterMissing(linkStatus))
             return;
         powerError = "";
         powerResult = "";
@@ -194,14 +194,14 @@ PlasmoidItem {
         active: PlasmaCore.Types.ActiveStatus,
         passive: PlasmaCore.Types.PassiveStatus,
         attention: PlasmaCore.Types.NeedsAttentionStatus
-    })[Output.trayStatus(connection, battery, pairingBusy || powerBusy)]
+    })[Output.trayStatus(connection, battery)]
     Plasmoid.contextualActions: [
         PlasmaCore.Action {
             text: root.target.transport === "bluetooth"
                 ? root.label("Pair USB dongle…", "Emparejar dongle USB…")
                 : root.label("Pair Barracuda…", "Emparejar Barracuda…")
             icon.name: "network-wireless"
-            enabled: !root.pairingBusy && !root.powerBusy
+            enabled: !root.pairingBusy && !root.powerBusy && !Output.adapterMissing(root.linkStatus)
             onTriggered: root.requestConfirmation("pairing")
         },
         PlasmaCore.Action {
@@ -209,7 +209,7 @@ PlasmoidItem {
                 ? root.label("Turn off through USB dongle…", "Apagar mediante dongle USB…")
                 : root.label("Turn off headset…", "Apagar auricular…")
             icon.name: "system-shutdown"
-            enabled: !root.pairingBusy && !root.powerBusy
+            enabled: !root.pairingBusy && !root.powerBusy && !Output.adapterMissing(root.linkStatus)
             onTriggered: root.requestConfirmation("power-off")
         },
         PlasmaCore.Action {

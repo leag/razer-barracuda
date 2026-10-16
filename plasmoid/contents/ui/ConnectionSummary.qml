@@ -49,6 +49,21 @@ ColumnLayout {
     readonly property string hintText: Output.connectionHint(status, connection, localeName)
     readonly property var details: Output.connectionDetails(status, localeName)
     readonly property bool viaBluetooth: target.transport === "bluetooth"
+    // Pairing and power-off need the dongle; only a confirmed missing adapter
+    // disables them.
+    readonly property bool adapterMissing: Output.adapterMissing(status)
+    readonly property bool commandsEnabled: !pairingBusy && !powerBusy && !adapterMissing
+    // Any read state without a connection; not while the first read is pending.
+    readonly property bool offerPairing: status !== null && !connected
+    readonly property string pairLabel: viaBluetooth
+        ? label("Pair USB dongle…", "Emparejar dongle USB…")
+        : label("Pair Barracuda…", "Emparejar Barracuda…")
+    onAdapterMissingChanged: {
+        if (adapterMissing) {
+            confirmingPairing = false;
+            confirmingPowerOff = false;
+        }
+    }
     onBatteryAvailableChanged: {
         if (batteryAvailable)
             confirmingPairing = false;
@@ -72,7 +87,7 @@ ColumnLayout {
     // Shows the inline confirmation for "pairing" or "power-off"; nothing runs
     // until it is accepted.
     function confirm(action) {
-        if (pairingBusy || powerBusy)
+        if (!commandsEnabled)
             return;
         confirmingPairing = action === "pairing";
         confirmingPowerOff = action === "power-off";
@@ -110,11 +125,9 @@ ColumnLayout {
                 objectName: "moreActionsMenu"
                 PC3.MenuItem {
                     objectName: "pairingButton"
-                    text: summary.viaBluetooth
-                        ? summary.label("Pair USB dongle…", "Emparejar dongle USB…")
-                        : summary.label("Pair Barracuda…", "Emparejar Barracuda…")
+                    text: summary.pairLabel
                     icon.name: "network-wireless"
-                    enabled: !summary.pairingBusy && !summary.powerBusy
+                    enabled: summary.commandsEnabled
                     onTriggered: summary.confirm("pairing")
                 }
                 PC3.MenuItem {
@@ -123,7 +136,7 @@ ColumnLayout {
                         ? summary.label("Turn off through USB dongle…", "Apagar mediante dongle USB…")
                         : summary.label("Turn off headset…", "Apagar auricular…")
                     icon.name: "system-shutdown"
-                    enabled: !summary.pairingBusy && !summary.powerBusy
+                    enabled: summary.commandsEnabled
                     onTriggered: summary.confirm("power-off")
                 }
                 PC3.MenuItem {
@@ -264,6 +277,120 @@ ColumnLayout {
         }
     }
 
+    // Without a connection the popup offers what pairing needs, beside the
+    // state that calls for it. Confirmation, progress and results follow.
+    RowLayout {
+        objectName: "pairingSection"
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        visible: summary.offerPairing
+        PC3.Button {
+            objectName: "pairNowButton"
+            text: summary.pairLabel
+            icon.name: "network-wireless"
+            enabled: summary.commandsEnabled
+            onClicked: summary.confirm("pairing")
+            PC3.ToolTip.text: summary.label("Connect the USB dongle first.", "Conecta primero el dongle USB.")
+            PC3.ToolTip.visible: hovered && summary.adapterMissing
+        }
+        Item { Layout.fillWidth: true }
+    }
+
+    Kirigami.InlineMessage {
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        type: summary.confirmingPairing ? Kirigami.MessageType.Warning : Kirigami.MessageType.Information
+        visible: summary.pairingBusy || summary.confirmingPairing || summary.pairingResult.length > 0
+        text: summary.pairingBusy
+            ? summary.label("Pairing… Keep the headset in pairing mode. Searching can take up to a minute; the result will appear here.",
+                            "Emparejando… Mantén los auriculares en modo de emparejamiento. La búsqueda puede tardar un minuto; el resultado aparecerá aquí.")
+            : summary.confirmingPairing
+                ? summary.label("Connect the Barracuda dongle and put the headset in pairing mode. Continue? This replaces the dongle's current pairing.",
+                                "Conecta el adaptador Barracuda y pon los auriculares en modo de emparejamiento. ¿Continuar? Esto reemplaza el emparejamiento actual del adaptador.")
+                : summary.pairingResult
+    }
+
+    PC3.ProgressBar {
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        visible: summary.pairingBusy
+        indeterminate: summary.pairingBusy
+        Accessible.name: summary.label("Pairing in progress", "Emparejamiento en curso")
+    }
+
+    PC3.ScrollView {
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        Layout.preferredHeight: Kirigami.Units.gridUnit * 5
+        visible: summary.pairingError.length > 0
+        PC3.ScrollBar.horizontal.policy: PC3.ScrollBar.AlwaysOff
+        contentWidth: width
+        PC3.TextArea {
+            text: summary.pairingError
+            textFormat: TextEdit.PlainText
+            readOnly: true
+            color: Kirigami.Theme.negativeTextColor
+            wrapMode: TextEdit.Wrap
+        }
+    }
+
+    RowLayout {
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        visible: summary.confirmingPairing
+        PC3.Button {
+            objectName: "confirmPairingButton"
+            text: summary.label("Pair", "Emparejar")
+            enabled: !summary.pairingBusy && !summary.adapterMissing
+            onClicked: {
+                summary.confirmingPairing = false;
+                summary.pairingRequested();
+            }
+        }
+        PC3.Button {
+            objectName: "cancelPairingButton"
+            text: summary.label("Cancel", "Cancelar")
+            onClicked: summary.confirmingPairing = false
+        }
+    }
+
+    Kirigami.InlineMessage {
+        objectName: "powerStatus"
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        visible: summary.confirmingPowerOff || summary.powerBusy
+            || summary.powerError.length > 0 || summary.powerResult.length > 0
+        type: summary.powerError.length > 0 ? Kirigami.MessageType.Error
+            : summary.confirmingPowerOff ? Kirigami.MessageType.Warning : Kirigami.MessageType.Information
+        text: summary.powerBusy ? summary.label("Sending power-off request…", "Enviando solicitud de apagado…")
+            : summary.confirmingPowerOff ? summary.label(
+                "Turn off the Barracuda headset? Use its physical button to turn it on again.",
+                "¿Apagar los auriculares Barracuda? Usa su botón físico para encenderlos de nuevo.")
+            : summary.powerError.length > 0 ? summary.powerError : summary.powerResult
+    }
+    RowLayout {
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        visible: summary.confirmingPowerOff
+        PC3.Button {
+            objectName: "confirmPowerOffButton"
+            text: summary.label("Turn off", "Apagar")
+            enabled: !summary.pairingBusy && !summary.powerBusy && !summary.adapterMissing
+            onClicked: {
+                summary.confirmingPowerOff = false;
+                summary.powerOffRequested();
+            }
+        }
+        PC3.Button {
+            objectName: "cancelPowerOffButton"
+            text: summary.label("Cancel", "Cancelar")
+            onClicked: summary.confirmingPowerOff = false
+        }
+    }
+
     Kirigami.Separator {
         visible: summary.connected
         Layout.fillWidth: true
@@ -337,101 +464,6 @@ ColumnLayout {
                     horizontalAlignment: Text.AlignRight
                 }
             }
-        }
-    }
-
-
-    Kirigami.InlineMessage {
-        Layout.fillWidth: true
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        type: summary.confirmingPairing ? Kirigami.MessageType.Warning : Kirigami.MessageType.Information
-        visible: summary.pairingBusy || summary.confirmingPairing || summary.pairingResult.length > 0
-        text: summary.pairingBusy
-            ? summary.label("Pairing… Keep the headset in pairing mode. Searching can take up to a minute; the result will appear here.",
-                            "Emparejando… Mantén los auriculares en modo de emparejamiento. La búsqueda puede tardar un minuto; el resultado aparecerá aquí.")
-            : summary.confirmingPairing
-                ? summary.label("Connect the Barracuda dongle and put the headset in pairing mode. Continue? This replaces the dongle's current pairing.",
-                                "Conecta el adaptador Barracuda y pon los auriculares en modo de emparejamiento. ¿Continuar? Esto reemplaza el emparejamiento actual del adaptador.")
-                : summary.pairingResult
-    }
-
-    PC3.ProgressBar {
-        Layout.fillWidth: true
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        visible: summary.pairingBusy
-        indeterminate: summary.pairingBusy
-        Accessible.name: summary.label("Pairing in progress", "Emparejamiento en curso")
-    }
-
-    PC3.ScrollView {
-        Layout.fillWidth: true
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 5
-        visible: summary.pairingError.length > 0
-        PC3.ScrollBar.horizontal.policy: PC3.ScrollBar.AlwaysOff
-        contentWidth: width
-        PC3.TextArea {
-            text: summary.pairingError
-            textFormat: TextEdit.PlainText
-            readOnly: true
-            color: Kirigami.Theme.negativeTextColor
-            wrapMode: TextEdit.Wrap
-        }
-    }
-
-    RowLayout {
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        visible: summary.confirmingPairing
-        PC3.Button {
-            objectName: "confirmPairingButton"
-            text: summary.label("Pair", "Emparejar")
-            enabled: !summary.pairingBusy
-            onClicked: {
-                summary.confirmingPairing = false;
-                summary.pairingRequested();
-            }
-        }
-        PC3.Button {
-            objectName: "cancelPairingButton"
-            text: summary.label("Cancel", "Cancelar")
-            onClicked: summary.confirmingPairing = false
-        }
-    }
-
-    Kirigami.InlineMessage {
-        objectName: "powerStatus"
-        Layout.fillWidth: true
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        visible: summary.confirmingPowerOff || summary.powerBusy
-            || summary.powerError.length > 0 || summary.powerResult.length > 0
-        type: summary.powerError.length > 0 ? Kirigami.MessageType.Error
-            : summary.confirmingPowerOff ? Kirigami.MessageType.Warning : Kirigami.MessageType.Information
-        text: summary.powerBusy ? summary.label("Sending power-off request…", "Enviando solicitud de apagado…")
-            : summary.confirmingPowerOff ? summary.label(
-                "Turn off the Barracuda headset? Use its physical button to turn it on again.",
-                "¿Apagar los auriculares Barracuda? Usa su botón físico para encenderlos de nuevo.")
-            : summary.powerError.length > 0 ? summary.powerError : summary.powerResult
-    }
-    RowLayout {
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        visible: summary.confirmingPowerOff
-        PC3.Button {
-            objectName: "confirmPowerOffButton"
-            text: summary.label("Turn off", "Apagar")
-            enabled: !summary.pairingBusy && !summary.powerBusy
-            onClicked: {
-                summary.confirmingPowerOff = false;
-                summary.powerOffRequested();
-            }
-        }
-        PC3.Button {
-            objectName: "cancelPowerOffButton"
-            text: summary.label("Cancel", "Cancelar")
-            onClicked: summary.confirmingPowerOff = false
         }
     }
 

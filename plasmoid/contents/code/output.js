@@ -85,8 +85,11 @@ function connectionText(value, locale, withTransport = true) {
 function connectionHint(status, value, locale) {
     switch (value.state) {
     case "disconnected":
-        return text("Turn the headset on. If it does not connect, pair it from More actions.",
-                    "Enciende el auricular. Si no se conecta, emparéjalo desde Más acciones.", locale);
+        if (adapterMissing(status))
+            return text("Turn the headset on. To pair it with the USB dongle, connect the dongle first.",
+                        "Enciende el auricular. Para emparejarlo con el dongle USB, conecta primero el dongle.", locale);
+        return text("Turn the headset on. If it does not connect, pair it with the button below.",
+                    "Enciende el auricular. Si no se conecta, emparéjalo con el botón de abajo.", locale);
     case "unknown":
         if (status.usb.adapter === "multiple")
             return text("More than one Barracuda adapter is connected. Connect only one.",
@@ -197,12 +200,17 @@ function emblem(value, battery) {
 // keep the icon shown; a disconnected headset, a missing adapter and an
 // unavailable helper move it to the tray's hidden items. A low battery asks for
 // attention.
-function trayStatus(value, battery, busy) {
-    if (emblem(value, battery) === "emblem-warning")
-        return "attention";
-    if (busy || value.state === "connected" || value.state === "unknown")
-        return "active";
-    return "passive";
+// The tray icon never hides itself: without a connection the popup holds the
+// controls needed to pair. The tray's own visibility setting still wins.
+function trayStatus(value, battery) {
+    return emblem(value, battery) === "emblem-warning" ? "attention" : "active";
+}
+
+// Pairing and power-off need the dongle. Only a confirmed missing adapter
+// disables them; unknown, unavailable and checking states never do.
+function adapterMissing(status) {
+    return status !== null && status !== undefined && status.ok === true
+        && status.usb.adapter === "missing";
 }
 
 function pairingCommand(locale) {

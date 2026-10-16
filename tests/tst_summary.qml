@@ -644,6 +644,54 @@ Item {
             tryCompare(findChild(summary, "moreActionsMenu"), "visible", false)
             summary.pairingBusy = false
         }
+        function test_pairing_controls_without_a_connection() {
+            summary.localeName = "en_US"
+            const section = findChild(summary, "pairingSection")
+            const button = findChild(summary, "pairNowButton")
+            summary.status = null
+            // Not while the first read is pending.
+            verify(!section.visible)
+            summary.status = linked("connected")
+            verify(!section.visible)
+            for (const state of [linked("disconnected"), linked("unknown"), {ok: false},
+                                 {ok: true, usb: {adapter: "multiple"}, bluetooth: null}]) {
+                summary.status = state
+                verify(section.visible)
+                verify(button.enabled)
+            }
+            compare(button.text, "Pair Barracuda…")
+            // The confirmation and its buttons sit right under the Pair button.
+            pairingSpy.clear()
+            summary.status = linked("disconnected")
+            button.clicked()
+            verify(summary.confirmingPairing)
+            compare(pairingSpy.count, 0)
+            const confirmButton = findChild(summary, "confirmPairingButton")
+            const top = () => confirmButton.mapToItem(summary, 0, 0).y
+            tryVerify(() => top() > section.y)
+            verify(top() < findChild(summary, "detailsToggle").y)
+            findChild(summary, "cancelPairingButton").clicked()
+            verify(!summary.confirmingPairing)
+            // A confirmed missing dongle disables pairing and power-off, never hides them.
+            summary.status = linked("disconnected")
+            summary.confirm("power-off")
+            verify(summary.confirmingPowerOff)
+            summary.status = {ok: true, usb: {adapter: "missing"}, bluetooth: null}
+            verify(section.visible)
+            verify(!button.enabled)
+            verify(!summary.confirmingPowerOff)
+            verify(!findChild(summary, "pairingButton").enabled)
+            verify(!findChild(summary, "powerOffButton").enabled)
+            summary.confirm("pairing")
+            verify(!summary.confirmingPairing)
+            summary.localeName = "es_CL"
+            compare(button.text, "Emparejar Barracuda…")
+            summary.target = {transport: "bluetooth", address: "01:02:03:04:05:06"}
+            compare(button.text, "Emparejar dongle USB…")
+            summary.target = {transport: "usb"}
+            summary.localeName = "en_US"
+            summary.status = null
+        }
         function test_closing_clears_pending_confirmation() {
             summary.confirmingPairing = true
             summary.activeView = false

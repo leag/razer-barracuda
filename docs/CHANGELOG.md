@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Make the system tray the widget's main place: the plugin is enabled by default,
+  so the tray shows it without configuration. The tray icon no longer hides when
+  the headset is disconnected or the adapter is missing. Without a connection
+  the popup shows a Pair button with its confirmation right below, and the hint
+  points to it. Pairing and power-off are disabled only while the driver reports
+  that no USB dongle is connected.
 - Remove the legacy software-effects cleanup. The widget no longer runs
   `barracuda-audio`, and headset settings no longer wait for it.
   `barracuda-audio` drops `remove_effects`/`remove_eq`, legacy filter detection

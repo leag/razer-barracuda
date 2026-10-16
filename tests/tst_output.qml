@@ -69,6 +69,14 @@ TestCase {
                .includes("más de un adaptador"));
         verify(Output.connectionHint({ok: false}, {state: "unavailable"}, "en_US").includes("barracuda-headset"));
         verify(Output.connectionHint(linked("disconnected"), {state: "disconnected"}, "es_CL").includes("Enciende"));
+        // The hint points to the popup's own Pair button, not to a menu.
+        verify(Output.connectionHint(linked("disconnected"), {state: "disconnected"}, "en_US").includes("button below"));
+        verify(Output.connectionHint(linked("disconnected"), {state: "disconnected"}, "es_CL").includes("botón de abajo"));
+        // Pair is disabled without the dongle, so the hint asks for it instead.
+        const noDongle = {ok: true, usb: {adapter: "missing"}, bluetooth: {state: "disconnected"}};
+        compare(Output.connection(noDongle).state, "disconnected");
+        verify(Output.connectionHint(noDongle, Output.connection(noDongle), "en_US").includes("connect the dongle first"));
+        verify(Output.connectionHint(noDongle, Output.connection(noDongle), "es_CL").includes("conecta primero el dongle"));
     }
     // Label and value of each details row; icons are checked separately.
     function pairs(rows) { return rows.map(row => row.slice(0, 2)); }
@@ -135,17 +143,20 @@ TestCase {
             compare(Output.transportIcon({state: state, transport: "usb"}), "");
     }
     function test_tray_status() {
-        compare(Output.trayStatus({state: "connected"}, null, false), "active");
-        compare(Output.trayStatus({state: "unknown"}, null, false), "active");
-        for (const state of ["disconnected", "no-adapter", "unavailable", "checking"]) {
-            compare(Output.trayStatus({state: state}, null, false), "passive");
-            // A running pairing or power-off keeps the icon reachable.
-            compare(Output.trayStatus({state: state}, null, true), "active");
-        }
-        compare(Output.trayStatus({state: "connected"}, {percent: 10, state: "Discharging"}, false), "attention");
-        compare(Output.trayStatus({state: "connected"}, {percent: 10, state: "Charging"}, false), "active");
+        // The icon stays visible in every state, so pairing stays reachable.
+        for (const state of ["connected", "unknown", "disconnected", "no-adapter", "unavailable", "checking"])
+            compare(Output.trayStatus({state: state}, null), "active");
+        compare(Output.trayStatus({state: "connected"}, {percent: 10, state: "Discharging"}), "attention");
+        compare(Output.trayStatus({state: "connected"}, {percent: 10, state: "Charging"}), "active");
         // A stale low reading without a confirmed link does not ask for attention.
-        compare(Output.trayStatus({state: "disconnected"}, {percent: 5, state: "Discharging"}, false), "passive");
+        compare(Output.trayStatus({state: "disconnected"}, {percent: 5, state: "Discharging"}), "active");
+    }
+    function test_commands_disabled_only_for_confirmed_missing_adapter() {
+        verify(Output.adapterMissing({ok: true, usb: {adapter: "missing"}, bluetooth: null}));
+        verify(Output.adapterMissing({ok: true, usb: {adapter: "missing"}, bluetooth: {state: "connected"}}));
+        for (const status of [null, undefined, {ok: false}, {ok: true, usb: {adapter: "multiple"}},
+                              linked("unknown"), linked("disconnected"), linked("connected")])
+            verify(!Output.adapterMissing(status));
     }
     function test_pairing_command_after_ui_confirmation() {
         compare(Output.powerOffCommand("es_CL"), "barracuda-power --off --yes --language es");
