@@ -247,6 +247,13 @@ function powerOutcome(data, locale) {
         + "\n" + String(data.stderr || data.stdout || "").trim()};
 }
 
+// The More actions entries, chosen as the system tray chooses them: visible,
+// normal-priority actions other than Plasma's own configure action.
+function moreActions(actions, configure, normalPriority) {
+    return Array.from(actions || []).filter(action => action && action.visible && !action.isSeparator
+        && action.priority === normalPriority && action !== configure);
+}
+
 // Plasma action texts carry a keyboard accelerator marker; buttons, tooltips
 // and accessible names show them without it.
 function actionText(value) {

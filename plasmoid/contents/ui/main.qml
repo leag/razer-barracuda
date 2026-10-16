@@ -196,9 +196,8 @@ PlasmoidItem {
         }
     ]
     // The More actions entries, as the system tray selects them.
-    readonly property var menuActions: Plasmoid.contextualActions.filter(action => action.visible
-        && !action.isSeparator && action.priority === PlasmaCore.Action.NormalPriority
-        && action !== Plasmoid.internalAction("configure"))
+    readonly property var menuActions: Output.moreActions(Plasmoid.contextualActions,
+        Plasmoid.internalAction("configure"), PlasmaCore.Action.NormalPriority)
 
     // The widget names itself as Plasma does: the tray heading, the configure
     // action and the configuration window use the same metadata name.

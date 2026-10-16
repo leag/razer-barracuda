@@ -1,9 +1,22 @@
 import QtQuick
 import QtTest
+import org.kde.plasma.core as PlasmaCore
 import "../plasmoid/contents/code/output.js" as Output
 
 TestCase {
     name: "HeadsetLogic"
+    property list<QtObject> actions: [
+        PlasmaCore.Action { id: audio; text: "Configure Audio Devices…" },
+        PlasmaCore.Action { id: hidden; text: "Hidden"; visible: false },
+        PlasmaCore.Action { id: separator; isSeparator: true },
+        PlasmaCore.Action { id: high; text: "High"; priority: PlasmaCore.Action.HighPriority },
+        PlasmaCore.Action { id: configure; text: "&Configure Barracuda Headset…" }
+    ]
+    function test_more_actions_match_the_tray() {
+        compare(Output.moreActions(actions, configure, PlasmaCore.Action.NormalPriority), [audio]);
+        compare(Output.moreActions([], configure, PlasmaCore.Action.NormalPriority), []);
+        compare(Output.moreActions(null, null, PlasmaCore.Action.NormalPriority), []);
+    }
     function linked(link, bluetooth, battery) {
         return {ok: true, usb: {adapter: "present", driver: true, link: link, battery: battery || null},
                 bluetooth: bluetooth === undefined ? null : bluetooth};

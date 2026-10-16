@@ -15,7 +15,7 @@ HELPERS = ('barracuda-headset', 'barracuda-pair', 'barracuda-power')
 QML_WARNINGS = ('Binding loop', 'TypeError', 'ReferenceError', 'Unable to assign')
 
 
-def run_qml(path):
+def run_qml(path, **env):
     """Run one QML suite offscreen, without an audio server or real helpers.
 
     Fake helpers come first on PATH and record every call, so a suite that
@@ -34,7 +34,7 @@ def run_qml(path):
             [RUNNER, '-input', str(path)],
             env={**os.environ, 'QT_QPA_PLATFORM': 'offscreen',
                  'PULSE_SERVER': 'unix:/nonexistent/barracuda-test',
-                 'PATH': str(fakes) + os.pathsep + os.environ.get('PATH', '')},
+                 'PATH': str(fakes) + os.pathsep + os.environ.get('PATH', ''), **env},
             capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
         log = fakes / 'calls.log'
         calls = log.read_text() if log.exists() else ''
@@ -84,6 +84,11 @@ class PlasmoidTests(unittest.TestCase):
         self.assertIn('readonly property bool viewShown: root.expanded || '
                       'Plasmoid.formFactor === PlasmaCore.Types.Planar', source)
         self.assertIn('readonly property bool settingsWanted: viewShown && connected', source)
+        self.assertIn('activeView: root.settingsWanted', source)
+        # Closing the popup clears the previous pairing and power-off results.
+        shown = source.split('onViewShownChanged: {', 1)[1].split('\n    }', 1)[0]
+        for field in ('pairingError', 'pairingResult', 'powerError', 'powerResult'):
+            self.assertIn(f'{field} = "";', shown)
 
     def test_popup_requests_reach_the_settings_controller(self):
         source = (ROOT / 'plasmoid/contents/ui/main.qml').read_text()
@@ -159,6 +164,23 @@ class PlasmoidTests(unittest.TestCase):
                 time.sleep(0.05)
             self.assertEqual(len(log.read_text().splitlines()), 2)
 
+    @unittest.skipUnless(Path(RUNNER).is_file(), 'Qt 6 QML test runner not installed')
+    def test_configuration_categories_in_both_languages(self):
+        with tempfile.TemporaryDirectory() as directory:
+            probe = Path(directory) / 'tst_categories.qml'
+            probe.write_text('import QtQuick\nimport QtTest\nTestCase { name: "Categories"; '
+                             'function test_print() { const model = Qt.createComponent("%s").createObject(null); '
+                             'const names = []; for (let i = 0; i < model.count; ++i) names.push(model.get(i).name); '
+                             'console.log("NAMES " + JSON.stringify(names)) } }\n'
+                             % (ROOT / 'plasmoid/contents/config/config.qml').as_uri())
+            for language, names in (('en_US.UTF-8', ['Equalizer', 'Power Saving']),
+                                    ('es_CL.UTF-8', ['Ecualizador', 'Ahorro de energía'])):
+                result, _ = run_qml(probe, LC_ALL=language, LANG=language, LANGUAGE=language.split('.')[0])
+                output = result.stdout + result.stderr
+                self.assertEqual(result.returncode, 0, output)
+                line = next(line for line in output.splitlines() if 'NAMES ' in line)
+                self.assertEqual(json.loads(line.split('NAMES ', 1)[1]), names)
+
     def test_arch_package(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -198,7 +220,7 @@ class PlasmoidTests(unittest.TestCase):
         source = (ROOT / 'plasmoid/contents/ui/main.qml').read_text()
         compact = source.split('compactRepresentation: ', 1)[1].split('    fullRepresentation:', 1)[0]
         compact = compact.replace('PC3.ToolButton {', 'PC3.ToolButton {\n id: button\n width: 32\n height: 32', 1)
-        compact = compact.replace('Plasmoid.formFactor', 'root.formFactor')
+        compact = compact.replace('Plasmoid.formFactor', 'root.formFactor').replace('Plasmoid.title', 'root.title')
         harness = """
 import QtQuick
 import QtQuick.Layouts
@@ -212,6 +234,7 @@ Item {
     property int formFactor: PlasmaCore.Types.Horizontal
     property bool inTray: false
     property string statusText: "Test"
+    property string title: "Barracuda Headset"
     property bool connected: false
     property bool slashed: false
     property string emblem: ""
@@ -293,6 +316,8 @@ Item {
                 verify(slash.height <= Math.max(1, artwork.width / 22) + 0.001)
             }
             compare(button.Accessible.description, "Test")
+            // The widget's own title, as in Plasma's heading and tooltip.
+            compare(button.Accessible.name, "Barracuda Headset")
         }
     }
 }
