@@ -37,6 +37,7 @@ ColumnLayout {
     signal pairingRequested()
     signal powerOffRequested()
     signal settingChangeRequested(string feature, bool enabled)
+    signal settingsRefreshRequested()
 
     function label(english, spanish) {
         return Output.text(english, spanish, localeName)
@@ -155,6 +156,7 @@ ColumnLayout {
             onPairingRequested: panel.pairingRequested()
             onPowerOffRequested: panel.powerOffRequested()
             onSettingChangeRequested: (feature, enabled) => panel.settingChangeRequested(feature, enabled)
+            onSettingsRefreshRequested: panel.settingsRefreshRequested()
         }
     }
 }

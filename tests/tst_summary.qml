@@ -82,6 +82,11 @@ Item {
         signalName: "settingChangeRequested"
     }
     SignalSpy {
+        id: refreshSpy
+        target: summary
+        signalName: "settingsRefreshRequested"
+    }
+    SignalSpy {
         id: actionSpy
         target: audioAction
         signalName: "triggered"
@@ -340,53 +345,184 @@ Item {
             }
             sizeDialog.visible = false
         }
-        function test_dnd_status_row() {
+        function test_dnd_switch_row() {
             summary.localeName = "en_US"
             const row = findChild(summary, "dnd")
+            const toggle = findChild(summary, "dndSwitch")
             const value = findChild(summary, "dndValue")
-            // Only with a confirmed link.
-            summary.status = linked("disconnected")
-            verify(!row.visible)
+            const description = findChild(summary, "dndDescription")
+            const icon = findChild(summary, "dndIcon")
+            // Always laid out; without a confirmed link the value is unknown,
+            // never an Off switch, even with an earlier reading.
+            read({dnd: true})
+            for (const state of [null, linked("disconnected"), linked("unknown"), {ok: false},
+                                 {ok: true, usb: {adapter: "missing"}, bluetooth: null}]) {
+                summary.status = state
+                verify(row.visible)
+                verify(!toggle.visible)
+                verify(value.visible)
+                compare(value.text, "Unknown")
+            }
+            fakeSettings.response = null
             summary.status = linked("connected")
-            verify(row.visible)
             fakeSettings.busy = true
             compare(value.text, "Reading…")
             fakeSettings.busy = false
             compare(value.text, "Unknown")
+            compare(icon.source, "notifications-disabled-symbolic")
+            compare(icon.opacity, 0.5)
+            compare(icon.width, findChild(summary, "headsetBatteryIcon").width)
             read({dnd: true})
-            compare(value.text, "On")
+            verify(toggle.visible)
+            verify(!value.visible)
+            verify(toggle.checked)
+            verify(toggle.enabled)
+            compare(icon.opacity, 1)
+            compare(findChild(summary, "dndLabel").text, "Do Not Disturb")
+            compare(toggle.Accessible.name, "Do Not Disturb")
+            compare(description.text, "Calls from a phone connected by Bluetooth do not interrupt the dongle audio. "
+                    + "Desktop notifications are not affected.")
+            // A click asks for the new value; the switch keeps showing the
+            // reported one until a reading confirms it.
+            settingSpy.clear()
+            mouseClick(toggle)
+            compare(settingSpy.count, 1)
+            compare(settingSpy.signalArguments[0][0], "dnd")
+            compare(settingSpy.signalArguments[0][1], false)
+            verify(toggle.checked)
             read({dnd: false})
-            compare(value.text, "Off")
+            verify(!toggle.checked)
+            // Disabled while any request or command runs; the value stays.
+            fakeSettings.busy = true
+            verify(toggle.visible)
+            verify(!toggle.enabled)
+            fakeSettings.busy = false
+            summary.pairingBusy = true
+            verify(!toggle.enabled)
+            summary.pairingBusy = false
+            summary.powerBusy = true
+            verify(!toggle.enabled)
+            summary.powerBusy = false
+            verify(toggle.enabled)
+            settingSpy.clear()
             summary.localeName = "es_CL"
-            compare(value.text, "Desactivado")
-            read({dnd: true})
-            compare(value.text, "Activado")
-            // A reading is not shown once the link is lost.
-            summary.status = linked("unknown")
-            compare(summary.dndState, null)
+            compare(findChild(summary, "dndLabel").text, "No molestar")
+            compare(description.text, "Las llamadas de un teléfono conectado por Bluetooth no interrumpen el audio "
+                    + "del dongle. No afecta a las notificaciones del escritorio.")
+            read({dnd: null})
+            compare(value.text, "Desconocido")
+            fakeSettings.busy = true
+            compare(value.text, "Leyendo…")
+            fakeSettings.busy = false
             summary.localeName = "en_US"
             fakeSettings.response = null
             summary.status = null
         }
-        function test_gaming_status_row() {
+        function test_gaming_switch_row() {
             summary.localeName = "en_US"
             summary.status = linked("connected")
-            const row = findChild(summary, "gaming")
+            const toggle = findChild(summary, "gamingSwitch")
             const value = findChild(summary, "gamingValue")
-            verify(row.visible)
+            const description = findChild(summary, "gamingDescription")
+            compare(findChild(summary, "gamingIcon").source, "input-gamepad-symbolic")
+            compare(findChild(summary, "gamingLabel").text, "Bluetooth Gaming Mode")
             compare(value.text, "Unknown")
+            verify(!toggle.visible)
+            compare(description.text, "Lowers Bluetooth audio delay. Not the Game sound profile.")
+            // Read through the USB dongle: shown but not settable, and the
+            // line under it says why.
             read({gaming: false})
-            compare(value.text, "Off")
-            // Read through the USB dongle: shown, but cannot be changed.
-            verify(!summary.gamingSettable)
+            verify(toggle.visible)
+            verify(!toggle.checked)
+            verify(!toggle.enabled)
+            compare(description.text, "Can be changed only over Bluetooth; settings are being read through the USB dongle.")
+            // Also while Bluetooth is connected but the settings follow the dongle.
+            summary.status = linked("connected", {state: "connected", address: "01:02:03:04:05:06"})
+            verify(!toggle.enabled)
+            compare(description.text, "Can be changed only over Bluetooth; settings are being read through the USB dongle.")
+            // Over Bluetooth the switch sets the new value.
             read({gaming: false}, "bluetooth")
-            verify(summary.gamingSettable)
+            verify(toggle.enabled)
+            compare(description.text, "Lowers Bluetooth audio delay. Not the Game sound profile.")
+            settingSpy.clear()
+            mouseClick(toggle)
+            compare(settingSpy.count, 1)
+            compare(settingSpy.signalArguments[0][0], "gaming")
+            compare(settingSpy.signalArguments[0][1], true)
+            verify(!toggle.checked)
             summary.localeName = "es_CL"
-            compare(value.text, "Desactivado")
+            compare(findChild(summary, "gamingLabel").text, "Modo gaming Bluetooth")
+            compare(description.text, "Reduce el retraso del audio Bluetooth. No es el perfil de sonido Juegos.")
+            read({gaming: true})
+            verify(toggle.checked)
+            compare(description.text, "Solo se puede cambiar por Bluetooth; los ajustes se están leyendo mediante el dongle USB.")
             summary.localeName = "en_US"
             fakeSettings.response = null
             summary.status = null
-            verify(!row.visible)
+        }
+        function test_connection_modes_layout_and_feedback() {
+            summary.localeName = "en_US"
+            summary.status = linked("connected")
+            const modes = findChild(summary, "connectionModes")
+            const notice = findChild(summary, "connectionModesError")
+            const top = name => findChild(summary, name).mapToItem(summary, 0, 0).y
+            // How it is, what to do now, how it connects, then the details.
+            tryVerify(() => top("connectionModes") < top("detailsToggle"))
+            verify(top("connectionState") < top("deviceCommands"))
+            verify(top("deviceCommands") < top("connectionModes"))
+            verify(top("dnd") < top("gaming"))
+            verify(!notice.visible)
+            // A failed request for a mode or a failed read: a warning with
+            // Refresh, right under the modes.
+            fakeSettings.requestFeature = "dnd"
+            fakeSettings.error = "The headset did not answer."
+            verify(notice.visible)
+            compare(notice.type, Kirigami.MessageType.Warning)
+            compare(notice.text, "The headset did not answer.")
+            tryVerify(() => top("connectionModesError") >= top("connectionModes") + modes.height)
+            verify(top("connectionModesError") < top("detailsToggle"))
+            compare(notice.actions.length, 1)
+            const refresh = notice.actions[0]
+            compare(refresh.objectName, "refreshSettings")
+            compare(refresh.text, "Refresh")
+            compare(refresh.icon.name, "view-refresh")
+            refreshSpy.clear()
+            refresh.trigger()
+            compare(refreshSpy.count, 1)
+            fakeSettings.busy = true
+            verify(!refresh.enabled)
+            fakeSettings.busy = false
+            fakeSettings.requestFeature = ""
+            verify(notice.visible)
+            // A Quick Connect request reports under Quick Connect instead.
+            fakeSettings.requestFeature = "devices"
+            verify(!notice.visible)
+            fakeSettings.error = ""
+            fakeSettings.requestFeature = ""
+            // The modes' read errors share one notice; each is named when they differ.
+            fakeSettings.response = {ok: true, transport: "usb", state: {dnd: null, gaming: null},
+                                     errors: {dnd: "timeout", gaming: "timeout"}}
+            compare(notice.text, "label:timeout")
+            fakeSettings.response = {ok: true, transport: "usb", state: {dnd: null, gaming: null},
+                                     errors: {dnd: "timeout", gaming: "rejected"}}
+            compare(notice.text, "Do Not Disturb: label:timeout Bluetooth Gaming Mode: label:rejected")
+            summary.localeName = "es_CL"
+            compare(notice.text, "No molestar: label:timeout Modo gaming Bluetooth: label:rejected")
+            compare(refresh.text, "Actualizar")
+            summary.localeName = "en_US"
+            fakeSettings.response = {ok: true, transport: "usb", state: {dnd: true, gaming: false, devices: null},
+                                     errors: {devices: "timeout"}}
+            verify(!notice.visible)
+            // No success notice: the switch shows the confirmed value.
+            fakeSettings.response = {ok: true, sent: "dnd", transport: "usb", state: {dnd: true}, errors: {}}
+            fakeSettings.message = "Change confirmed by the headset."
+            verify(!notice.visible)
+            fakeSettings.message = ""
+            fakeSettings.response = null
+            // Refresh needs a confirmed link.
+            summary.status = linked("disconnected")
+            verify(!refresh.enabled)
+            summary.status = null
         }
         function test_poweroff_is_explicit_and_serialized_in_ui() {
             const action = findChild(summary, "powerOffButton")

@@ -265,5 +265,6 @@ PlasmoidItem {
         onPairingRequested: root.openPairing()
         onPowerOffRequested: root.turnOffHeadset()
         onSettingChangeRequested: (feature, enabled) => root.setSetting(feature, enabled)
+        onSettingsRefreshRequested: root.readSettings()
     }
 }

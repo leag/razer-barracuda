@@ -38,6 +38,30 @@ ColumnLayout {
     function settingValue(feature) {
         return settingsState !== null && typeof settingsState[feature] === "boolean" ? settingsState[feature] : null;
     }
+    // Settings change only with a confirmed link and while nothing else runs.
+    readonly property bool settingsEnabled: connected && !settingsBusy && !pairingBusy && !powerBusy
+    // Feedback for the connection modes: a failed request for them or a failed
+    // read, and the modes' own read errors.
+    readonly property string modesError: settings === null ? ""
+        : settings.error.length > 0 && settings.requestFeature !== "devices" ? settings.error
+        : featureError(["dnd", "gaming"])
+    function featureName(feature) {
+        return ({dnd: label("Do Not Disturb", "No molestar"),
+                 gaming: label("Bluetooth Gaming Mode", "Modo gaming Bluetooth"),
+                 devices: "Quick Connect"})[feature] || feature;
+    }
+    // One notice for the read errors of these features; each is named when
+    // they differ. Kept on one paragraph: Kirigami's InlineMessage with an
+    // action loops on short lines split by a hard line break.
+    function featureError(features) {
+        const errors = settingsState !== null && settings.response.errors ? settings.response.errors : {};
+        const failed = features.filter(feature => errors[feature]);
+        if (!failed.length)
+            return "";
+        if (failed.every(feature => errors[feature] === errors[failed[0]]))
+            return settings.errorLabel(errors[failed[0]]);
+        return failed.map(feature => featureName(feature) + ": " + settings.errorLabel(errors[feature])).join(" ");
+    }
     property bool activeView: true
     // Diagnostic rows (dongle, link, cable, voltage) stay folded by default.
     property bool showDetails: false
@@ -81,6 +105,7 @@ ColumnLayout {
     signal pairingRequested()
     signal powerOffRequested()
     signal settingChangeRequested(string feature, bool enabled)
+    signal settingsRefreshRequested()
 
     function label(english, spanish) {
         return Output.text(english, spanish, localeName)
@@ -345,30 +370,71 @@ ColumnLayout {
         }
     }
 
+    // Offered only inside the messages that ask for it; reopening the popup
+    // also reads the headset again.
+    Kirigami.Action {
+        id: refreshAction
+        objectName: "refreshSettings"
+        icon.name: "view-refresh"
+        text: summary.label("Refresh", "Actualizar")
+        enabled: summary.connected && !summary.settingsBusy
+        onTriggered: summary.settingsRefreshRequested()
+    }
+
     Kirigami.Separator {
-        visible: summary.connected
         Layout.fillWidth: true
         Layout.leftMargin: Kirigami.Units.largeSpacing
         Layout.rightMargin: Kirigami.Units.largeSpacing
     }
 
-    SettingRow {
-        objectName: "dnd"
-        visible: summary.connected
-        iconName: "notifications-disabled-symbolic"
-        text: summary.label("Do Not Disturb", "No molestar")
-        value: summary.dndState
-        busy: summary.settingsBusy
-        localeName: summary.localeName
+    // How the headset's connection behaves. Always laid out, so the popup
+    // keeps its shape; each switch changes the headset directly.
+    ColumnLayout {
+        objectName: "connectionModes"
+        Layout.fillWidth: true
+        spacing: Kirigami.Units.largeSpacing
+        SettingRow {
+            objectName: "dnd"
+            iconName: "notifications-disabled-symbolic"
+            text: summary.label("Do Not Disturb", "No molestar")
+            description: summary.label(
+                "Calls from a phone connected by Bluetooth do not interrupt the dongle audio. Desktop notifications are not affected.",
+                "Las llamadas de un teléfono conectado por Bluetooth no interrumpen el audio del dongle. No afecta a las notificaciones del escritorio.")
+            value: summary.dndState
+            busy: summary.settingsBusy
+            interactive: summary.settingsEnabled
+            localeName: summary.localeName
+            onToggleRequested: value => summary.settingChangeRequested("dnd", value)
+        }
+        SettingRow {
+            objectName: "gaming"
+            iconName: "input-gamepad-symbolic"
+            text: summary.label("Bluetooth Gaming Mode", "Modo gaming Bluetooth")
+            description: summary.label("Lowers Bluetooth audio delay. Not the Game sound profile.",
+                                       "Reduce el retraso del audio Bluetooth. No es el perfil de sonido Juegos.")
+            // With both links confirmed the settings may follow the dongle
+            // even though Bluetooth is connected; say which one they use.
+            disabledReason: summary.settingsState !== null && !summary.gamingSettable
+                ? summary.label("Can be changed only over Bluetooth; settings are being read through the USB dongle.",
+                                "Solo se puede cambiar por Bluetooth; los ajustes se están leyendo mediante el dongle USB.")
+                : ""
+            value: summary.gamingState
+            busy: summary.settingsBusy
+            interactive: summary.settingsEnabled && summary.gamingSettable
+            localeName: summary.localeName
+            onToggleRequested: value => summary.settingChangeRequested("gaming", value)
+        }
     }
-    SettingRow {
-        objectName: "gaming"
-        visible: summary.connected
-        iconName: "input-gamepad-symbolic"
-        text: summary.label("Bluetooth Gaming Mode", "Modo gaming Bluetooth")
-        value: summary.gamingState
-        busy: summary.settingsBusy
-        localeName: summary.localeName
+    // No success notice: each switch shows the value the headset confirmed.
+    Kirigami.InlineMessage {
+        objectName: "connectionModesError"
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        type: Kirigami.MessageType.Warning
+        visible: text.length > 0
+        text: summary.modesError
+        actions: [refreshAction]
     }
 
     PC3.ToolButton {
