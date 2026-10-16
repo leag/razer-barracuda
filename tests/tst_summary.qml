@@ -20,10 +20,21 @@ Item {
         // Inject command output without running the helper.
         engine: "barracuda-test-none"
     }
+    // Stands in for HeadsetController; nothing is sent to a headset.
+    QtObject {
+        id: fakeSettings
+        property bool busy: false
+        property var response: null
+        property string error: ""
+        property string message: ""
+        property string requestFeature: ""
+        function errorLabel(code) { return "label:" + code }
+    }
     ConnectionSummary {
         id: summary
         anchors.fill: parent
         localeName: "en_US"
+        settings: fakeSettings
     }
     HeadsetPanel {
         id: panel
@@ -42,11 +53,6 @@ Item {
         id: headsetSettingsSpy
         target: panel
         signalName: "headsetSettingsRequested"
-    }
-    SignalSpy {
-        id: requestSpy
-        target: panel
-        signalName: "requestHandled"
     }
     SignalSpy {
         id: powerSpy
@@ -120,34 +126,14 @@ Item {
             summary.status = null
             summary.battery = null
         }
-        function test_tray_heading_and_action_requests() {
+        function test_tray_heading() {
             summary.visible = false
             panel.visible = true
             panel.activeView = true
-            const overview = findChild(panel, "connectionOverview")
             verify(findChild(panel, "summaryHeader").visible)
+            // The system tray draws its own heading.
             panel.showHeader = false
             verify(!findChild(panel, "summaryHeader").visible)
-            pairingSpy.clear()
-            powerSpy.clear()
-            for (const request of ["pairing", "power-off"]) {
-                requestSpy.clear()
-                panel.request = request
-                tryCompare(requestSpy, "count", 1)
-                compare(overview.confirmingPairing, request === "pairing")
-                compare(overview.confirmingPowerOff, request === "power-off")
-                // The request is consumed; nothing runs before confirmation.
-                panel.request = ""
-                compare(pairingSpy.count, 0)
-                compare(powerSpy.count, 0)
-            }
-            // A running action ignores new confirmation requests.
-            overview.confirmingPowerOff = false
-            panel.pairingBusy = true
-            panel.request = "power-off"
-            verify(!overview.confirmingPowerOff)
-            panel.request = ""
-            panel.pairingBusy = false
             panel.showHeader = true
             panel.visible = false
             summary.visible = true
@@ -320,24 +306,24 @@ Item {
             verify(!row.visible)
             summary.status = linked("connected")
             verify(row.visible)
-            summary.settingsBusy = true
+            fakeSettings.busy = true
             compare(value.text, "Reading…")
-            summary.settingsBusy = false
+            fakeSettings.busy = false
             compare(value.text, "Unknown")
             const icon = findChild(summary, "dndIcon")
             compare(icon.source, "notifications-disabled-symbolic")
             compare(icon.opacity, 0.5)
-            summary.dndState = true
+            read({dnd: true})
             compare(value.text, "On")
             compare(icon.source, "notifications-disabled-symbolic")
             compare(icon.opacity, 1)
             compare(icon.width, findChild(summary, "headsetBatteryIcon").width)
-            summary.dndState = false
+            read({dnd: false})
             compare(value.text, "Off")
             compare(icon.source, "notifications-disabled-symbolic")
             summary.localeName = "es_CL"
             compare(value.text, "Desactivado")
-            summary.dndState = true
+            read({dnd: true})
             compare(value.text, "Activado")
             // The menu entry is a checkbox that requests the opposite value.
             const item = findChild(summary, "dndMenuItem")
@@ -352,14 +338,17 @@ Item {
             compare(settingSpy.signalArguments[0][1], false)
             // It keeps showing the reported value until the headset confirms.
             verify(item.checked)
-            summary.settingsBusy = true
+            fakeSettings.busy = true
             verify(!item.enabled)
-            summary.settingsBusy = false
-            summary.dndState = null
+            fakeSettings.busy = false
+            read({dnd: null})
             verify(!item.enabled)
-            summary.dndState = true
+            // A reading is not shown once the link is lost.
+            read({dnd: true})
+            summary.status = linked("unknown")
+            compare(summary.dndState, null)
             summary.localeName = "en_US"
-            summary.dndState = null
+            fakeSettings.response = null
             summary.status = null
         }
         function test_gaming_status_row_and_action() {
@@ -372,13 +361,14 @@ Item {
             verify(row.visible)
             compare(icon.source, "input-gamepad-symbolic")
             compare(value.text, "Unknown")
-            summary.gamingState = false
+            read({gaming: false})
             compare(value.text, "Off")
             // Read through the USB dongle: shown, but cannot be changed.
-            summary.gamingSettable = false
+            verify(!summary.gamingSettable)
             verify(!item.enabled)
             // Over Bluetooth the menu entry sets the opposite value.
-            summary.gamingSettable = true
+            read({gaming: false}, "bluetooth")
+            verify(summary.gamingSettable)
             verify(item.enabled)
             settingSpy.clear()
             item.toggle()
@@ -391,8 +381,7 @@ Item {
             compare(item.text, "Modo gaming Bluetooth")
             compare(value.text, "Desactivado")
             summary.localeName = "en_US"
-            summary.gamingSettable = false
-            summary.gamingState = null
+            fakeSettings.response = null
             summary.status = null
             verify(!row.visible)
         }
@@ -701,6 +690,10 @@ Item {
             verify(!summary.confirmingPairing)
             summary.activeView = true
             verify(!summary.confirmingPairing)
+        }
+        // A status reply from the settings controller.
+        function read(state, transport) {
+            fakeSettings.response = {ok: true, transport: transport || "usb", state: state, errors: {}}
         }
         function linked(value, bluetooth, battery) {
             return {ok: true, usb: {adapter: "present", driver: true, link: value, battery: battery || null},

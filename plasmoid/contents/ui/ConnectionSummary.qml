@@ -20,12 +20,22 @@ ColumnLayout {
     property string powerResult: ""
     property bool confirmingPowerOff: false
     property bool confirmingPairing: false
-    // Settings read when the popup opens: null until the headset answers.
-    property var dndState: null
-    property var gamingState: null
-    property bool settingsBusy: false
-    // Bluetooth gaming mode can be changed only over Bluetooth.
-    property bool gamingSettable: false
+    // The headset settings controller (HeadsetController): its last status
+    // read, whether a request runs and its feedback.
+    property var settings: null
+    readonly property bool settingsBusy: settings !== null && settings.busy === true
+    // Only a reading taken with a confirmed link is shown; anything else is
+    // unknown, never Off.
+    readonly property var settingsState: connected && settings !== null && settings.response
+        && settings.response.state ? settings.response.state : null
+    readonly property var dndState: settingValue("dnd")
+    readonly property var gamingState: settingValue("gaming")
+    // Bluetooth gaming mode is read through either transport but set only over
+    // Bluetooth.
+    readonly property bool gamingSettable: settingsState !== null && settings.response.transport === "bluetooth"
+    function settingValue(feature) {
+        return settingsState !== null && typeof settingsState[feature] === "boolean" ? settingsState[feature] : null;
+    }
     property bool activeView: true
     // Diagnostic rows (dongle, link, cable, voltage) stay folded by default.
     property bool showDetails: false

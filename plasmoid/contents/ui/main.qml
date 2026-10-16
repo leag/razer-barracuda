@@ -26,8 +26,16 @@ PlasmoidItem {
     // Inside the system tray, which draws the heading and the actions menu.
     readonly property bool inTray: (Plasmoid.containmentDisplayHints
         & PlasmaCore.Types.ContainmentDrawsPlasmoidHeading) !== 0
-    // A confirmation requested from an action, consumed by the popup.
-    property string pendingRequest: ""
+    // The full view is on screen: the expanded popup, or the desktop, which
+    // shows it inline.
+    readonly property bool viewShown: root.expanded || Plasmoid.formFactor === PlasmaCore.Types.Planar
+    // Headset settings are read once each time the view is shown with a
+    // confirmed link, and again if the link returns while it is shown.
+    readonly property bool settingsWanted: viewShown && connected
+    onSettingsWantedChanged: {
+        if (settingsWanted)
+            readSettings();
+    }
     property bool powerBusy: false
     property string powerError: ""
     property string powerResult: ""
@@ -44,17 +52,14 @@ PlasmoidItem {
         }
     }
     onConnectedChanged: {
-        if (connected && root.expanded)
-            readSettings();
         if (connected) {
             pairingError = "";
             pairingResult = "";
         }
     }
-    onExpandedChanged: {
-        if (root.expanded) {
+    onViewShownChanged: {
+        if (viewShown) {
             linkMonitor.refresh();
-            readSettings();
         }
         else {
             pairingError = "";
@@ -71,13 +76,6 @@ PlasmoidItem {
     }
     function openHeadsetSettings() {
         Plasmoid.internalAction("configure").trigger();
-    }
-    // Actions only open the popup's confirmation; nothing runs from the menu.
-    function requestConfirmation(action) {
-        if (pairingBusy || powerBusy)
-            return;
-        root.expanded = true;
-        pendingRequest = action;
     }
     function openPairing() {
         if (pairingBusy || powerBusy || Output.adapterMissing(linkStatus))
@@ -112,33 +110,23 @@ PlasmoidItem {
         }
     }
 
-    // Do Not Disturb and Bluetooth gaming mode are read once each time the
-    // popup opens with a confirmed link. Their menu actions show the last value
-    // read and set the opposite.
+    // Do Not Disturb, Bluetooth gaming mode and the Quick Connect devices,
+    // from one status read per showing. The popup changes them only on an
+    // explicit switch or Switch button; a transport change while it is shown
+    // reads them again.
     HeadsetController {
         id: settingsController
         target: root.target
-        activeView: false
+        activeView: root.settingsWanted
     }
-    function settingState(feature) {
-        const response = settingsController.response;
-        return response && response.state && typeof response.state[feature] === "boolean"
-            ? response.state[feature] : null;
-    }
-    readonly property var dndState: settingState("dnd")
-    readonly property var gamingState: settingState("gaming")
-    // Bluetooth gaming mode is read through either transport but set only over
-    // Bluetooth.
-    readonly property bool gamingSettable: settingsController.response !== null
-        && settingsController.response.transport === "bluetooth"
-
     function readSettings() {
         if (connected && !settingsController.busy)
             settingsController.request({op: "status"});
     }
-    function setSetting(feature, enabled) {
-        if (connected && !settingsController.busy)
-            settingsController.request({op: "set", feature: feature, value: enabled});
+    // "dnd" and "gaming" take a boolean; "devices" takes a known address.
+    function setSetting(feature, value) {
+        if (connected && !settingsController.busy && !pairingBusy && !powerBusy)
+            settingsController.request({op: "set", feature: feature, value: value});
     }
 
     BatteryMonitor {
@@ -158,7 +146,7 @@ PlasmoidItem {
     Timer {
         interval: root.expanded ? 5000 : 30000
         repeat: true
-        running: root.expanded || Plasmoid.formFactor === PlasmaCore.Types.Planar
+        running: root.viewShown
         onTriggered: linkMonitor.refresh()
     }
 
@@ -187,55 +175,30 @@ PlasmoidItem {
         passive: PlasmaCore.Types.PassiveStatus,
         attention: PlasmaCore.Types.NeedsAttentionStatus
     })[Output.trayStatus(connection, battery)]
+    // The widget's only action leads out to KDE's own audio settings. The
+    // system tray draws it in its More actions menu, the widget's own heading
+    // builds the same menu from this list, and Plasma copies it into the
+    // right-click menu. Every headset command lives in the popup.
     Plasmoid.contextualActions: [
         PlasmaCore.Action {
-            text: root.label("Pair USB Dongle…", "Emparejar dongle USB…")
-            icon.name: "network-wireless"
-            enabled: !root.pairingBusy && !root.powerBusy && !Output.adapterMissing(root.linkStatus)
-            onTriggered: root.requestConfirmation("pairing")
-        },
-        PlasmaCore.Action {
-            text: root.label("Turn Off Headset…", "Apagar auricular…")
-            icon.name: "system-shutdown"
-            enabled: !root.pairingBusy && !root.powerBusy && !Output.adapterMissing(root.linkStatus)
-            onTriggered: root.requestConfirmation("power-off")
-        },
-        PlasmaCore.Action {
-            id: dndAction
-            text: root.label("Do Not Disturb", "No molestar")
-            icon.name: "notifications-disabled"
-            checkable: true
-            checked: root.dndState === true
-            enabled: root.connected && !settingsController.busy && !root.pairingBusy && !root.powerBusy
-            onTriggered: {
-                const value = dndAction.checked;
-                dndAction.checked = Qt.binding(() => root.dndState === true);
-                // Without a reading, open the popup, which reads it.
-                if (root.dndState === null)
-                    root.expanded = true;
-                else
-                    root.setSetting("dnd", value);
-            }
-        },
-        PlasmaCore.Action {
-            id: gamingAction
-            text: root.label("Bluetooth Gaming Mode", "Modo gaming Bluetooth")
-            icon.name: "input-gamepad"
-            checkable: true
-            checked: root.gamingState === true
-            // Without a reading the transport is unknown; the popup reads it.
-            enabled: root.connected && (root.gamingState === null || root.gamingSettable)
-                && !settingsController.busy && !root.pairingBusy && !root.powerBusy
-            onTriggered: {
-                const value = gamingAction.checked;
-                gamingAction.checked = Qt.binding(() => root.gamingState === true);
-                if (root.gamingState === null)
-                    root.expanded = true;
-                else
-                    root.setSetting("gaming", value);
+            id: audioDevicesAction
+            // KDE's own name for this action in its volume applet.
+            text: root.label("Configure Audio Devices…", "Configurar dispositivos de sonido…")
+            icon.name: "audio-card-symbolic"
+            priority: PlasmaCore.Action.NormalPriority
+            onTriggered: root.openSettings()
+            // A single action is drawn as a bare button unless it asks to stay a
+            // menu. The property is new in Plasma 6.8; older versions skip it.
+            Component.onCompleted: {
+                if ("alwaysShowAsMenu" in audioDevicesAction)
+                    audioDevicesAction.alwaysShowAsMenu = true;
             }
         }
     ]
+    // The More actions entries, as the system tray selects them.
+    readonly property var menuActions: Plasmoid.contextualActions.filter(action => action.visible
+        && !action.isSeparator && action.priority === PlasmaCore.Action.NormalPriority
+        && action !== Plasmoid.internalAction("configure"))
 
     // The widget names itself as Plasma does: the tray heading, the configure
     // action and the configuration window use the same metadata name.
@@ -285,10 +248,8 @@ PlasmoidItem {
     fullRepresentation: HeadsetPanel {
         status: root.linkStatus
         target: root.target
-        activeView: root.expanded || Plasmoid.formFactor === PlasmaCore.Types.Planar
+        activeView: root.viewShown
         showHeader: !root.inTray
-        request: root.pendingRequest
-        onRequestHandled: root.pendingRequest = ""
         pairingBusy: root.pairingBusy
         pairingError: root.pairingError
         pairingResult: root.pairingResult
@@ -296,11 +257,8 @@ PlasmoidItem {
         powerError: root.powerError
         powerResult: root.powerResult
         battery: root.battery
-        dndState: root.dndState
-        gamingState: root.gamingState
-        gamingSettable: root.gamingSettable
+        settings: settingsController
         configureText: Plasmoid.internalAction("configure") ? Plasmoid.internalAction("configure").text : ""
-        settingsBusy: settingsController.busy
         onSettingsRequested: root.openSettings()
         onHeadsetSettingsRequested: root.openHeadsetSettings()
         onPairingRequested: root.openPairing()

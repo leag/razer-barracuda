@@ -21,6 +21,9 @@ Plasma5Support.DataSource {
     property var response: null
     property string error: ""
     property string message: ""
+    // The feature of the last set request ("dnd", "gaming", "devices", …), or
+    // empty for a status read, so its feedback can appear beside its control.
+    property string requestFeature: ""
     property string localeName: Qt.locale().name
     signal loaded(var result)
     function label(en, es) { return Output.text(en, es, localeName); }
@@ -51,6 +54,7 @@ Plasma5Support.DataSource {
         busy = true;
         error = "";
         message = "";
+        requestFeature = value.op === "set" ? String(value.feature) : "";
         requestedKey = targetKey;
         connectSource(Output.headsetCommand(value, target));
     }

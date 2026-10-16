@@ -19,16 +19,10 @@ ColumnLayout {
     property string powerError: ""
     property string powerResult: ""
     property var battery: null
-    property var dndState: null
-    property var gamingState: null
-    property bool gamingSettable: false
+    // The headset settings controller (HeadsetController) read by the popup.
+    property var settings: null
     property string configureText: ""
-    property bool settingsBusy: false
     property string localeName: Qt.locale().name
-    // A one-shot confirmation requested from the applet's actions: "pairing" or
-    // "power-off". The summary asks before anything runs.
-    property string request: ""
-    signal requestHandled()
     signal settingsRequested()
     signal headsetSettingsRequested()
     signal pairingRequested()
@@ -41,18 +35,6 @@ ColumnLayout {
     // A panel popup fits its content; the system tray gives every applet the
     // same size, which the summary fills.
     Layout.maximumHeight: showHeader ? panel.Layout.preferredHeight : Infinity
-
-    function applyRequest() {
-        if (request === "")
-            return;
-        overview.confirm(request);
-        // Clearing the request rewrites this binding's source; do it after the
-        // current change has been handled.
-        Qt.callLater(panel.requestHandled);
-    }
-    onRequestChanged: applyRequest()
-    // The popup may be created by the same action that made the request.
-    Component.onCompleted: applyRequest()
 
     PC3.ScrollView {
         id: overviewScroll
@@ -82,11 +64,8 @@ ColumnLayout {
             powerError: panel.powerError
             powerResult: panel.powerResult
             battery: panel.battery
-            dndState: panel.dndState
-            gamingState: panel.gamingState
-            gamingSettable: panel.gamingSettable
+            settings: panel.settings
             configureText: panel.configureText
-            settingsBusy: panel.settingsBusy
             onSettingsRequested: panel.settingsRequested()
             onHeadsetSettingsRequested: panel.headsetSettingsRequested()
             onPairingRequested: panel.pairingRequested()

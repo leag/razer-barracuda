@@ -241,6 +241,27 @@ Item {
             }
             nativeBackend.localeName = "en_US";
         }
+        function test_controller_remembers_the_requested_feature() {
+            // Feedback appears beside the control whose request produced it.
+            nativeBackend.request({op: "set", feature: "devices", value: "01:02:03:04:05:06"});
+            verify(nativeBackend.busy);
+            compare(nativeBackend.requestFeature, "devices");
+            compare(nativeBackend.connectedSources.length, 1);
+            verify(nativeBackend.connectedSources[0].includes('"feature":"devices"'));
+            nativeBackend.newData(nativeBackend.connectedSources[0],
+                                  {stdout: JSON.stringify({ok: false, error: "gaming-active"})});
+            verify(!nativeBackend.busy);
+            compare(nativeBackend.requestFeature, "devices");
+            compare(nativeBackend.error, nativeBackend.errorLabel("gaming-active"));
+            nativeBackend.request({op: "status"});
+            compare(nativeBackend.requestFeature, "");
+            nativeBackend.newData(nativeBackend.connectedSources[0],
+                                  {stdout: JSON.stringify({ok: true, transport: "usb", state: {dnd: true}, errors: {}})});
+            verify(!nativeBackend.busy);
+            compare(nativeBackend.error, "");
+            compare(nativeBackend.response.state.dnd, true);
+            nativeBackend.response = null;
+        }
         function test_transport_change_drops_old_reply() {
             nativeBackend.target = {transport: "usb"};
             nativeBackend.requestedKey = "usb";

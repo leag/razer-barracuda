@@ -59,6 +59,31 @@ class PlasmoidTests(unittest.TestCase):
         self.assertEqual(' '.join(binding.split()),
                          'Plasmoid.formFactor === PlasmaCore.Types.Planar ? fullRepresentation : null')
 
+    def test_single_action_leads_to_kde_audio_settings(self):
+        # Every headset command lives in the popup; the only widget action is
+        # the way out to KDE's audio settings (More actions and right-click).
+        source = (ROOT / 'plasmoid/contents/ui/main.qml').read_text()
+        actions = re.search(r'\n    Plasmoid\.contextualActions: \[(.*?)\n    \]', source, re.S).group(1)
+        self.assertEqual(actions.count('PlasmaCore.Action {'), 1)
+        self.assertIn('root.label("Configure Audio Devices…", "Configurar dispositivos de sonido…")', actions)
+        self.assertIn('priority: PlasmaCore.Action.NormalPriority', actions)
+        self.assertIn('onTriggered: root.openSettings()', actions)
+        # alwaysShowAsMenu is assigned only where libplasma has it (6.8+),
+        # never declared, so older Plasma versions still load the widget.
+        self.assertNotIn('alwaysShowAsMenu:', actions)
+        self.assertIn('if ("alwaysShowAsMenu" in audioDevicesAction)', actions)
+        self.assertIn('KCMLauncher.openSystemSettings("kcm_pulseaudio")', source)
+        for removed in ('requestConfirmation', 'pendingRequest', 'dndAction', 'gamingAction'):
+            self.assertNotIn(removed, source)
+        # The name comes from metadata, as in Plasma's own heading.
+        self.assertIn('toolTipMainText: Plasmoid.title', source)
+        self.assertNotIn('"Razer Barracuda X"', source)
+        # Settings are read with a confirmed link whenever the full view is
+        # shown, including the desktop, which never expands.
+        self.assertIn('readonly property bool viewShown: root.expanded || '
+                      'Plasmoid.formFactor === PlasmaCore.Types.Planar', source)
+        self.assertIn('readonly property bool settingsWanted: viewShown && connected', source)
+
     def test_arch_package(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
