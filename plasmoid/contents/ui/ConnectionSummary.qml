@@ -2,15 +2,17 @@ import QtQuick
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PC3
-import org.kde.plasma.extras as PlasmaExtras
 import org.kde.plasma.workspace.components as WorkspaceComponents
 import "../code/output.js" as Output
 
+// The popup body, top to bottom: how the headset is (state, hint, battery),
+// what can be done to it now (Pair, Turn Off, each confirmed right below), how
+// its connection behaves and, folded, the diagnostic details. Feedback
+// appears under the control that caused it.
 ColumnLayout {
     id: summary
 
     property var status: null
-    property var target: ({transport: "usb"})
     property string localeName: Qt.locale().name
     property bool pairingBusy: false
     property string pairingError: ""
@@ -39,14 +41,11 @@ ColumnLayout {
     property bool activeView: true
     // Diagnostic rows (dongle, link, cable, voltage) stay folded by default.
     property bool showDetails: false
-    // The system tray draws its own heading with the applet's actions.
-    property bool showHeader: true
     onActiveViewChanged: {
         if (!activeView) {
             confirmingPairing = false;
             confirmingPowerOff = false;
             showDetails = false;
-            moreActions.close();
         }
     }
     property var battery: null
@@ -58,15 +57,13 @@ ColumnLayout {
     readonly property string statusText: Output.connectionText(connection, localeName, false)
     readonly property string hintText: Output.connectionHint(status, connection, localeName)
     readonly property var details: Output.connectionDetails(status, localeName)
-    readonly property bool viaBluetooth: target.transport === "bluetooth"
-    // Pairing and power-off need the dongle; only a confirmed missing adapter
+    // Pairing and power-off need the dongle; only a confirmed missing dongle
     // disables them.
     readonly property bool adapterMissing: Output.adapterMissing(status)
     readonly property bool commandsEnabled: !pairingBusy && !powerBusy && !adapterMissing
-    // Any read state without a connection; not while the first read is pending.
-    readonly property bool offerPairing: status !== null && !connected
-    // Static: pairing and power-off always go through the USB dongle.
-    readonly property string pairLabel: label("Pair USB Dongle…", "Emparejar dongle USB…")
+    // Why both commands are disabled without the dongle.
+    readonly property string commandsHint: adapterMissing
+        ? label("Connect the USB dongle first.", "Conecta primero el dongle USB.") : ""
     onAdapterMissingChanged: {
         if (adapterMissing) {
             confirmingPairing = false;
@@ -81,11 +78,6 @@ ColumnLayout {
         if (connected)
             confirmingPairing = false;
     }
-    signal headsetSettingsRequested()
-    // Text of Plasma's own "Configure …" action, so the button and the context
-    // menu name the same window identically. Empty outside Plasma.
-    property string configureText: ""
-    signal settingsRequested()
     signal pairingRequested()
     signal powerOffRequested()
     signal settingChangeRequested(string feature, bool enabled)
@@ -100,86 +92,12 @@ ColumnLayout {
             return;
         confirmingPairing = action === "pairing";
         confirmingPowerOff = action === "power-off";
-
     }
 
     Layout.minimumWidth: Kirigami.Units.gridUnit * 16
     Layout.preferredWidth: Kirigami.Units.gridUnit * 18
     Layout.minimumHeight: implicitHeight
     spacing: Kirigami.Units.largeSpacing
-
-    RowLayout {
-        objectName: "summaryHeader"
-        visible: summary.showHeader
-        Layout.fillWidth: true
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        PlasmaExtras.Heading {
-            Layout.fillWidth: true
-            level: 3
-            text: summary.label("Barracuda Headset", "Auricular Barracuda")
-            textFormat: Text.PlainText
-        }
-        PC3.ToolButton {
-            objectName: "moreActionsButton"
-            icon.name: "application-menu"
-            text: summary.label("More actions", "Más acciones")
-            display: PC3.AbstractButton.IconOnly
-            Accessible.name: text
-            PC3.ToolTip.text: text
-            PC3.ToolTip.visible: hovered
-            onClicked: moreActions.popup()
-            PC3.Menu {
-                id: moreActions
-                objectName: "moreActionsMenu"
-                PC3.MenuItem {
-                    objectName: "pairingButton"
-                    text: summary.pairLabel
-                    icon.name: "network-wireless"
-                    enabled: summary.commandsEnabled
-                    onTriggered: summary.confirm("pairing")
-                }
-                PC3.MenuItem {
-                    objectName: "powerOffButton"
-                    text: summary.label("Turn Off Headset…", "Apagar auricular…")
-                    icon.name: "system-shutdown"
-                    enabled: summary.commandsEnabled
-                    onTriggered: summary.confirm("power-off")
-                }
-                PC3.MenuItem {
-                    objectName: "dndMenuItem"
-                    text: summary.label("Do Not Disturb", "No molestar")
-                    icon.name: "notifications-disabled"
-                    checkable: true
-                    // Shows only the value the headset reported.
-                    checked: summary.dndState === true
-                    enabled: summary.connected && summary.dndState !== null && !summary.settingsBusy
-                        && !summary.pairingBusy && !summary.powerBusy
-                    onTriggered: {
-                        const value = checked;
-                        checked = Qt.binding(() => summary.dndState === true);
-                        summary.settingChangeRequested("dnd", value);
-                    }
-                }
-                PC3.MenuItem {
-                    objectName: "gamingMenuItem"
-                    text: summary.label("Bluetooth Gaming Mode", "Modo gaming Bluetooth")
-                    icon.name: "input-gamepad"
-                    checkable: true
-                    checked: summary.gamingState === true
-                    enabled: summary.connected && summary.gamingSettable && summary.gamingState !== null
-                        && !summary.settingsBusy && !summary.pairingBusy && !summary.powerBusy
-                    onTriggered: {
-                        const value = checked;
-                        checked = Qt.binding(() => summary.gamingState === true);
-                        summary.settingChangeRequested("gaming", value);
-                    }
-                }
-
-
-            }
-        }
-    }
 
     RowLayout {
         Layout.fillWidth: true
@@ -226,11 +144,13 @@ ColumnLayout {
                         : summary.connection.state === "unavailable" ? Kirigami.Theme.negativeTextColor
                         : Kirigami.Theme.textColor
                 }
+                // The popup's only help button: connection and battery. The
+                // connection modes explain themselves on their own rows.
                 Kirigami.ContextualHelpButton {
                     objectName: "connectionHelp"
                     toolTipText: summary.label(
-                        "Shows how the headset is connected and its last battery reading. “Link not confirmed” means the connection is not known yet, not that the headset is off.\n\nDo Not Disturb keeps calls from a phone connected by Bluetooth from interrupting the dongle audio. It does not silence desktop notifications.\n\nBluetooth gaming mode lowers audio delay. It can only be changed while the headset is connected by Bluetooth.",
-                        "Muestra cómo está conectado el auricular y su última lectura de batería. «Conexión no confirmada» significa que aún no se sabe si está conectado, no que esté apagado.\n\nNo molestar evita que las llamadas de un teléfono conectado por Bluetooth interrumpan el audio del dongle. No silencia las notificaciones del escritorio.\n\nEl modo gaming Bluetooth reduce el retraso del audio. Solo se puede cambiar cuando el auricular está conectado por Bluetooth.")
+                        "Shows how the headset is connected and its last battery reading. “Link not confirmed” means the connection is not known yet, not that the headset is off.",
+                        "Muestra cómo está conectado el auricular y su última lectura de batería. «Conexión no confirmada» significa que aún no se sabe si está conectado, no que esté apagado.")
                 }
             }
             PC3.Label {
@@ -284,27 +204,37 @@ ColumnLayout {
         }
     }
 
-    // Without a connection the popup offers what pairing needs, beside the
-    // state that calls for it. Confirmation, progress and results follow.
-    RowLayout {
-        objectName: "pairingSection"
+    // What can be done to the headset now. Both commands stay visible; they
+    // are disabled only while one runs or when the driver reports no dongle.
+    Flow {
+        objectName: "deviceCommands"
         Layout.fillWidth: true
         Layout.leftMargin: Kirigami.Units.largeSpacing
         Layout.rightMargin: Kirigami.Units.largeSpacing
-        visible: summary.offerPairing
+        spacing: Kirigami.Units.smallSpacing
         PC3.Button {
-            objectName: "pairNowButton"
-            text: summary.pairLabel
+            objectName: "pairButton"
+            text: summary.label("Pair USB Dongle…", "Emparejar dongle USB…")
             icon.name: "network-wireless"
             enabled: summary.commandsEnabled
             onClicked: summary.confirm("pairing")
-            PC3.ToolTip.text: summary.label("Connect the USB dongle first.", "Conecta primero el dongle USB.")
-            PC3.ToolTip.visible: hovered && summary.adapterMissing
+            PC3.ToolTip.text: summary.commandsHint
+            PC3.ToolTip.visible: hovered && summary.commandsHint.length > 0
         }
-        Item { Layout.fillWidth: true }
+        PC3.Button {
+            objectName: "powerOffButton"
+            text: summary.label("Turn Off Headset…", "Apagar auricular…")
+            icon.name: "system-shutdown"
+            enabled: summary.commandsEnabled
+            onClicked: summary.confirm("power-off")
+            PC3.ToolTip.text: summary.commandsHint
+            PC3.ToolTip.visible: hovered && summary.commandsHint.length > 0
+        }
     }
 
+    // Pairing: confirmation, progress and result, right under its button.
     Kirigami.InlineMessage {
+        objectName: "pairingStatus"
         Layout.fillWidth: true
         Layout.leftMargin: Kirigami.Units.largeSpacing
         Layout.rightMargin: Kirigami.Units.largeSpacing
@@ -318,7 +248,34 @@ ColumnLayout {
                                 "Conecta el dongle USB y pon el auricular en modo de emparejamiento. Esto reemplaza el emparejamiento actual del dongle.")
                 : summary.pairingResult
     }
-
+    RowLayout {
+        objectName: "pairingConfirmation"
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        visible: summary.confirmingPairing
+        PC3.Button {
+            objectName: "confirmPairingButton"
+            text: summary.label("Pair", "Emparejar")
+            icon.name: "network-wireless"
+            enabled: !summary.pairingBusy && !summary.powerBusy && !summary.adapterMissing
+            // The confirming button is the primary one: it takes keyboard
+            // focus, which Plasma draws highlighted.
+            onVisibleChanged: {
+                if (visible)
+                    forceActiveFocus(Qt.TabFocusReason);
+            }
+            onClicked: {
+                summary.confirmingPairing = false;
+                summary.pairingRequested();
+            }
+        }
+        PC3.Button {
+            objectName: "cancelPairingButton"
+            text: summary.label("Cancel", "Cancelar")
+            icon.name: "dialog-cancel"
+            onClicked: summary.confirmingPairing = false
+        }
+    }
     PC3.ProgressBar {
         Layout.fillWidth: true
         Layout.leftMargin: Kirigami.Units.largeSpacing
@@ -327,13 +284,13 @@ ColumnLayout {
         indeterminate: summary.pairingBusy
         Accessible.name: summary.label("Pairing in progress", "Emparejamiento en curso")
     }
-
     PC3.ScrollView {
+        objectName: "pairingError"
         Layout.fillWidth: true
         Layout.leftMargin: Kirigami.Units.largeSpacing
         Layout.rightMargin: Kirigami.Units.largeSpacing
         Layout.preferredHeight: Kirigami.Units.gridUnit * 5
-        visible: summary.pairingError.length > 0
+        visible: summary.pairingError.length > 0 && !summary.confirmingPairing
         PC3.ScrollBar.horizontal.policy: PC3.ScrollBar.AlwaysOff
         contentWidth: width
         PC3.TextArea {
@@ -345,25 +302,7 @@ ColumnLayout {
         }
     }
 
-    RowLayout {
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        visible: summary.confirmingPairing
-        PC3.Button {
-            objectName: "confirmPairingButton"
-            text: summary.label("Pair", "Emparejar")
-            enabled: !summary.pairingBusy && !summary.adapterMissing
-            onClicked: {
-                summary.confirmingPairing = false;
-                summary.pairingRequested();
-            }
-        }
-        PC3.Button {
-            objectName: "cancelPairingButton"
-            text: summary.label("Cancel", "Cancelar")
-            onClicked: summary.confirmingPairing = false
-        }
-    }
-
+    // Power-off: confirmation, progress and result.
     Kirigami.InlineMessage {
         objectName: "powerStatus"
         Layout.fillWidth: true
@@ -371,8 +310,8 @@ ColumnLayout {
         Layout.rightMargin: Kirigami.Units.largeSpacing
         visible: summary.confirmingPowerOff || summary.powerBusy
             || summary.powerError.length > 0 || summary.powerResult.length > 0
-        type: summary.powerError.length > 0 ? Kirigami.MessageType.Error
-            : summary.confirmingPowerOff ? Kirigami.MessageType.Warning : Kirigami.MessageType.Information
+        type: summary.confirmingPowerOff ? Kirigami.MessageType.Warning
+            : summary.powerError.length > 0 ? Kirigami.MessageType.Error : Kirigami.MessageType.Information
         text: summary.powerBusy ? summary.label("Sending power-off request…", "Enviando solicitud de apagado…")
             : summary.confirmingPowerOff ? summary.label(
                 "Turn off the headset through the USB dongle? Use its button to turn it on again.",
@@ -380,12 +319,19 @@ ColumnLayout {
             : summary.powerError.length > 0 ? summary.powerError : summary.powerResult
     }
     RowLayout {
+        objectName: "powerOffConfirmation"
         Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
         visible: summary.confirmingPowerOff
         PC3.Button {
             objectName: "confirmPowerOffButton"
             text: summary.label("Turn Off", "Apagar")
+            icon.name: "system-shutdown"
             enabled: !summary.pairingBusy && !summary.powerBusy && !summary.adapterMissing
+            onVisibleChanged: {
+                if (visible)
+                    forceActiveFocus(Qt.TabFocusReason);
+            }
             onClicked: {
                 summary.confirmingPowerOff = false;
                 summary.powerOffRequested();
@@ -394,6 +340,7 @@ ColumnLayout {
         PC3.Button {
             objectName: "cancelPowerOffButton"
             text: summary.label("Cancel", "Cancelar")
+            icon.name: "dialog-cancel"
             onClicked: summary.confirmingPowerOff = false
         }
     }
@@ -405,8 +352,6 @@ ColumnLayout {
         Layout.rightMargin: Kirigami.Units.largeSpacing
     }
 
-    // Headset settings read when the popup opens; each is changed from its
-    // action in the menu.
     SettingRow {
         objectName: "dnd"
         visible: summary.connected
@@ -474,39 +419,10 @@ ColumnLayout {
         }
     }
 
-    // In the system tray the popup has a fixed size; keep the actions at the
-    // bottom and leave the free space above them.
+    // The system tray gives the popup a fixed size; the free space stays
+    // below the content.
     Item {
         objectName: "footerSpacer"
         Layout.fillHeight: true
-    }
-
-    Kirigami.Separator { Layout.fillWidth: true }
-
-    GridLayout {
-        objectName: "overviewActions"
-        Layout.fillWidth: true
-        Layout.margins: Kirigami.Units.largeSpacing
-        // Stacked: both labels are long and must not be cut.
-        columns: 1
-        rowSpacing: 0
-        PC3.ToolButton {
-            objectName: "soundSettingsButton"
-            icon.name: "audio-card-symbolic"
-            // KDE's own name for this action in its volume applet.
-            text: summary.label("Configure Audio Devices…", "Configurar dispositivos de sonido…")
-            onClicked: summary.settingsRequested()
-        }
-        PC3.ToolButton {
-            id: headsetSettingsButton
-            objectName: "headsetSettingsButton"
-            // In the system tray the heading already has this configure button.
-            visible: summary.showHeader
-            icon.name: "configure"
-            // Drop the keyboard accelerator marker of the menu action.
-            text: summary.configureText.length > 0 ? summary.configureText.replace(/&(?!&)/g, "")
-                : summary.label("Configure Barracuda Headset…", "Configurar Auricular Barracuda…")
-            onClicked: summary.headsetSettingsRequested()
-        }
     }
 }

@@ -1,13 +1,24 @@
 import QtQuick
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import org.kde.plasma.components as PC3
 import org.kde.plasma.core as PlasmaCore
 import QtTest
 import "../plasmoid/contents/ui"
 
 Item {
+    id: host
     width: 400
     height: 650
+    // The applet's actions as main.qml declares them; triggering one only
+    // counts here.
+    property list<QtObject> fakeActions: [
+        PlasmaCore.Action {
+            id: audioAction
+            text: "&Configure Audio Devices…"
+            icon.name: "audio-card-symbolic"
+        }
+    ]
     // An unknown engine name loads nothing. An empty one would keep the
     // engine that the component itself sets, and run it.
     BatteryMonitor {
@@ -41,6 +52,7 @@ Item {
         width: 400
         height: 540
         visible: false
+        menuActions: host.fakeActions
     }
     PlasmaCore.Dialog {
         id: sizeDialog
@@ -70,40 +82,89 @@ Item {
         signalName: "settingChangeRequested"
     }
     SignalSpy {
-        id: settingsSpy
-        target: summary
-        signalName: "settingsRequested"
+        id: actionSpy
+        target: audioAction
+        signalName: "triggered"
     }
     TestCase {
         name: "ConnectionSummary"
         when: windowShown
-        function test_headset_settings_and_help_leave_the_popup() {
+        function test_heading_title_menu_and_gear() {
             summary.visible = false
             panel.visible = true
             panel.activeView = true
+            const title = findChild(panel, "popupTitle")
+            const more = findChild(panel, "moreActionsButton")
+            const gear = findChild(panel, "configureButton")
+            // Outside Plasma the heading uses the metadata name.
+            panel.title = ""
             for (const locale of ["en_US", "es_CL"]) {
                 panel.localeName = locale
-                const button = findChild(panel, "headsetSettingsButton")
-                compare(button.text, locale === "en_US" ? "Configure Barracuda Headset…" : "Configurar Auricular Barracuda…")
-                headsetSettingsSpy.clear()
-                wait(20)
-                mouseClick(button)
-                compare(headsetSettingsSpy.count, 1)
+                const english = locale === "en_US"
+                compare(title.text, english ? "Barracuda Headset" : "Auricular Barracuda")
+                compare(more.text, english ? "More actions" : "Más acciones")
+                compare(gear.text, english ? "Configure Barracuda Headset…" : "Configurar Auricular Barracuda…")
             }
-            // Plasma's own configure action names the button inside Plasma,
-            // without its keyboard accelerator marker.
-            panel.configureText = "&Configure Barracuda Headset…"
-            compare(findChild(panel, "headsetSettingsButton").text, "Configure Barracuda Headset…")
-            panel.configureText = ""
-            // Headset settings and help are not pages of the popup.
-            compare(findChild(panel, "headsetSettings"), null)
-            compare(findChild(panel, "headsetHelp"), null)
-            compare(findChild(panel, "helpMenuItem"), null)
-            compare(findChild(panel, "backToOverview"), null)
-            const menu = findChild(panel, "moreActionsMenu")
-            compare(menu.itemAt(menu.count - 2).objectName, "dndMenuItem")
-            compare(menu.itemAt(menu.count - 1).objectName, "gamingMenuItem")
             panel.localeName = "en_US"
+            panel.title = "Auricular Barracuda"
+            compare(title.text, "Auricular Barracuda")
+            // Plasma's own configure text names the gear, without its
+            // keyboard accelerator marker.
+            panel.configureText = "&Configure Barracuda Headset…"
+            compare(gear.text, "Configure Barracuda Headset…")
+            compare(gear.Accessible.name, "Configure Barracuda Headset…")
+            compare(gear.display, PC3.AbstractButton.IconOnly)
+            compare(gear.icon.name, "configure")
+            headsetSettingsSpy.clear()
+            mouseClick(gear)
+            compare(headsetSettingsSpy.count, 1)
+            // Title, then More actions, then the gear at the top right.
+            verify(more.x > title.x)
+            verify(gear.x > more.x)
+            // More actions is a menu button built from the applet's actions.
+            verify(more.visible)
+            verify(more.checkable)
+            compare(more.display, PC3.AbstractButton.IconOnly)
+            compare(more.Accessible.role, Accessible.ButtonMenu)
+            const menu = findChild(panel, "moreActionsMenu")
+            compare(menu.count, 1)
+            compare(menu.itemAt(0).text, "Configure Audio Devices…")
+            compare(menu.itemAt(0).icon.name, "audio-card-symbolic")
+            actionSpy.clear()
+            mouseClick(more)
+            tryCompare(menu, "opened", true)
+            verify(more.checked)
+            mouseClick(menu.itemAt(0))
+            tryCompare(menu, "visible", false)
+            compare(actionSpy.count, 1)
+            verify(!more.checked)
+            // A second press on the button closes the menu.
+            mouseClick(more)
+            tryCompare(menu, "opened", true)
+            mouseClick(more)
+            tryCompare(menu, "visible", false)
+            verify(!more.checked)
+            compare(actionSpy.count, 1)
+            // Closing the popup closes the menu.
+            mouseClick(more)
+            tryCompare(menu, "opened", true)
+            panel.activeView = false
+            tryCompare(menu, "visible", false)
+            panel.activeView = true
+            // Without actions there is no More actions button.
+            panel.menuActions = []
+            verify(!more.visible)
+            compare(menu.count, 0)
+            panel.menuActions = host.fakeActions
+            compare(menu.count, 1)
+            // Headset settings and help are not pages of the popup, and the
+            // commands have no second copy in a menu or footer.
+            for (const name of ["headsetSettings", "headsetHelp", "backToOverview", "overviewActions",
+                                "soundSettingsButton", "headsetSettingsButton", "pairingSection",
+                                "pairNowButton", "pairingButton", "dndMenuItem", "gamingMenuItem"])
+                compare(findChild(panel, name), null)
+            panel.configureText = ""
+            panel.title = ""
             panel.visible = false
             summary.visible = true
         }
@@ -111,16 +172,16 @@ Item {
             summary.status = {ok: true, usb: {adapter: "present", driver: true, link: "connected", battery: null},
                               bluetooth: null}
             summary.battery = {percent: 65, state: "Discharging"}
-            // One help button in the popup; it also covers the battery.
+            // One help button in the popup, for the connection and battery.
             const buttons = findChildren(summary, "connectionHelp")
             compare(buttons.length, 1)
             compare(findChild(summary, "batteryHelp"), null)
             for (const locale of ["en_US", "es_CL"]) {
                 summary.localeName = locale
                 const help = buttons[0].toolTipText
-                verify(help.includes(locale === "en_US" ? "not that the headset is off" : "no que esté apagado"))
-                verify(help.includes(locale === "en_US" ? "battery reading" : "lectura de batería"))
-                verify(help.includes(locale === "en_US" ? "Do Not Disturb" : "No molestar"))
+                compare(help, locale === "en_US"
+                        ? "Shows how the headset is connected and its last battery reading. “Link not confirmed” means the connection is not known yet, not that the headset is off."
+                        : "Muestra cómo está conectado el auricular y su última lectura de batería. «Conexión no confirmada» significa que aún no se sabe si está conectado, no que esté apagado.")
             }
             summary.localeName = "en_US"
             summary.status = null
@@ -180,26 +241,6 @@ Item {
                 compare(component.status, Component.Ready, component.errorString())
             }
         }
-        function test_footer_actions_are_stacked() {
-            const actions = findChild(summary, "overviewActions")
-            const settings = findChild(summary, "soundSettingsButton")
-            const configure = findChild(summary, "headsetSettingsButton")
-            const originalWidth = summary.parent.width
-            // Both labels are long: always one column, never side by side.
-            for (const width of [300, 500]) {
-                summary.parent.width = width
-                compare(actions.columns, 1)
-                tryVerify(() => configure.y > settings.y)
-                verify(settings.width <= actions.width)
-                verify(configure.width <= actions.width)
-            }
-            // In the system tray its heading already has the configure button.
-            summary.showHeader = false
-            verify(!configure.visible)
-            verify(settings.visible)
-            summary.showHeader = true
-            summary.parent.width = originalWidth
-        }
         function test_transport_icon_beside_state() {
             const icon = findChild(summary, "transportIcon")
             summary.status = linked("connected")
@@ -214,17 +255,19 @@ Item {
             verify(!icon.visible)
             summary.status = null
         }
-        function test_fixed_height_keeps_actions_at_bottom() {
+        function test_fixed_height_leaves_free_space_below() {
             // The system tray gives every applet the same popup size.
             panel.visible = true
             summary.visible = false
             const overview = findChild(panel, "connectionOverview")
-            panel.height = overview.implicitHeight + 200
+            panel.height = panel.Layout.preferredHeight + 200
             wait(50)
-            const actions = findChild(panel, "overviewActions")
-            const bottom = actions.mapToItem(overview, 0, actions.height).y
             verify(overview.height >= overview.implicitHeight + 150)
-            verify(bottom > overview.height - 4 * Kirigami.Units.gridUnit)
+            // The content stays at the top; the free space is at the bottom.
+            const spacer = findChild(panel, "footerSpacer")
+            verify(spacer.height >= 150)
+            const commands = findChild(panel, "deviceCommands")
+            verify(commands.mapToItem(overview, 0, commands.height).y < spacer.mapToItem(overview, 0, 0).y + 1)
             panel.height = 540
             panel.visible = false
             summary.visible = true
@@ -273,11 +316,11 @@ Item {
             wait(50)
             const compactHeight = sizeDialog.height
             const overview = findChild(sizedPanel, "connectionOverview")
-            for (const action of ["pairingButton", "powerOffButton"]) {
-                findChild(sizedPanel, action).triggered()
+            for (const action of ["pairButton", "powerOffButton"]) {
+                findChild(sizedPanel, action).clicked()
                 tryVerify(() => sizeDialog.height > compactHeight)
                 tryVerify(() => overview.height >= overview.implicitHeight - 1)
-                const cancel = action === "pairingButton" ? "cancelPairingButton" : "cancelPowerOffButton"
+                const cancel = action === "pairButton" ? "cancelPairingButton" : "cancelPowerOffButton"
                 mouseClick(findChild(sizedPanel, cancel))
                 tryCompare(sizeDialog, "height", compactHeight)
             }
@@ -310,75 +353,35 @@ Item {
             compare(value.text, "Reading…")
             fakeSettings.busy = false
             compare(value.text, "Unknown")
-            const icon = findChild(summary, "dndIcon")
-            compare(icon.source, "notifications-disabled-symbolic")
-            compare(icon.opacity, 0.5)
             read({dnd: true})
             compare(value.text, "On")
-            compare(icon.source, "notifications-disabled-symbolic")
-            compare(icon.opacity, 1)
-            compare(icon.width, findChild(summary, "headsetBatteryIcon").width)
             read({dnd: false})
             compare(value.text, "Off")
-            compare(icon.source, "notifications-disabled-symbolic")
             summary.localeName = "es_CL"
             compare(value.text, "Desactivado")
             read({dnd: true})
             compare(value.text, "Activado")
-            // The menu entry is a checkbox that requests the opposite value.
-            const item = findChild(summary, "dndMenuItem")
-            verify(item.checkable)
-            verify(item.checked)
-            verify(item.enabled)
-            settingSpy.clear()
-            item.toggle()
-            item.triggered()
-            compare(settingSpy.count, 1)
-            compare(settingSpy.signalArguments[0][0], "dnd")
-            compare(settingSpy.signalArguments[0][1], false)
-            // It keeps showing the reported value until the headset confirms.
-            verify(item.checked)
-            fakeSettings.busy = true
-            verify(!item.enabled)
-            fakeSettings.busy = false
-            read({dnd: null})
-            verify(!item.enabled)
             // A reading is not shown once the link is lost.
-            read({dnd: true})
             summary.status = linked("unknown")
             compare(summary.dndState, null)
             summary.localeName = "en_US"
             fakeSettings.response = null
             summary.status = null
         }
-        function test_gaming_status_row_and_action() {
+        function test_gaming_status_row() {
             summary.localeName = "en_US"
             summary.status = linked("connected")
             const row = findChild(summary, "gaming")
             const value = findChild(summary, "gamingValue")
-            const icon = findChild(summary, "gamingIcon")
-            const item = findChild(summary, "gamingMenuItem")
             verify(row.visible)
-            compare(icon.source, "input-gamepad-symbolic")
             compare(value.text, "Unknown")
             read({gaming: false})
             compare(value.text, "Off")
             // Read through the USB dongle: shown, but cannot be changed.
             verify(!summary.gamingSettable)
-            verify(!item.enabled)
-            // Over Bluetooth the menu entry sets the opposite value.
             read({gaming: false}, "bluetooth")
             verify(summary.gamingSettable)
-            verify(item.enabled)
-            settingSpy.clear()
-            item.toggle()
-            item.triggered()
-            compare(settingSpy.count, 1)
-            compare(settingSpy.signalArguments[0][0], "gaming")
-            compare(settingSpy.signalArguments[0][1], true)
-            verify(!item.checked)
             summary.localeName = "es_CL"
-            compare(item.text, "Modo gaming Bluetooth")
             compare(value.text, "Desactivado")
             summary.localeName = "en_US"
             fakeSettings.response = null
@@ -390,27 +393,30 @@ Item {
             summary.localeName = "en_US"
             compare(action.text, "Turn Off Headset…")
             powerSpy.clear()
-            action.triggered()
+            mouseClick(action)
             verify(summary.confirmingPowerOff)
             compare(powerSpy.count, 0)
+            wait(20)
             mouseClick(findChild(summary, "cancelPowerOffButton"))
             compare(powerSpy.count, 0)
             verify(!summary.confirmingPowerOff)
-            action.triggered()
+            mouseClick(action)
+            // The confirming button is the primary one.
+            tryVerify(() => findChild(summary, "confirmPowerOffButton").focus)
             wait(20)
             mouseClick(findChild(summary, "confirmPowerOffButton"))
             compare(powerSpy.count, 1)
             verify(!summary.confirmingPowerOff)
             summary.powerBusy = true
             verify(!action.enabled)
-            verify(!findChild(summary, "pairingButton").enabled)
+            verify(!findChild(summary, "pairButton").enabled)
             summary.powerBusy = false
             summary.pairingBusy = true
             verify(!action.enabled)
             summary.pairingBusy = false
             summary.localeName = "es_CL"
             compare(action.text, "Apagar auricular…")
-            action.triggered()
+            action.clicked()
             summary.activeView = false
             verify(!summary.confirmingPowerOff)
             summary.activeView = true
@@ -424,13 +430,7 @@ Item {
             const percent = findChild(summary, "batteryPercentage")
             verify(findChild(summary, "headsetBatteryRow").visible)
             compare(percent.text, "Battery unknown")
-            const settings = findChild(summary, "soundSettingsButton")
-            compare(settings.text, "Configure Audio Devices…")
-            settingsSpy.clear()
-            mouseClick(settings)
-            compare(settingsSpy.count, 1)
             summary.localeName = "es_CL"
-            compare(settings.text, "Configurar dispositivos de sonido…")
             compare(percent.text, "Batería desconocida")
             summary.battery = {percent: 65, state: "Discharging"}
             compare(percent.text, "65%")
@@ -479,19 +479,15 @@ Item {
         function test_bluetooth_presentation() {
             summary.status = {ok: true, usb: {adapter: "missing"},
                               bluetooth: {state: "connected", address: "01:02:03:04:05:06"}}
-            summary.target = {transport: "bluetooth", address: "01:02:03:04:05:06"}
             summary.battery = {percent: 60, state: "NoCharge"}
             // The popup says whether; its transport icon says how.
             compare(summary.statusText, "Connected")
             compare(findChild(summary, "transportIcon").Accessible.name, "Bluetooth")
             compare(findChild(summary, "batteryPercentage").text, "60%")
             verify(!findChild(summary, "batteryStatus").visible)
-            verify(findChild(summary, "moreActionsButton").visible)
-            // Pairing and power-off always go through the dongle: static labels.
-            compare(findChild(summary, "pairingButton").text, "Pair USB Dongle…")
-            compare(findChild(summary, "powerOffButton").text, "Turn Off Headset…")
-            summary.target = {transport: "usb"}
-            compare(findChild(summary, "pairingButton").text, "Pair USB Dongle…")
+            // Without the dongle, pairing and power-off wait for it.
+            verify(!findChild(summary, "pairButton").enabled)
+            verify(!findChild(summary, "powerOffButton").enabled)
             summary.status = null
             summary.battery = null
         }
@@ -606,82 +602,150 @@ Item {
         }
         function test_pairing_is_explicit_and_independent_of_output() {
             pairingSpy.clear()
-            const button = findChild(summary, "pairingButton")
-            verify(button !== null)
-            compare(pairingSpy.count, 0)
-            mouseClick(findChild(summary, "moreActionsButton"))
-            tryCompare(findChild(summary, "moreActionsMenu"), "opened", true)
+            // Re-pairing stays available with a confirmed link.
+            summary.status = linked("connected")
+            const button = findChild(summary, "pairButton")
+            verify(button.visible)
+            verify(button.enabled)
             mouseClick(button)
             compare(pairingSpy.count, 0)
             verify(summary.confirmingPairing)
-            tryCompare(findChild(summary, "moreActionsMenu"), "visible", false)
             wait(20)
             mouseClick(findChild(summary, "cancelPairingButton"))
             verify(!summary.confirmingPairing)
             compare(pairingSpy.count, 0)
-            mouseClick(findChild(summary, "moreActionsButton"))
-            tryCompare(findChild(summary, "moreActionsMenu"), "opened", true)
             mouseClick(button)
-            tryCompare(findChild(summary, "moreActionsMenu"), "visible", false)
+            // The confirming button is the primary one.
+            tryVerify(() => findChild(summary, "confirmPairingButton").focus)
             wait(20)
             mouseClick(findChild(summary, "confirmPairingButton"))
             compare(pairingSpy.count, 1)
+            verify(!summary.confirmingPairing)
             summary.pairingBusy = true
             verify(!button.enabled)
-            mouseClick(findChild(summary, "moreActionsButton"))
-            tryCompare(findChild(summary, "moreActionsMenu"), "opened", true)
+            verify(!findChild(summary, "powerOffButton").enabled)
             mouseClick(button)
+            verify(!summary.confirmingPairing)
             compare(pairingSpy.count, 1)
-            findChild(summary, "moreActionsMenu").close()
-            tryCompare(findChild(summary, "moreActionsMenu"), "visible", false)
             summary.pairingBusy = false
-        }
-        function test_pairing_controls_without_a_connection() {
-            summary.localeName = "en_US"
-            const section = findChild(summary, "pairingSection")
-            const button = findChild(summary, "pairNowButton")
             summary.status = null
-            // Not while the first read is pending.
-            verify(!section.visible)
-            summary.status = linked("connected")
-            verify(!section.visible)
-            for (const state of [linked("disconnected"), linked("unknown"), {ok: false},
+        }
+        function test_device_commands_stay_visible() {
+            summary.localeName = "en_US"
+            const commands = findChild(summary, "deviceCommands")
+            const pair = findChild(summary, "pairButton")
+            const power = findChild(summary, "powerOffButton")
+            // Visible and enabled in every state but a confirmed missing
+            // dongle, including while the first read is pending.
+            for (const state of [null, linked("connected"), linked("disconnected"), linked("unknown"), {ok: false},
                                  {ok: true, usb: {adapter: "multiple"}, bluetooth: null}]) {
                 summary.status = state
-                verify(section.visible)
-                verify(button.enabled)
+                verify(commands.visible)
+                verify(pair.visible)
+                verify(power.visible)
+                verify(pair.enabled)
+                verify(power.enabled)
+                compare(summary.commandsHint, "")
             }
-            compare(button.text, "Pair USB Dongle…")
-            // The confirmation and its buttons sit right under the Pair button.
+            compare(pair.text, "Pair USB Dongle…")
+            compare(power.text, "Turn Off Headset…")
+            compare(pair.icon.name, "network-wireless")
+            compare(power.icon.name, "system-shutdown")
+            // Each confirmation sits right under the command row.
             pairingSpy.clear()
             summary.status = linked("disconnected")
-            button.clicked()
+            pair.clicked()
             verify(summary.confirmingPairing)
             compare(pairingSpy.count, 0)
-            const confirmButton = findChild(summary, "confirmPairingButton")
-            const top = () => confirmButton.mapToItem(summary, 0, 0).y
-            tryVerify(() => top() > section.y)
-            verify(top() < findChild(summary, "detailsToggle").y)
+            const below = item => {
+                const top = item.mapToItem(summary, 0, 0).y
+                return top >= commands.y + commands.height && top < findChild(summary, "detailsToggle").y
+            }
+            tryVerify(() => below(findChild(summary, "confirmPairingButton")))
+            verify(below(findChild(summary, "pairingStatus")))
             findChild(summary, "cancelPairingButton").clicked()
             verify(!summary.confirmingPairing)
-            // A confirmed missing dongle disables pairing and power-off, never hides them.
-            summary.status = linked("disconnected")
-            summary.confirm("power-off")
+            power.clicked()
             verify(summary.confirmingPowerOff)
+            tryVerify(() => below(findChild(summary, "confirmPowerOffButton")))
+            verify(below(findChild(summary, "powerStatus")))
+            // A confirmed missing dongle disables pairing and power-off,
+            // never hides them, and drops a pending confirmation.
             summary.status = {ok: true, usb: {adapter: "missing"}, bluetooth: null}
-            verify(section.visible)
-            verify(!button.enabled)
+            verify(pair.visible)
+            verify(power.visible)
+            verify(!pair.enabled)
+            verify(!power.enabled)
             verify(!summary.confirmingPowerOff)
-            verify(!findChild(summary, "pairingButton").enabled)
-            verify(!findChild(summary, "powerOffButton").enabled)
+            compare(summary.commandsHint, "Connect the USB dongle first.")
             summary.confirm("pairing")
             verify(!summary.confirmingPairing)
+            summary.confirm("power-off")
+            verify(!summary.confirmingPowerOff)
             summary.localeName = "es_CL"
-            compare(button.text, "Emparejar dongle USB…")
-            summary.target = {transport: "bluetooth", address: "01:02:03:04:05:06"}
-            compare(button.text, "Emparejar dongle USB…")
-            summary.target = {transport: "usb"}
+            compare(pair.text, "Emparejar dongle USB…")
+            compare(power.text, "Apagar auricular…")
+            compare(summary.commandsHint, "Conecta primero el dongle USB.")
             summary.localeName = "en_US"
+            summary.status = null
+        }
+        function test_confirmation_progress_and_result_texts() {
+            const pairing = findChild(summary, "pairingStatus")
+            const power = findChild(summary, "powerStatus")
+            const pairingError = findChild(summary, "pairingError")
+            summary.status = linked("disconnected")
+            for (const locale of ["en_US", "es_CL"]) {
+                const english = locale === "en_US"
+                summary.localeName = locale
+                summary.confirm("pairing")
+                compare(pairing.type, Kirigami.MessageType.Warning)
+                compare(pairing.text, english
+                        ? "Connect the USB dongle and put the headset in pairing mode. This replaces the dongle's current pairing."
+                        : "Conecta el dongle USB y pon el auricular en modo de emparejamiento. Esto reemplaza el emparejamiento actual del dongle.")
+                compare(findChild(summary, "confirmPairingButton").text, english ? "Pair" : "Emparejar")
+                compare(findChild(summary, "cancelPairingButton").text, english ? "Cancel" : "Cancelar")
+                // One confirmation at a time.
+                summary.confirm("power-off")
+                verify(!summary.confirmingPairing)
+                verify(!pairing.visible)
+                compare(power.type, Kirigami.MessageType.Warning)
+                compare(power.text, english
+                        ? "Turn off the headset through the USB dongle? Use its button to turn it on again."
+                        : "¿Apagar el auricular mediante el dongle USB? Usa su botón para encenderlo de nuevo.")
+                compare(findChild(summary, "confirmPowerOffButton").text, english ? "Turn Off" : "Apagar")
+                compare(findChild(summary, "cancelPowerOffButton").text, english ? "Cancel" : "Cancelar")
+                summary.confirmingPowerOff = false
+                summary.pairingBusy = true
+                compare(pairing.type, Kirigami.MessageType.Information)
+                compare(pairing.text, english
+                        ? "Pairing… Keep the headset in pairing mode. Searching can take up to a minute; the result will appear here."
+                        : "Emparejando… Mantén el auricular en modo de emparejamiento. La búsqueda puede tardar un minuto; el resultado aparecerá aquí.")
+                summary.pairingBusy = false
+                summary.powerBusy = true
+                compare(power.text, english ? "Sending power-off request…" : "Enviando solicitud de apagado…")
+                summary.powerBusy = false
+            }
+            summary.localeName = "en_US"
+            summary.pairingResult = "Paired."
+            verify(pairing.visible)
+            compare(pairing.text, "Paired.")
+            summary.pairingResult = ""
+            // A previous error gives way to a new confirmation.
+            summary.pairingError = "Pairing failed."
+            verify(pairingError.visible)
+            summary.confirm("pairing")
+            verify(!pairingError.visible)
+            summary.confirmingPairing = false
+            verify(pairingError.visible)
+            summary.pairingError = ""
+            summary.powerError = "Could not send the power-off request."
+            compare(power.type, Kirigami.MessageType.Error)
+            compare(power.text, "Could not send the power-off request.")
+            summary.powerError = ""
+            summary.powerResult = "Power-off request sent."
+            compare(power.type, Kirigami.MessageType.Information)
+            summary.powerResult = ""
+            verify(!power.visible)
             summary.status = null
         }
         function test_closing_clears_pending_confirmation() {

@@ -247,9 +247,12 @@ PlasmoidItem {
     }
     fullRepresentation: HeadsetPanel {
         status: root.linkStatus
-        target: root.target
         activeView: root.viewShown
+        // The system tray draws the same heading itself.
         showHeader: !root.inTray
+        title: Plasmoid.title
+        configureText: Plasmoid.internalAction("configure") ? Plasmoid.internalAction("configure").text : ""
+        menuActions: root.menuActions
         pairingBusy: root.pairingBusy
         pairingError: root.pairingError
         pairingResult: root.pairingResult
@@ -258,8 +261,6 @@ PlasmoidItem {
         powerResult: root.powerResult
         battery: root.battery
         settings: settingsController
-        configureText: Plasmoid.internalAction("configure") ? Plasmoid.internalAction("configure").text : ""
-        onSettingsRequested: root.openSettings()
         onHeadsetSettingsRequested: root.openHeadsetSettings()
         onPairingRequested: root.openPairing()
         onPowerOffRequested: root.turnOffHeadset()
