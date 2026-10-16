@@ -4,11 +4,10 @@ import org.kde.kcmutils as KCM
 import org.kde.plasma.private.volume
 import "../code/output.js" as Output
 
-// One section of the native headset settings ("equalizer", "powerSaving" or
-// "quickConnect"). The
-// page reads the link and the default output on its own, so it chooses the same
-// transport as the popup without a shared state; it has no configuration keys
-// and applies each change on request.
+// One category of the native headset settings ("equalizer" or
+// "powerSaving"). The page reads the link and the default output on its own,
+// so it chooses the same transport as the popup without a shared state; it
+// has no configuration keys. Its changes wait for the window's Apply or OK.
 KCM.AbstractKCM {
     id: page
     framedView: false
@@ -42,9 +41,11 @@ KCM.AbstractKCM {
         activeView: page.shown
     }
     // Plasma's configuration window enables its Apply button from
-    // unsavedChanges and calls saveConfig() for Apply and OK.
-    readonly property bool unsavedChanges: settings.unsavedBands
-    function saveConfig() { settings.applyBands(); }
+    // unsavedChanges, calls saveConfig() for Apply and OK, and discards the
+    // page on Cancel. It calls saveConfig() only on the current page, so each
+    // category sends its own changes.
+    readonly property bool unsavedChanges: settings.unsavedChanges
+    function saveConfig() { settings.save(); }
     HeadsetSettings {
         id: settings
         anchors.fill: parent

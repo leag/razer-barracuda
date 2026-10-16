@@ -4,6 +4,10 @@ import org.kde.kirigami as Kirigami
 import QtQuick.Controls as QQC2
 import "../code/output.js" as Output
 
+// How the headset sounds ("equalizer") and when it turns itself off
+// ("powerSaving"); each is its own configuration category. Every change on a
+// page waits for the window's Apply or OK, which send it, and Cancel discards
+// it. Messages about reading, sending and errors sit at the top.
 ColumnLayout {
     id: page
     objectName: "headsetSettings"
@@ -13,39 +17,66 @@ ColumnLayout {
     property var bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     property bool bandsDirty: false
     readonly property var presetIds: [0, 7, 8, 9, 255]
+    readonly property var standbyMinutes: [0, 5, 15, 30, 45, 60]
     property int confirmedPreset: -1
-    property bool applyingPreset: false
+    // Choices waiting for Apply or OK; -1 when there is none.
+    property int pendingPreset: -1
+    property int pendingStandby: -1
+    // The changes sent by Apply or OK are running.
+    property bool saving: false
     readonly property string targetKey: controller.targetKey === undefined ? "" : controller.targetKey
-    onTargetKeyChanged: { confirmedPreset = -1; bandsDirty = false; }
-    readonly property bool showBands: available("preset") && state.preset === 255
+    onTargetKeyChanged: {
+        confirmedPreset = -1;
+        pendingPreset = -1;
+        pendingStandby = -1;
+        bandsDirty = false;
+    }
+    readonly property int selectedPreset: pendingPreset >= 0 ? pendingPreset : confirmedPreset
+    readonly property bool showBands: available("preset") && selectedPreset === 255
     onStateChanged: {
         if (available("preset") && presetIds.includes(state.preset))
             confirmedPreset = state.preset;
     }
-    // "equalizer" shows the headset EQ, "powerSaving" idle shutdown and
-    // "quickConnect" Bluetooth source switching. Each is its own configuration
-    // category.
     property string section: "equalizer"
-    readonly property var sectionFeatures: ({equalizer: ["preset", "bands"], powerSaving: ["standby"],
-                                             quickConnect: ["devices"]})[section] || []
+    readonly property var sectionFeatures: ({equalizer: ["preset", "bands"], powerSaving: ["standby"]})[section] || []
     readonly property var state: controller.response ? controller.response.state : null
-    // Do Not Disturb and Bluetooth gaming mode are in the popup and its action
-    // menu. Quick Connect still needs gaming mode off.
     readonly property bool busy: controller.busy
     function label(en, es) { return Output.text(en, es, localeName); }
     function available(feature) { return state !== null && state[feature] !== null && state[feature] !== undefined; }
-    function apply(feature, value) { controller.request({op: "set", feature: feature, value: value}); }
-    // Custom bands are sent with the configuration window's Apply or OK button.
+
+    readonly property bool presetChanged: section === "equalizer" && available("preset")
+        && pendingPreset >= 0 && pendingPreset !== confirmedPreset
     readonly property bool unsavedBands: section === "equalizer" && showBands && bandsDirty && available("bands")
-    function applyBands() {
+    readonly property bool standbyChanged: section === "powerSaving" && available("standby")
+        && pendingStandby >= 0 && pendingStandby !== state.standby
+    // Plasma's configuration window enables its Apply button from this.
+    readonly property bool unsavedChanges: !saving && (presetChanged || unsavedBands || standbyChanged)
+    // The page's changes in sending order: the profile before the bands of
+    // the Custom profile.
+    function changes() {
+        const requests = [];
+        if (presetChanged)
+            requests.push({op: "set", feature: "preset", value: pendingPreset});
         if (unsavedBands)
-            apply("bands", bands);
+            requests.push({op: "set", feature: "bands", value: bands.slice()});
+        if (standbyChanged)
+            requests.push({op: "set", feature: "standby", value: pendingStandby});
+        return requests;
     }
+    // Called for Apply and OK. The controller takes one request at a time, so
+    // the changes go as one chain that stops at the first failure.
+    function save() {
+        const requests = changes();
+        if (busy || requests.length === 0)
+            return;
+        saving = true;
+        controller.requestChain(requests);
+    }
+
     readonly property string settingsError: {
         const errors = controller.response ? controller.response.errors || {} : {};
         const labels = {preset: label("Equalizer", "Ecualizador"), bands: label("Custom EQ", "EQ personalizado"),
-                        gaming: label("Bluetooth gaming mode", "Modo gaming Bluetooth"), dnd: label("Do Not Disturb", "No molestar"),
-                        standby: label("Idle shutdown", "Apagado por inactividad"), devices: "Quick Connect"};
+                        standby: label("Idle shutdown", "Apagado por inactividad")};
         const keys = Object.keys(errors).filter(key => sectionFeatures.includes(key));
         if (!keys.length)
             return "";
@@ -54,12 +85,25 @@ ColumnLayout {
             return controller.errorLabel(codes[0]);
         return keys.map(key => labels[key] + ": " + controller.errorLabel(errors[key])).join("\n");
     }
+    // The page's setting has no reading, and nothing else explains why.
+    readonly property string staleText: busy || controller.error !== "" || settingsError !== "" ? ""
+        : section === "equalizer" && !available("preset")
+            ? (confirmedPreset >= 0
+                ? label("Last confirmed profile. Refresh to read the current setting.",
+                        "Último perfil confirmado. Actualiza para leer el ajuste actual.")
+                : label("Applied profile unknown. Refresh to read the headset.",
+                        "Perfil aplicado desconocido. Actualiza para leer el auricular."))
+        : section === "powerSaving" && !available("standby")
+            ? label("Idle shutdown unknown. Refresh to read the headset.",
+                    "Apagado por inactividad desconocido. Actualiza para leer el auricular.")
+        : ""
     function presetLabel(id) {
         return ({0: label("Default", "Predeterminado"), 7: label("Game", "Juegos"),
                  8: label("Music", "Música"), 9: label("Movie", "Cine"),
                  255: label("Custom", "Personalizado")})[id] || label("Unknown", "Desconocido");
     }
     readonly property string confirmedPresetIcon: presetIcon(confirmedPreset)
+    readonly property string selectedPresetIcon: presetIcon(selectedPreset)
     // Breeze has no EQ profile icons; these are the closest standard ones.
     function presetIcon(id) {
         return ({0: "view-media-equalizer", 7: "input-gamepad", 8: "audio-x-generic",
@@ -68,11 +112,16 @@ ColumnLayout {
     Connections {
         target: page.controller
         function onBusyChanged() {
+            // After the reply has been handled: a failed chain keeps its
+            // choices, so Apply can send them again.
             if (!page.controller.busy)
-                page.applyingPreset = false;
+                Qt.callLater(() => page.saving = false);
         }
         function onLoaded(result) {
-            page.applyingPreset = false;
+            if (result.sent === "preset" || result.sent === "bands")
+                page.pendingPreset = -1;
+            if (result.sent === "standby")
+                page.pendingStandby = -1;
             if (page.bandsDirty && result.sent !== "bands")
                 return;
             // A var signal argument is no longer a JavaScript array, so
@@ -82,6 +131,54 @@ ColumnLayout {
                 page.bands = Array.from(bands);
             page.bandsDirty = false;
         }
+    }
+
+    // The page reads the headset when it opens. Refresh is offered inside the
+    // messages that call for it.
+    Kirigami.Action {
+        id: refreshAction
+        objectName: "refreshNativeSettings"
+        icon.name: "view-refresh"
+        text: page.label("Refresh", "Actualizar")
+        enabled: !page.busy && !page.unsavedChanges
+        onTriggered: page.controller.request({op: "status"})
+    }
+    QQC2.Label {
+        objectName: "nativeSettingsReading"
+        Layout.fillWidth: true
+        visible: page.busy && !page.saving
+        text: page.label("Reading headset…", "Leyendo auricular…")
+        opacity: 0.75
+    }
+    QQC2.Label {
+        objectName: "nativeSettingsSaving"
+        Layout.fillWidth: true
+        visible: page.saving
+        text: page.label("Sending changes to the headset…", "Enviando cambios al auricular…")
+        opacity: 0.75
+    }
+    Kirigami.InlineMessage {
+        objectName: "nativeSettingsError"
+        Layout.fillWidth: true
+        type: Kirigami.MessageType.Warning
+        visible: text.length > 0
+        text: page.controller.error || page.settingsError
+        actions: [refreshAction]
+    }
+    Kirigami.InlineMessage {
+        objectName: "nativeSettingsStale"
+        Layout.fillWidth: true
+        type: Kirigami.MessageType.Information
+        visible: text.length > 0
+        text: page.staleText
+        actions: [refreshAction]
+    }
+    Kirigami.InlineMessage {
+        objectName: "nativeSettingsMessage"
+        Layout.fillWidth: true
+        type: Kirigami.MessageType.Positive
+        visible: text.length > 0
+        text: page.controller.message
     }
     QQC2.ScrollView {
         id: scroll
@@ -118,8 +215,8 @@ ColumnLayout {
                                 Accessible.name: page.label("Sound profile", "Perfil de sonido")
                                 textRole: "text"
                                 model: page.presetIds.map(id => ({text: page.presetLabel(id), icon: page.presetIcon(id)}))
-                                currentIndex: page.presetIds.indexOf(page.confirmedPreset)
-                                onModelChanged: currentIndex = Qt.binding(() => page.presetIds.indexOf(page.confirmedPreset))
+                                currentIndex: page.presetIds.indexOf(page.selectedPreset)
+                                onModelChanged: currentIndex = Qt.binding(() => page.presetIds.indexOf(page.selectedPreset))
                                 displayText: currentIndex < 0 ? page.label("Unknown", "Desconocido") : currentText
                                 delegate: QQC2.ItemDelegate {
                                     required property var modelData
@@ -129,39 +226,22 @@ ColumnLayout {
                                     icon.name: modelData.icon
                                     highlighted: profileSelector.highlightedIndex === index
                                 }
-                                // The style draws the confirmed profile's icon in the closed selector.
-                                Kirigami.StyleHints.iconName: page.confirmedPresetIcon
+                                // The style draws the selected profile's icon in the closed selector.
+                                Kirigami.StyleHints.iconName: page.selectedPresetIcon
                                 enabled: page.available("preset") && page.presetIds.includes(page.state.preset)
                                 onActivated: index => {
                                     const value = page.presetIds[index];
-                                    // Show only readback-confirmed selections, including after a failed SET.
-                                    currentIndex = Qt.binding(() => page.presetIds.indexOf(page.confirmedPreset));
-                                    if (value === page.confirmedPreset)
-                                        return;
-                                    page.applyingPreset = true;
-                                    page.apply("preset", value);
+                                    // Kept for Apply; choosing the stored profile again drops it.
+                                    page.pendingPreset = value === page.confirmedPreset ? -1 : value;
+                                    currentIndex = Qt.binding(() => page.presetIds.indexOf(page.selectedPreset));
                                 }
                             }
                             Kirigami.ContextualHelpButton {
                                 objectName: "profileHelp"
                                 toolTipText: page.label(
-                                    "Profiles are stored on the headset; the selection updates once the headset confirms it. For a custom EQ, choose Custom, adjust the bands (0 is neutral) and select Apply. Bluetooth gaming mode and the Game profile are independent.",
-                                    "Los perfiles se guardan en el auricular; la selección se actualiza cuando el auricular la confirma. Para un EQ personalizado, elige Personalizado, ajusta las bandas (0 es neutro) y selecciona Aplicar. El modo gaming Bluetooth y el perfil Juegos son independientes.")
+                                    "Profiles are stored on the headset. Choose a profile, or Custom to adjust the bands (0 is neutral), then select Apply to send it; Cancel discards it. The Game profile is independent of Bluetooth Gaming Mode in the popup.",
+                                    "Los perfiles se guardan en el auricular. Elige un perfil, o Personalizado para ajustar las bandas (0 es neutro), y selecciona Aplicar para enviarlo; Cancelar lo descarta. El perfil Juegos es independiente del modo gaming Bluetooth de la ventana emergente.")
                             }
-                        }
-                        QQC2.Label {
-                            objectName: "nativeProfileStatus"
-                            Layout.maximumWidth: Kirigami.Units.gridUnit * 16
-                            wrapMode: Text.Wrap
-                            visible: page.applyingPreset || (!page.available("preset") && page.settingsError === "" && page.controller.error === "")
-                            text: page.applyingPreset ? page.label("Applying profile…", "Aplicando perfil…")
-                                : page.confirmedPreset >= 0
-                                    ? page.label("Last confirmed profile. Refresh to read the current setting.",
-                                                 "Último perfil confirmado. Actualiza para leer el ajuste actual.")
-                                    : page.label("Applied profile unknown. Refresh to read the headset.",
-                                                 "Perfil aplicado desconocido. Actualiza para leer el auricular.")
-                            font: Kirigami.Theme.smallFont
-                            opacity: 0.75
                         }
                     }
                     // A graphic equalizer: one vertical slider per band, the gain
@@ -241,7 +321,7 @@ ColumnLayout {
                             QQC2.Button {
                                 objectName: "resetNativeBands"
                                 icon.name: "edit-reset"
-                                text: page.label("Reset bands", "Restablecer bandas")
+                                text: page.label("Reset Bands", "Restablecer bandas")
                                 onClicked: {
                                     page.bands = [0,0,0,0,0,0,0,0,0,0];
                                     page.bandsDirty = JSON.stringify(page.bands) !== JSON.stringify(page.state.bands);
@@ -254,161 +334,33 @@ ColumnLayout {
                     objectName: "powerSaving"
                     Layout.fillWidth: true
                     visible: page.section === "powerSaving"
-                    QQC2.ComboBox {
-                        objectName: "nativeStandby"
+                    // A row, like the sound profile: FormLayout sizing a bare
+                    // ComboBox loops on its implicit width.
+                    RowLayout {
                         Kirigami.FormData.label: page.label("Turn off when idle:", "Apagar por inactividad:")
-                        Layout.preferredWidth: Kirigami.Units.gridUnit * 10
-                        wheelEnabled: false
-                        enabled: page.available("standby")
-                        model: [page.label("Never", "Nunca"), "5 min", "15 min", "30 min", "45 min", "60 min"]
-                        currentIndex: page.available("standby") ? [0,5,15,30,45,60].indexOf(page.state.standby) : -1
-                        displayText: currentIndex < 0 ? page.label("Unknown", "Desconocido") : currentText
-                        onActivated: index => page.apply("standby", [0,5,15,30,45,60][index])
-                    }
-                }
-                ColumnLayout {
-                    id: quickConnect
-                    objectName: "quickConnect"
-                    Layout.fillWidth: true
-                    visible: page.section === "quickConnect"
-                    spacing: Kirigami.Units.largeSpacing
-                    readonly property var devices: page.available("devices") ? page.state.devices : []
-                    // Switching needs gaming mode known to be off.
-                    readonly property bool canSwitch: page.available("gaming") && !page.state.gaming
-                    QQC2.Label {
-                        Layout.fillWidth: true
-                        wrapMode: Text.Wrap
-                        text: page.label("Move the headset's Bluetooth connection to a device it already knows. Switching may interrupt audio.",
-                                         "Mueve la conexión Bluetooth del auricular a un dispositivo que ya conoce. El cambio puede interrumpir el audio.")
-                        opacity: 0.75
-                    }
-                    Kirigami.InlineMessage {
-                        objectName: "quickConnectBlocked"
-                        Layout.fillWidth: true
-                        type: Kirigami.MessageType.Information
-                        visible: quickConnect.devices.length > 0 && !quickConnect.canSwitch
-                        text: page.available("gaming")
-                            ? page.label("Turn off Bluetooth gaming mode in the popup to switch devices.",
-                                         "Desactiva el modo gaming Bluetooth en la ventana emergente para cambiar de dispositivo.")
-                            : page.label("Gaming mode state unknown. Refresh to read it before switching devices.",
-                                         "Estado del modo gaming desconocido. Actualiza para leerlo antes de cambiar de dispositivo.")
-                    }
-                    ColumnLayout {
-                        objectName: "quickConnectDevices"
-                        Layout.fillWidth: true
-                        spacing: 0
-                        visible: quickConnect.devices.length > 0
-                        Repeater {
-                            model: quickConnect.devices
-                            ColumnLayout {
-                                id: deviceRow
-                                required property var modelData
-                                required property int index
-                                readonly property string text: modelData.name || Output.macAddress(modelData.address)
-                                Layout.fillWidth: true
-                                spacing: 0
-                                Kirigami.Separator { Layout.fillWidth: true; visible: deviceRow.index > 0 }
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Layout.margins: Kirigami.Units.smallSpacing
-                                    spacing: Kirigami.Units.largeSpacing
-                                    Kirigami.Icon {
-                                        Layout.preferredWidth: Kirigami.Units.iconSizes.medium
-                                        Layout.preferredHeight: Kirigami.Units.iconSizes.medium
-                                        source: "network-bluetooth"
-                                        opacity: deviceRow.modelData.active ? 1 : 0.6
-                                    }
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 0
-                                        QQC2.Label {
-                                            Layout.fillWidth: true
-                                            text: deviceRow.text
-                                            textFormat: Text.PlainText
-                                            elide: Text.ElideRight
-                                            font.bold: deviceRow.modelData.active
-                                        }
-                                        QQC2.Label {
-                                            Layout.fillWidth: true
-                                            // A nameless device already shows its address as its title.
-                                            visible: text !== ""
-                                            text: deviceRow.modelData.active
-                                                ? page.label("Active source", "Fuente activa")
-                                                : deviceRow.modelData.name ? Output.macAddress(deviceRow.modelData.address) : ""
-                                            textFormat: Text.PlainText
-                                            elide: Text.ElideRight
-                                            font: Kirigami.Theme.smallFont
-                                            opacity: 0.7
-                                        }
-                                    }
-                                    Kirigami.Icon {
-                                        visible: deviceRow.modelData.active
-                                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
-                                        source: "checkmark"
-                                        color: Kirigami.Theme.positiveTextColor
-                                        isMask: true
-                                    }
-                                    QQC2.Button {
-                                        objectName: "quickConnectButton"
-                                        visible: !deviceRow.modelData.active
-                                        icon.name: "network-connect"
-                                        text: page.label("Switch", "Cambiar")
-                                        Accessible.name: page.label("Switch to ", "Cambiar a ") + deviceRow.text
-                                        enabled: quickConnect.canSwitch
-                                        onClicked: page.apply("devices", deviceRow.modelData.address)
-                                    }
-                                }
+                        QQC2.ComboBox {
+                            id: standbySelector
+                            objectName: "nativeStandby"
+                            Layout.preferredWidth: Kirigami.Units.gridUnit * 10
+                            wheelEnabled: false
+                            Accessible.name: page.label("Turn off when idle", "Apagar por inactividad")
+                            enabled: page.available("standby")
+                            model: [page.label("Never", "Nunca"), "5 min", "15 min", "30 min", "45 min", "60 min"]
+                            readonly property int selectedMinutes: page.pendingStandby >= 0 ? page.pendingStandby
+                                : page.available("standby") ? page.state.standby : -1
+                            currentIndex: page.standbyMinutes.indexOf(standbySelector.selectedMinutes)
+                            onModelChanged: currentIndex = Qt.binding(() => page.standbyMinutes.indexOf(standbySelector.selectedMinutes))
+                            displayText: currentIndex < 0 ? page.label("Unknown", "Desconocido") : currentText
+                            onActivated: index => {
+                                const value = page.standbyMinutes[index];
+                                // Kept for Apply; choosing the stored value again drops it.
+                                page.pendingStandby = value === page.state.standby ? -1 : value;
+                                currentIndex = Qt.binding(() => page.standbyMinutes.indexOf(standbySelector.selectedMinutes));
                             }
                         }
                     }
-                    Kirigami.PlaceholderMessage {
-                        objectName: "quickConnectEmpty"
-                        Layout.fillWidth: true
-                        Layout.topMargin: Kirigami.Units.gridUnit * 2
-                        visible: page.available("devices") && page.state.devices.length === 0
-                        icon.name: "network-bluetooth"
-                        text: page.label("No known Bluetooth devices", "No hay dispositivos Bluetooth conocidos")
-                        explanation: page.label("Pair the headset with a phone or computer over Bluetooth first.",
-                                                "Primero empareja el auricular con un teléfono o computador por Bluetooth.")
-                    }
                 }
-
             }
         }
-    }
-    // The page reads the headset when it opens. Refreshing is offered only where
-    // it is needed: after a failed read or change, and after a device switch.
-    Kirigami.Action {
-        id: refreshAction
-        objectName: "refreshNativeSettings"
-        icon.name: "view-refresh"
-        text: page.label("Refresh", "Actualizar")
-        enabled: !page.busy && !page.bandsDirty
-        onTriggered: page.controller.request({op: "status"})
-    }
-    Kirigami.InlineMessage {
-        objectName: "nativeSettingsError"
-        Layout.fillWidth: true
-        type: Kirigami.MessageType.Warning
-        visible: text.length > 0
-        text: page.controller.error || page.settingsError
-        actions: [refreshAction]
-    }
-    Kirigami.InlineMessage {
-        objectName: "nativeSettingsMessage"
-        Layout.fillWidth: true
-        type: Kirigami.MessageType.Positive
-        visible: text.length > 0
-        text: page.controller.message
-        // A switch request does not confirm the active device.
-        actions: page.controller.response && page.controller.response.sent === "devices" ? [refreshAction] : []
-    }
-    QQC2.Label {
-        objectName: "nativeSettingsReading"
-        Layout.fillWidth: true
-        visible: page.controller.busy && !page.applyingPreset
-        text: page.label("Reading headset…", "Leyendo auricular…")
-        opacity: 0.75
     }
 }

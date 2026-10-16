@@ -58,6 +58,19 @@ Plasma5Support.DataSource {
         requestedKey = targetKey;
         connectSource(Output.headsetCommand(value, target));
     }
+    // Set requests from the configuration window, in order; the chain stops at
+    // the first failure and its last reply is the result. It completes even
+    // if the window closes before it ends.
+    function requestChain(values) {
+        if (busy || values.length === 0)
+            return;
+        busy = true;
+        error = "";
+        message = "";
+        requestFeature = String(values[values.length - 1].feature);
+        requestedKey = targetKey;
+        connectSource(Output.headsetChainCommand(values, target));
+    }
     onNewData: (sourceName, data) => {
         disconnectSource(sourceName);
         busy = false;

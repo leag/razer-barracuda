@@ -215,7 +215,7 @@ Item {
         }
         function test_hidden_settings_page_sends_nothing() {
             // Plasma may create the page without showing it; no command runs.
-            for (const file of ["ConfigEqualizer.qml", "ConfigPowerSaving.qml", "ConfigQuickConnect.qml"]) {
+            for (const file of ["ConfigEqualizer.qml", "ConfigPowerSaving.qml"]) {
                 const component = Qt.createComponent("../plasmoid/contents/ui/" + file)
                 compare(component.status, Component.Ready, component.errorString())
                 const page = component.createObject(null)
@@ -235,21 +235,22 @@ Item {
         function test_settings_categories_and_icons() {
             const model = Qt.createComponent("../plasmoid/contents/config/config.qml").createObject(null)
             verify(model !== null)
-            // The equalizer, power saving and Quick Connect are separate categories.
-            compare(model.count, 3)
+            // How the headset sounds and when it turns itself off; Quick
+            // Connect is in the popup.
+            compare(model.count, 2)
             compare(model.get(0).source, "ConfigEqualizer.qml")
             compare(model.get(0).icon, "view-media-equalizer")
             compare(model.get(1).source, "ConfigPowerSaving.qml")
-            compare(model.get(1).name, "Power saving")
             compare(model.get(1).icon, "preferences-system-power-management")
-            compare(model.get(2).source, "ConfigQuickConnect.qml")
-            compare(model.get(2).icon, "preferences-system-bluetooth")
+            const english = Qt.locale().name.startsWith("es") === false
+            compare(model.get(0).name, english ? "Equalizer" : "Ecualizador")
+            compare(model.get(1).name, english ? "Power Saving" : "Ahorro de energía")
             model.destroy()
+            compare(Qt.createComponent("../plasmoid/contents/ui/ConfigQuickConnect.qml").status, Component.Error)
         }
         function test_config_pages_compile() {
             for (const page of ["../plasmoid/contents/ui/ConfigPowerSaving.qml",
                                 "../plasmoid/contents/ui/ConfigEqualizer.qml",
-                                "../plasmoid/contents/ui/ConfigQuickConnect.qml",
                                 "../plasmoid/contents/config/config.qml"]) {
                 const component = Qt.createComponent(page)
                 compare(component.status, Component.Ready, component.errorString())

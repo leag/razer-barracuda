@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -98,6 +99,65 @@ class PlasmoidTests(unittest.TestCase):
         set_setting = source.split('function setSetting(feature, value) {', 1)[1].split('\n    }', 1)[0]
         self.assertIn('connected && !settingsController.busy && !pairingBusy && !powerBusy', set_setting)
         self.assertIn('settingsController.request({op: "set", feature: feature, value: value})', set_setting)
+
+    @unittest.skipUnless(Path(RUNNER).is_file() and shutil.which('sh'), 'Qt 6 QML test runner required')
+    def test_configuration_chain_survives_the_closed_window(self):
+        # Plasma ends a configuration page's process when OK closes the
+        # window. Run the command output.js builds, with fake helpers, and
+        # check that it stops at the first failure, reports the last reply and
+        # finishes even when the waiting shell is killed at once.
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            probe = base / 'tst_chain.qml'
+            probe.write_text('import QtQuick\nimport QtTest\nimport "%s" as Output\n'
+                             'TestCase { name: "Chain"; function test_print() { console.log("CHAIN " + '
+                             'Output.headsetChainCommand([{op: "set", feature: "preset", value: 255}, '
+                             '{op: "set", feature: "bands", value: [1,0,0,0,0,0,0,0,0,0]}], {transport: "usb"})) } }\n'
+                             % (ROOT / 'plasmoid/contents/code/output.js').as_uri())
+            result, _ = run_qml(probe)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            command = next(line.split('CHAIN ', 1)[1] for line in (result.stdout + result.stderr).splitlines()
+                           if 'CHAIN ' in line)
+            fakes = base / 'bin'
+            fakes.mkdir()
+            log = base / 'calls.log'
+            helper = fakes / 'barracuda-headset'
+            # Records each request; fails the preset step when asked to.
+            helper.write_text('#!/bin/sh\n'
+                              'sleep "${FAKE_DELAY:-0}"\n'
+                              f'echo "$2" >> "{log}"\n'
+                              'case "$2" in *preset*) if [ -n "$FAKE_FAIL" ]; then '
+                              'echo \'{"ok": false, "error": "rejected"}\'; exit 1; fi;; esac\n'
+                              'echo \'{"ok": true, "sent": "x"}\'\n')
+            helper.chmod(0o755)
+            env = {**os.environ, 'PATH': f'{fakes}{os.pathsep}{os.environ["PATH"]}',
+                   'XDG_RUNTIME_DIR': str(base)}
+            done = subprocess.run(['sh', '-c', command], env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(done.returncode, 0)
+            self.assertEqual(done.stdout, '{"ok": true, "sent": "x"}\n')
+            calls = log.read_text().splitlines()
+            self.assertEqual(len(calls), 2)
+            self.assertIn('"feature":"preset"', calls[0])
+            self.assertIn('"feature":"bands"', calls[1])
+            log.unlink()
+            failed = subprocess.run(['sh', '-c', command], env={**env, 'FAKE_FAIL': '1'},
+                                    capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertEqual(json.loads(failed.stdout), {'ok': False, 'error': 'rejected'})
+            self.assertEqual(len(log.read_text().splitlines()), 1)
+            log.unlink()
+            # The window closes while the first step runs: the waiting shell is
+            # killed, and the chain still completes.
+            waiting = subprocess.Popen(['sh', '-c', command], env={**env, 'FAKE_DELAY': '0.3'},
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(0.1)
+            waiting.kill()
+            waiting.wait(timeout=10)
+            self.assertFalse(log.exists())
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline and not (log.exists() and len(log.read_text().splitlines()) == 2):
+                time.sleep(0.05)
+            self.assertEqual(len(log.read_text().splitlines()), 2)
 
     def test_arch_package(self):
         with tempfile.TemporaryDirectory() as directory:

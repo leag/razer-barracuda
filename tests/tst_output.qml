@@ -15,6 +15,20 @@ TestCase {
         compare(Output.macAddress("abc"), "abc");
         compare(Output.macAddress(undefined), "");
     }
+    function test_configuration_changes_run_as_one_chain() {
+        const requests = [{op: "set", feature: "preset", value: 255},
+                          {op: "set", feature: "bands", value: [1, 0, 0, 0, 0, 0, 0, 0, 0, -1]}];
+        compare(Output.headsetChainCommand(requests, {transport: "usb"}),
+                "f=$(mktemp -p \"${XDG_RUNTIME_DIR:-/tmp}\") || exit 1; ("
+                + "barracuda-headset --request '{\"op\":\"set\",\"feature\":\"preset\",\"value\":255}' && "
+                + "barracuda-headset --request '{\"op\":\"set\",\"feature\":\"bands\",\"value\":[1,0,0,0,0,0,0,0,0,-1]}'"
+                + ") > \"$f\" 2>/dev/null & wait $!; s=$?; tail -n 1 \"$f\"; rm -f \"$f\"; exit $s");
+        // Over Bluetooth every step names the headset's address.
+        const bluetooth = Output.headsetChainCommand([{op: "set", feature: "standby", value: 0}],
+                                                     {transport: "bluetooth", address: "01:02:03:04:05:06"});
+        verify(bluetooth.includes('"transport":"bluetooth","address":"01:02:03:04:05:06"'));
+        verify(!bluetooth.includes("&&"));
+    }
     function test_link_parsing_and_command() {
         compare(Output.linkCommand(), "barracuda-headset --request '{\"op\":\"link\"}'");
         compare(Output.parseLink("").ok, false);
