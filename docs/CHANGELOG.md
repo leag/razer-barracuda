@@ -7,10 +7,32 @@
   it with a flat curve.
 - Make the system tray the widget's main place: the plugin is enabled by default,
   so the tray shows it without configuration. The tray icon no longer hides when
-  the headset is disconnected or the adapter is missing. Without a connection
-  the popup shows a Pair button with its confirmation right below, and the hint
-  points to it. Pairing and power-off are disabled only while the driver reports
-  that no USB dongle is connected.
+  the headset is disconnected or the USB dongle is missing. Pairing and
+  power-off are disabled only while the driver reports that no USB dongle is
+  connected.
+- Give every widget function one place. The popup holds the headset and its
+  connections, top to bottom: state and battery; always-visible
+  **Pair USB Dongle…** and **Turn Off Headset…** buttons, each confirmed right
+  below; **Do Not Disturb** and **Bluetooth Gaming Mode** switches with a line
+  explaining each (Reading… or Unknown instead of a switch without a reading);
+  **Quick Connect**, moved from the configuration window and fed by the same
+  status read; and folded Details. Feedback appears under the control that
+  caused it, with **Refresh** where it helps. In a panel or on the desktop the
+  widget draws the heading the system tray draws: its name, **More actions**
+  and a gear for the configuration window. **Configure Audio Devices…** is now
+  the only widget action, so the right-click and tray menus no longer duplicate
+  the popup's commands; the popup footer is gone. The desktop view now reads the
+  headset settings too.
+- The configuration window keeps **Equalizer** and **Power Saving**; their
+  changes wait for Apply or OK, which send them as one chain that stops at the
+  first failure and finishes even when the window closes, and Cancel discards
+  them. Messages, with **Refresh** wherever they ask for it, move to the top of
+  each page. The idle shutdown selector no longer logs a binding loop.
+- Name the widget by its title everywhere it names itself, write USB dongle
+  rather than adapter (**USB dongle not detected**), and use title case for
+  English commands. Spanish uses *auricular* and *dongle USB* throughout.
+- Keep the QML tests from launching the real helpers: the suites run with
+  recording fake helpers and fail if one is started.
 - Remove the legacy software-effects cleanup. The widget no longer runs
   `barracuda-audio`, and headset settings no longer wait for it.
   `barracuda-audio` drops `remove_effects`/`remove_eq`, legacy filter detection

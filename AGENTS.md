@@ -10,14 +10,17 @@ user in their conversation language. Read README.md and docs/PROTOCOL.md first.
 
 ## Layout
 
-- plasmoid/: Plasma 6 system tray/panel widget. The popup shows read-only
-  status, including Do Not Disturb and Bluetooth gaming mode (one settings
-  read each time the popup opens with a confirmed link, and checkable actions
-  that set them; gaming mode only over Bluetooth), and
-  confirms explicit pairing/power-off;
-  native headset settings are
-  the Equalizer, Power saving and Quick Connect configuration pages
-  (contents/config). Help uses
+- plasmoid/: Plasma 6 system tray/panel widget; each function has one place.
+  The popup holds the headset and its connections: state and battery, the
+  always-visible Pair USB Dongle… and Turn Off Headset… buttons with their
+  explicit confirmations right below, Do Not Disturb and Bluetooth Gaming Mode
+  switches (gaming mode settable only over Bluetooth) and Quick Connect, all
+  from one settings read each time the full view is shown with a confirmed
+  link, then folded Details. Its heading (drawn by the tray, or by the widget
+  in a panel or on the desktop) has More actions, whose only entry is the
+  single contextual action Configure Audio Devices…, and a gear for the
+  configuration window: the Equalizer and Power Saving pages
+  (contents/config), whose changes are sent on Apply or OK. Help uses
   at most one Kirigami.ContextualHelpButton per view, not a help page. Panel
   and tray icons use the theme's symbolic glyph; the popup loads detailed
   Breeze headset artwork.

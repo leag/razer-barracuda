@@ -23,7 +23,7 @@ select outputs, change volume, or control the microphone.
 
 Pairing, settings changes and power-off run only on user request. The widget is
 a native Plasma applet that can live in the system tray; there is no separate
-tray application or background Python monitor. A missing adapter, an unknown
+tray application or background Python monitor. A missing USB dongle, an unknown
 link and a confirmed disconnection are reported as distinct states; USB presence
 alone does not establish a headset connection.
 
@@ -111,29 +111,34 @@ barracuda-pair --language es   # Use Spanish prompts.
 ```
 
 Pairing replaces the dongle's existing headset pairing and asks for confirmation.
-After success, **power the headset off and on**. You can also pair through
-**Pair Barracuda…** in the widget's action menu.
+After success, **power the headset off and on**. You can also pair with the
+widget's **Pair USB Dongle…** button.
 
 ### Use the Plasma widget
 
 The widget lives in the system tray (or a panel, if you add it there). Its icon
 stays visible in every state, so the pairing controls are always one click away
 when the headset is not connected. Hover over the icon for connection and battery
-status. Click to view the USB dongle, wireless link, Bluetooth connection and
-available battery telemetry.
+status. Click it to open the popup, which holds everything about the headset and
+its connections, top to bottom:
 
-- **Configure Audio Devices…** opens KDE's audio controls, as in KDE's volume
-  widget.
-- **Configure Barracuda Headset…**, the same action as in the right-click menu,
-  opens the widget's configuration window: the **Power saving** page holds idle
-  shutdown, the **Equalizer** page holds the native EQ and
-  the **Quick Connect** page switches Bluetooth sources.
-- The action menu (**More actions** in the popup heading, or right-click)
-  provides pairing and headset power-off, each confirmed in the popup.
-- With a confirmed link, the popup also shows **Do Not Disturb** and
-  **Bluetooth gaming mode** (low-latency audio), read from the headset each
-  time the popup opens; the action menu has a checkbox for each. Gaming mode
-  can be changed only over Bluetooth.
+- How it is: the connection state, a hint when it is not connected and the
+  battery.
+- What you can do to it now: **Pair USB Dongle…** and **Turn Off Headset…**,
+  each confirmed right below its button.
+- How its connection behaves: **Do Not Disturb** and **Bluetooth Gaming Mode**
+  (low-latency Bluetooth audio) switches, read from the headset each time the
+  popup opens with a confirmed link. Gaming mode can be changed only over
+  Bluetooth.
+- Which Bluetooth device it serves: **Quick Connect** lists the sources the
+  headset knows, with a **Switch** button for each inactive one.
+- Folded **Details** for the dongle, links, cable and voltage.
+
+The gear in the popup heading opens the widget's configuration window for how
+the headset sounds (**Equalizer**) and when it turns itself off (**Power
+Saving**); its changes are sent with the window's **Apply** or **OK**. **More
+actions** (☰) holds **Configure Audio Devices…**, which opens KDE's audio
+settings. The right-click menu shows the same two entries.
 
 Status reads do not send commands to the headset. Native controls require the
 appropriate helpers, permissions and supported transport. Software EQ and
@@ -143,7 +148,7 @@ for dependencies, behavior and validation limits.
 
 ### Turn off the headset
 
-Use **Turn off headset…** from the widget's action menu, or run:
+Use the widget's **Turn Off Headset…** button, or run:
 
 ```bash
 barracuda-power --off

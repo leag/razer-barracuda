@@ -117,9 +117,10 @@ The widget uses KDE's private volume QML API, tested with Plasma 6.7.4. It may n
 adjustment for future Plasma releases. The connection state requires
 `barracuda-headset` from the `barracuda-pair` package and the DKMS driver; without
 them the widget shows the state as unavailable and keeps **Configure Audio Devices…**.
-The optional **Pair Barracuda…** action requires `barracuda-pair`
-on the desktop session's `PATH`. The user CLI installer does not add its
-`~/.local/bin` directory to `PATH`; add it to your session environment if needed.
+The **Pair USB Dongle…** button requires `barracuda-pair` and **Turn Off
+Headset…** requires `barracuda-power`, both on the desktop session's `PATH`.
+The user CLI installer does not add its `~/.local/bin` directory to `PATH`; add
+it to your session environment if needed.
 
 ## Optional audio controls
 

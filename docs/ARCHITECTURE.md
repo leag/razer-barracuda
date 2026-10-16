@@ -15,22 +15,31 @@
   executable engine: on load, every 5 s while the popup is open, and when a
   Barracuda battery appears or disappears or the default output changes.
   Pure JavaScript turns the result into distinct connected, disconnected,
-  unconfirmed, missing-adapter and unavailable states, and into detail rows.
+  unconfirmed, missing-dongle and unavailable states, and into detail rows.
   `Server.defaultSink` only chooses the native-control transport when the link
-  reports do not. **Configure Audio Devices…** opens KDE's audio settings as a secondary action. Explicit pairing uses
-  Plasma5Support's executable engine to run the existing CLI with `--yes` only
-  after native UI confirmation. The widget shows activity and the final result;
-  only the read-only link query runs when it loads. The powermanagement data engine supplies the
-  Barracuda battery published by the driver through UPower/Solid, without HID reads.
-  The popup loads KDE's detailed headset SVG with Qt Quick `Image`; panel and
-  system tray icons use the theme's symbolic glyph through Kirigami. The package
-  depends on `breeze-icons` rather than bundling artwork. The widget declares
-  itself a system tray entry (category Hardware, not enabled by default), sets
-  its tray status from the link state and exposes pairing and power-off as
-  contextual actions. The popup holds only the summary; native headset settings
-  are the Equalizer, Power saving and Quick Connect pages of the widget's configuration window
-  (`contents/config`). Help is
-  one `Kirigami.ContextualHelpButton` per view at most.
+  reports do not. Each function has one place. The popup (`HeadsetPanel`,
+  `ConnectionSummary`) holds the headset and its connections: state and battery,
+  the always-visible **Pair USB Dongle…** and **Turn Off Headset…** buttons with
+  their confirmations right below, Do Not Disturb and Bluetooth Gaming Mode
+  switches (`SettingRow`) and Quick Connect, all fed by one `barracuda-headset`
+  status read each time the full view is shown with a confirmed link. Explicit
+  pairing and power-off run the existing CLIs with `--yes` only after that
+  confirmation; the widget shows activity and the final result. The single
+  contextual action, **Configure Audio Devices…**, opens KDE's audio settings;
+  the system tray draws it in its More actions menu, and in a panel or on the
+  desktop the widget's own heading builds the same menu from
+  `Plasmoid.contextualActions`, next to a gear for the configuration window.
+  The configuration window (`contents/config`) has two categories,
+  **Equalizer** and **Power Saving**; their changes are sent on Apply or OK as
+  one chain that finishes even when Plasma closes the page. Help is one
+  `Kirigami.ContextualHelpButton` per view at most. The powermanagement data
+  engine supplies the Barracuda battery published by the driver through
+  UPower/Solid, without HID reads. The popup loads KDE's detailed headset SVG
+  with Qt Quick `Image`; panel and system tray icons use the theme's symbolic
+  glyph through Kirigami. The package depends on `breeze-icons` rather than
+  bundling artwork. The widget declares itself a system tray entry (category
+  Hardware, enabled by default) and sets its tray status from the link state
+  and battery.
 - `packaging/`: hidraw and battery udev rules, ALSA profile/path and
   WirePlumber device-icon rule.
 - `scripts/install.py`: isolated user installation of the pairing CLI.
