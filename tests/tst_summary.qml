@@ -8,15 +8,17 @@ import "../plasmoid/contents/ui"
 Item {
     width: 400
     height: 650
+    // An unknown engine name loads nothing. An empty one would keep the
+    // engine that the component itself sets, and run it.
     BatteryMonitor {
         id: monitor
         // Inject engine events without using the system's power service.
-        engine: ""
+        engine: "barracuda-test-none"
     }
     LinkMonitor {
         id: link
         // Inject command output without running the helper.
-        engine: ""
+        engine: "barracuda-test-none"
     }
     ConnectionSummary {
         id: summary

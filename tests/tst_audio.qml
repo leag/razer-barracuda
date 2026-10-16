@@ -24,7 +24,9 @@ Item {
         visible: false
         controller: fakeHeadset
     }
-    HeadsetController { id: nativeBackend; engine: "" }
+    // An unknown engine name runs nothing; an empty one would keep the
+    // component's executable engine.
+    HeadsetController { id: nativeBackend; engine: "barracuda-test-none" }
     TestCase {
         name: "HeadsetSettings"
         when: windowShown

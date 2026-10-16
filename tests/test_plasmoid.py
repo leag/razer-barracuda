@@ -10,6 +10,34 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = shutil.which('qmltestrunner6') or '/usr/lib/qt6/bin/qmltestrunner'
+HELPERS = ('barracuda-headset', 'barracuda-pair', 'barracuda-power')
+QML_WARNINGS = ('Binding loop', 'TypeError', 'ReferenceError', 'Unable to assign')
+
+
+def run_qml(path):
+    """Run one QML suite offscreen, without an audio server or real helpers.
+
+    Fake helpers come first on PATH and record every call, so a suite that
+    launches one fails instead of reaching the headset.
+    """
+    with tempfile.TemporaryDirectory() as directory:
+        fakes = Path(directory)
+        for name in HELPERS:
+            helper = fakes / name
+            helper.write_text('#!/bin/sh\n'
+                              f'echo "{name} $*" >> "{fakes / "calls.log"}"\n'
+                              'echo \'{"ok": false, "error": "test"}\'\n'
+                              'exit 1\n')
+            helper.chmod(0o755)
+        result = subprocess.run(
+            [RUNNER, '-input', str(path)],
+            env={**os.environ, 'QT_QPA_PLATFORM': 'offscreen',
+                 'PULSE_SERVER': 'unix:/nonexistent/barracuda-test',
+                 'PATH': str(fakes) + os.pathsep + os.environ.get('PATH', '')},
+            capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+        log = fakes / 'calls.log'
+        calls = log.read_text() if log.exists() else ''
+    return result, calls
 
 
 class PlasmoidTests(unittest.TestCase):
@@ -50,10 +78,17 @@ class PlasmoidTests(unittest.TestCase):
 
     @unittest.skipUnless(Path(RUNNER).is_file(), 'Qt 6 QML test runner not installed')
     def test_qml_logic(self):
-        subprocess.run([RUNNER, '-input', str(ROOT / 'tests/tst_output.qml')],
-                       env={**os.environ, 'QT_QPA_PLATFORM': 'offscreen',
-                            'PULSE_SERVER': 'unix:/nonexistent/barracuda-test'},
-                       check=True, capture_output=True, text=True, timeout=30)
+        self.assertQmlSuitePasses(ROOT / 'tests/tst_output.qml')
+
+    def assertQmlSuitePasses(self, path):
+        result, calls = run_qml(path)
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, output)
+        for warning in QML_WARNINGS:
+            self.assertNotIn(warning, output)
+        # A helper killed before it logs still leaves this warning.
+        self.assertNotIn('QProcess: Destroyed', output)
+        self.assertEqual(calls, '', 'a QML test launched a helper')
 
     @unittest.skipUnless(Path(RUNNER).is_file()
                          and Path('/usr/lib/qt6/qml/org/kde/plasma/components/ToolButton.qml').is_file()
@@ -165,35 +200,16 @@ Item {
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'tst_panel.qml'
             path.write_text(harness)
-            result = subprocess.run(
-                [RUNNER, '-input', str(path)],
-                env={**os.environ, 'QT_QPA_PLATFORM': 'offscreen',
-                     'PULSE_SERVER': 'unix:/nonexistent/barracuda-test'},
-                capture_output=True, text=True, timeout=30)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertNotIn('Binding loop', result.stdout + result.stderr)
+            self.assertQmlSuitePasses(path)
 
     @unittest.skipUnless(Path(RUNNER).is_file()
                          and Path('/usr/lib/qt6/qml/org/kde/plasma/components/ToolButton.qml').is_file(),
                          'Qt 6 and Plasma components required')
     def test_generic_summary(self):
-        result = subprocess.run(
-            [RUNNER, '-input', str(ROOT / 'tests/tst_summary.qml')],
-            env={**os.environ, 'QT_QPA_PLATFORM': 'offscreen',
-                 'PULSE_SERVER': 'unix:/nonexistent/barracuda-test'},
-            capture_output=True, text=True, timeout=30)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertNotIn('Binding loop', result.stdout + result.stderr)
+        self.assertQmlSuitePasses(ROOT / 'tests/tst_summary.qml')
 
     @unittest.skipUnless(Path(RUNNER).is_file()
                          and Path('/usr/lib/qt6/qml/org/kde/plasma/components/ToolButton.qml').is_file(),
                          'Qt 6 and Plasma components required')
     def test_audio_settings(self):
-        result = subprocess.run(
-            [RUNNER, '-input', str(ROOT / 'tests/tst_audio.qml')],
-            env={**os.environ, 'QT_QPA_PLATFORM': 'offscreen',
-                 'PULSE_SERVER': 'unix:/nonexistent/barracuda-test'},
-            capture_output=True, text=True, timeout=30)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        for warning in ('Binding loop', 'TypeError', 'ReferenceError', 'Unable to assign'):
-            self.assertNotIn(warning, result.stdout + result.stderr)
+        self.assertQmlSuitePasses(ROOT / 'tests/tst_audio.qml')
