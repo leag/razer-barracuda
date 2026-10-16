@@ -57,7 +57,8 @@ TestCase {
                 "Conectado · Dongle USB y Bluetooth");
         compare(Output.connectionText({state: "disconnected"}, "es_CL"), "Desconectado");
         compare(Output.connectionText({state: "unknown"}, "en_US"), "Link not confirmed");
-        compare(Output.connectionText({state: "no-adapter"}, "es_CL"), "Adaptador no detectado");
+        compare(Output.connectionText({state: "no-adapter"}, "es_CL"), "Dongle USB no detectado");
+        compare(Output.connectionText({state: "no-adapter"}, "en_US"), "USB dongle not detected");
         compare(Output.connectionText({state: "unavailable"}, "en_US"), "Status unavailable");
         compare(Output.connectionText({state: "checking"}, "es_CL"), "Comprobando…");
         compare(Output.connectionHint(linked("connected"), {state: "connected"}, "en_US"), "");
@@ -65,13 +66,17 @@ TestCase {
         verify(Output.connectionHint(linked("unknown"), {state: "unknown"}, "es_CL").includes("no significa"));
         verify(Output.connectionHint({ok: true, usb: {adapter: "present", driver: false, link: "unknown"}},
                                      {state: "unknown"}, "en_US").includes("driver"));
-        verify(Output.connectionHint({ok: true, usb: {adapter: "multiple"}}, {state: "unknown"}, "es_CL")
-               .includes("más de un adaptador"));
+        compare(Output.connectionHint({ok: true, usb: {adapter: "multiple"}}, {state: "unknown"}, "es_CL"),
+                "Hay más de un dongle USB Barracuda conectado. Conecta solo uno.");
+        compare(Output.connectionHint({ok: true, usb: {adapter: "multiple"}}, {state: "unknown"}, "en_US"),
+                "More than one Barracuda USB dongle is connected. Connect only one.");
         verify(Output.connectionHint({ok: false}, {state: "unavailable"}, "en_US").includes("barracuda-headset"));
         verify(Output.connectionHint(linked("disconnected"), {state: "disconnected"}, "es_CL").includes("Enciende"));
-        // The hint points to the popup's own Pair button, not to a menu.
-        verify(Output.connectionHint(linked("disconnected"), {state: "disconnected"}, "en_US").includes("button below"));
-        verify(Output.connectionHint(linked("disconnected"), {state: "disconnected"}, "es_CL").includes("botón de abajo"));
+        // The hint names the popup's own Pair button, not a menu.
+        compare(Output.connectionHint(linked("disconnected"), {state: "disconnected"}, "en_US"),
+                "Turn the headset on. If it does not connect, use Pair USB Dongle.");
+        compare(Output.connectionHint(linked("disconnected"), {state: "disconnected"}, "es_CL"),
+                "Enciende el auricular. Si no se conecta, usa Emparejar dongle USB.");
         // Pair is disabled without the dongle, so the hint asks for it instead.
         const noDongle = {ok: true, usb: {adapter: "missing"}, bluetooth: {state: "disconnected"}};
         compare(Output.connection(noDongle).state, "disconnected");
@@ -100,6 +105,13 @@ TestCase {
         battery.voltage_mv = null;
         compare(pairs(Output.connectionDetails(linked("connected", null, battery), "en_US")).slice(2),
                 [["Charging cable", "Unknown"]]);
+        // The cable row shows the charging glyph only while the cable is connected.
+        compare(Output.connectionDetails(linked("connected", null, battery), "en_US")[2][2], "battery-full-symbolic");
+        battery.cable = false;
+        compare(Output.connectionDetails(linked("connected", null, battery), "en_US")[2][2], "battery-full-symbolic");
+        battery.cable = true;
+        compare(Output.connectionDetails(linked("connected", null, battery), "en_US")[2][2],
+                "battery-full-charging-symbolic");
         // Retained values are not shown as current while the link is not confirmed.
         compare(pairs(Output.connectionDetails(linked("unknown", null, battery), "en_US")).length, 2);
         compare(Output.connectionDetails(linked("connected", {state: "connected"}, {percent: 5, cable: true, voltage_mv: 4000}), "en_US")
@@ -166,6 +178,32 @@ TestCase {
         compare(Output.pairingCommand("en_US"),
                 "barracuda-pair --yes --timeout 60 --language en");
         compare(Output.pairingCommand("de_DE; echo unsafe"), Output.pairingCommand("en_US"));
+    }
+    function test_pairing_and_power_outcomes() {
+        compare(Output.pairingOutcome({"exit code": 0, stdout: "ok"}, "en_US"),
+                {ok: true, text: "Paired. Turn the headset off and on to start the link."});
+        compare(Output.pairingOutcome({"exit code": 0}, "es_CL"),
+                {ok: true, text: "Emparejado. Apaga y enciende el auricular para iniciar la conexión."});
+        const failed = Output.pairingOutcome({"exit code": 1, stdout: "searching\n", stderr: "timeout\n"}, "en_US");
+        verify(!failed.ok);
+        compare(failed.text, "Pairing failed. Check the USB dongle and HID permissions, and that barracuda-pair "
+                + "is installed on your PATH.\nsearching\ntimeout");
+        verify(Output.pairingOutcome({"exit code": 2, stderr: "x"}, "es_CL").text
+               .startsWith("No se pudo emparejar. Comprueba el dongle USB, los permisos HID"));
+        compare(Output.powerOutcome({"exit code": 0}, "en_US"),
+                {ok: true, text: "Power-off request sent. Use the headset button to turn it on again."});
+        compare(Output.powerOutcome({"exit code": 0}, "es_CL"),
+                {ok: true, text: "Solicitud de apagado enviada. Usa el botón del auricular para encenderlo de nuevo."});
+        compare(Output.powerOutcome({"exit code": 1, stderr: "not linked\n"}, "en_US"),
+                {ok: false, text: "Could not send the power-off request.\nnot linked"});
+        compare(Output.powerOutcome({"exit code": 1, stdout: "busy"}, "es_CL"),
+                {ok: false, text: "No se pudo enviar la solicitud de apagado.\nbusy"});
+    }
+    function test_action_text_drops_accelerators() {
+        compare(Output.actionText("&Configure Barracuda Headset…"), "Configure Barracuda Headset…");
+        compare(Output.actionText("Configurar &Auricular Barracuda…"), "Configurar Auricular Barracuda…");
+        compare(Output.actionText("Sound && Video"), "Sound & Video");
+        compare(Output.actionText(undefined), "");
     }
     function test_battery_identity_and_unknown_states() {
         const data = {Battery0: {Product: "Logitech mouse", Type: "Mouse", "Is Power Supply": false,

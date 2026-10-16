@@ -27,7 +27,7 @@ Plasma5Support.DataSource {
     function errorLabel(code) {
         const labels = {
             "driver-required": label("Update the Barracuda driver to use native controls.", "Actualiza el driver del Barracuda para usar los controles nativos."),
-            "missing-adapter": label("Adapter not detected.", "Adaptador no detectado."),
+            "missing-adapter": label("USB dongle not detected.", "Dongle USB no detectado."),
             "unknown-link": label("The headset link is not confirmed.", "La conexión del auricular no está confirmada."),
             "permission-denied": label("Install the headset-control permissions rule.", "Instala la regla de permisos de control del auricular."),
             "bluetooth-runtime-unavailable": label("Install the helper with the system Python to enable Bluetooth sockets.", "Instala la utilidad con el Python del sistema para habilitar Bluetooth."),
@@ -36,10 +36,11 @@ Plasma5Support.DataSource {
             "invalid-response": label("The headset returned an invalid response. Refresh to read its state.", "El auricular devolvió una respuesta inválida. Actualiza para leer su estado."),
             "busy": label("Another headset operation is running. Try again shortly.", "Hay otra operación en curso. Vuelve a intentarlo en unos segundos."),
             "timeout": label("The headset did not answer. Its state is unknown.", "El auricular no respondió. Su estado es desconocido."),
-            "route-failed": label("Could not restore the adapter route. Reconnect the dongle.", "No se pudo restaurar la ruta del adaptador. Reconecta el dongle."),
+            "route-failed": label("Could not restore the USB dongle route. Reconnect the dongle.", "No se pudo restaurar la ruta del dongle USB. Reconecta el dongle."),
             "rejected": label("The headset rejected this change.", "El auricular rechazó este cambio."),
             "unconfirmed": label("The change could not be confirmed. Refresh before trying again.", "No se pudo confirmar el cambio. Actualiza antes de volver a intentarlo."),
-            "gaming-active": label("Turn Bluetooth gaming mode off before switching Bluetooth devices.", "Desactiva el modo gaming Bluetooth antes de cambiar de dispositivo Bluetooth."),
+            "gaming-active": label("Turn off Bluetooth Gaming Mode before switching Bluetooth devices.", "Desactiva el modo gaming Bluetooth antes de cambiar de dispositivo Bluetooth."),
+            "unknown-device": label("The headset no longer lists this device. Refresh to read its known devices.", "El auricular ya no tiene este dispositivo en su lista. Actualiza para leer sus dispositivos conocidos."),
             "gaming-not-applied": label("The headset accepted the Gaming request but did not change its mode. Activation over USB is unverified; this does not enable the Game EQ preset.", "El auricular aceptó la solicitud Gaming, pero no cambió de modo. Su activación por USB no está confirmada; esto no activa el perfil EQ Juegos.")
         };
         return labels[code] || label("This control is unavailable on the current headset.", "Este control no está disponible en el auricular actual.");

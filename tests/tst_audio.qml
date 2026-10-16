@@ -223,6 +223,24 @@ Item {
             nativeBackend.localeName = "en_US";
             verify(nativeBackend.errorLabel("gaming-not-applied").includes("did not change"));
         }
+        function test_error_labels_name_the_usb_dongle() {
+            const expected = {
+                "missing-adapter": ["USB dongle not detected.", "Dongle USB no detectado."],
+                "route-failed": ["Could not restore the USB dongle route. Reconnect the dongle.",
+                                 "No se pudo restaurar la ruta del dongle USB. Reconecta el dongle."],
+                "gaming-active": ["Turn off Bluetooth Gaming Mode before switching Bluetooth devices.",
+                                  "Desactiva el modo gaming Bluetooth antes de cambiar de dispositivo Bluetooth."],
+                "unknown-device": ["The headset no longer lists this device. Refresh to read its known devices.",
+                                   "El auricular ya no tiene este dispositivo en su lista. Actualiza para leer sus dispositivos conocidos."]
+            };
+            for (const code of Object.keys(expected)) {
+                nativeBackend.localeName = "en_US";
+                compare(nativeBackend.errorLabel(code), expected[code][0]);
+                nativeBackend.localeName = "es_CL";
+                compare(nativeBackend.errorLabel(code), expected[code][1]);
+            }
+            nativeBackend.localeName = "en_US";
+        }
         function test_transport_change_drops_old_reply() {
             nativeBackend.target = {transport: "usb"};
             nativeBackend.requestedKey = "usb";

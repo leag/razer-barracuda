@@ -74,7 +74,7 @@ function connectionText(value, locale, withTransport = true) {
     case "unknown":
         return text("Link not confirmed", "Conexión no confirmada", locale);
     case "no-adapter":
-        return text("Adapter not detected", "Adaptador no detectado", locale);
+        return text("USB dongle not detected", "Dongle USB no detectado", locale);
     case "unavailable":
         return text("Status unavailable", "Estado no disponible", locale);
     default:
@@ -88,12 +88,12 @@ function connectionHint(status, value, locale) {
         if (adapterMissing(status))
             return text("Turn the headset on. To pair it with the USB dongle, connect the dongle first.",
                         "Enciende el auricular. Para emparejarlo con el dongle USB, conecta primero el dongle.", locale);
-        return text("Turn the headset on. If it does not connect, pair it with the button below.",
-                    "Enciende el auricular. Si no se conecta, emparéjalo con el botón de abajo.", locale);
+        return text("Turn the headset on. If it does not connect, use Pair USB Dongle.",
+                    "Enciende el auricular. Si no se conecta, usa Emparejar dongle USB.", locale);
     case "unknown":
         if (status.usb.adapter === "multiple")
-            return text("More than one Barracuda adapter is connected. Connect only one.",
-                        "Hay más de un adaptador Barracuda conectado. Conecta solo uno.", locale);
+            return text("More than one Barracuda USB dongle is connected. Connect only one.",
+                        "Hay más de un dongle USB Barracuda conectado. Conecta solo uno.", locale);
         if (status.usb.driver === false)
             return text("Install or update the Barracuda driver to read the link state.",
                         "Instala o actualiza el driver del Barracuda para leer el estado de la conexión.", locale);
@@ -144,7 +144,8 @@ function connectionDetails(status, locale) {
             battery.cable === true ? text("Connected", "Conectado", locale)
                 : battery.cable === false ? text("Not connected", "No conectado", locale)
                 : text("Unknown", "Desconocido", locale),
-            "battery-full-charging-symbolic"]);
+            // The charging glyph only while the cable is known to be connected.
+            battery.cable === true ? "battery-full-charging-symbolic" : "battery-full-symbolic"]);
         if (typeof battery.voltage_mv === "number" && battery.voltage_mv > 0)
             rows.push([text("Battery voltage", "Voltaje de batería", locale),
                        voltageText(battery.voltage_mv, locale), "battery-full-symbolic"]);
@@ -211,6 +212,33 @@ function trayStatus(value, battery) {
 function adapterMissing(status) {
     return status !== null && status !== undefined && status.ok === true
         && status.usb.adapter === "missing";
+}
+
+// Result of a finished barracuda-pair run, from the executable engine's data.
+function pairingOutcome(data, locale) {
+    if (data["exit code"] === 0)
+        return {ok: true, text: text("Paired. Turn the headset off and on to start the link.",
+                                     "Emparejado. Apaga y enciende el auricular para iniciar la conexión.", locale)};
+    const details = (String(data.stdout || "").trim() + "\n" + String(data.stderr || "").trim()).trim();
+    return {ok: false, text: text(
+        "Pairing failed. Check the USB dongle and HID permissions, and that barracuda-pair is installed on your PATH.",
+        "No se pudo emparejar. Comprueba el dongle USB, los permisos HID y que barracuda-pair esté instalado en tu PATH.",
+        locale) + "\n" + details};
+}
+
+// Result of a finished barracuda-power run.
+function powerOutcome(data, locale) {
+    if (data["exit code"] === 0)
+        return {ok: true, text: text("Power-off request sent. Use the headset button to turn it on again.",
+                                     "Solicitud de apagado enviada. Usa el botón del auricular para encenderlo de nuevo.", locale)};
+    return {ok: false, text: text("Could not send the power-off request.", "No se pudo enviar la solicitud de apagado.", locale)
+        + "\n" + String(data.stderr || data.stdout || "").trim()};
+}
+
+// Plasma action texts carry a keyboard accelerator marker; buttons, tooltips
+// and accessible names show them without it.
+function actionText(value) {
+    return String(value || "").replace(/&(?!&)/g, "");
 }
 
 function pairingCommand(locale) {

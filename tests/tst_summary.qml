@@ -399,7 +399,7 @@ Item {
         function test_poweroff_is_explicit_and_serialized_in_ui() {
             const action = findChild(summary, "powerOffButton")
             summary.localeName = "en_US"
-            compare(action.text, "Turn off headset…")
+            compare(action.text, "Turn Off Headset…")
             powerSpy.clear()
             action.triggered()
             verify(summary.confirmingPowerOff)
@@ -498,10 +498,11 @@ Item {
             compare(findChild(summary, "batteryPercentage").text, "60%")
             verify(!findChild(summary, "batteryStatus").visible)
             verify(findChild(summary, "moreActionsButton").visible)
-            verify(findChild(summary, "pairingButton").text.includes("USB"))
-            verify(findChild(summary, "powerOffButton").text.includes("USB"))
+            // Pairing and power-off always go through the dongle: static labels.
+            compare(findChild(summary, "pairingButton").text, "Pair USB Dongle…")
+            compare(findChild(summary, "powerOffButton").text, "Turn Off Headset…")
             summary.target = {transport: "usb"}
-            verify(!findChild(summary, "pairingButton").text.includes("USB"))
+            compare(findChild(summary, "pairingButton").text, "Pair USB Dongle…")
             summary.status = null
             summary.battery = null
         }
@@ -554,7 +555,7 @@ Item {
             verify(hint.visible)
             verify(hint.text.includes("barracuda-headset"))
             summary.status = {ok: true, usb: {adapter: "missing"}, bluetooth: null}
-            compare(state.text, "Adapter not detected")
+            compare(state.text, "USB dongle not detected")
             verify(details.visible)
             verify(slash.visible)
             verify(!emblem.visible)
@@ -661,7 +662,7 @@ Item {
                 verify(section.visible)
                 verify(button.enabled)
             }
-            compare(button.text, "Pair Barracuda…")
+            compare(button.text, "Pair USB Dongle…")
             // The confirmation and its buttons sit right under the Pair button.
             pairingSpy.clear()
             summary.status = linked("disconnected")
@@ -687,7 +688,7 @@ Item {
             summary.confirm("pairing")
             verify(!summary.confirmingPairing)
             summary.localeName = "es_CL"
-            compare(button.text, "Emparejar Barracuda…")
+            compare(button.text, "Emparejar dongle USB…")
             summary.target = {transport: "bluetooth", address: "01:02:03:04:05:06"}
             compare(button.text, "Emparejar dongle USB…")
             summary.target = {transport: "usb"}

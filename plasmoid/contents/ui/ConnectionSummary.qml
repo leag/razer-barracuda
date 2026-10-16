@@ -55,9 +55,8 @@ ColumnLayout {
     readonly property bool commandsEnabled: !pairingBusy && !powerBusy && !adapterMissing
     // Any read state without a connection; not while the first read is pending.
     readonly property bool offerPairing: status !== null && !connected
-    readonly property string pairLabel: viaBluetooth
-        ? label("Pair USB dongle…", "Emparejar dongle USB…")
-        : label("Pair Barracuda…", "Emparejar Barracuda…")
+    // Static: pairing and power-off always go through the USB dongle.
+    readonly property string pairLabel: label("Pair USB Dongle…", "Emparejar dongle USB…")
     onAdapterMissingChanged: {
         if (adapterMissing) {
             confirmingPairing = false;
@@ -108,7 +107,7 @@ ColumnLayout {
         PlasmaExtras.Heading {
             Layout.fillWidth: true
             level: 3
-            text: "Razer Barracuda X"
+            text: summary.label("Barracuda Headset", "Auricular Barracuda")
             textFormat: Text.PlainText
         }
         PC3.ToolButton {
@@ -132,9 +131,7 @@ ColumnLayout {
                 }
                 PC3.MenuItem {
                     objectName: "powerOffButton"
-                    text: summary.viaBluetooth
-                        ? summary.label("Turn off through USB dongle…", "Apagar mediante dongle USB…")
-                        : summary.label("Turn off headset…", "Apagar auricular…")
+                    text: summary.label("Turn Off Headset…", "Apagar auricular…")
                     icon.name: "system-shutdown"
                     enabled: summary.commandsEnabled
                     onTriggered: summary.confirm("power-off")
@@ -156,7 +153,7 @@ ColumnLayout {
                 }
                 PC3.MenuItem {
                     objectName: "gamingMenuItem"
-                    text: summary.label("Bluetooth gaming mode", "Modo gaming Bluetooth")
+                    text: summary.label("Bluetooth Gaming Mode", "Modo gaming Bluetooth")
                     icon.name: "input-gamepad"
                     checkable: true
                     checked: summary.gamingState === true
@@ -305,10 +302,10 @@ ColumnLayout {
         visible: summary.pairingBusy || summary.confirmingPairing || summary.pairingResult.length > 0
         text: summary.pairingBusy
             ? summary.label("Pairing… Keep the headset in pairing mode. Searching can take up to a minute; the result will appear here.",
-                            "Emparejando… Mantén los auriculares en modo de emparejamiento. La búsqueda puede tardar un minuto; el resultado aparecerá aquí.")
+                            "Emparejando… Mantén el auricular en modo de emparejamiento. La búsqueda puede tardar un minuto; el resultado aparecerá aquí.")
             : summary.confirmingPairing
-                ? summary.label("Connect the Barracuda dongle and put the headset in pairing mode. Continue? This replaces the dongle's current pairing.",
-                                "Conecta el adaptador Barracuda y pon los auriculares en modo de emparejamiento. ¿Continuar? Esto reemplaza el emparejamiento actual del adaptador.")
+                ? summary.label("Connect the USB dongle and put the headset in pairing mode. This replaces the dongle's current pairing.",
+                                "Conecta el dongle USB y pon el auricular en modo de emparejamiento. Esto reemplaza el emparejamiento actual del dongle.")
                 : summary.pairingResult
     }
 
@@ -368,8 +365,8 @@ ColumnLayout {
             : summary.confirmingPowerOff ? Kirigami.MessageType.Warning : Kirigami.MessageType.Information
         text: summary.powerBusy ? summary.label("Sending power-off request…", "Enviando solicitud de apagado…")
             : summary.confirmingPowerOff ? summary.label(
-                "Turn off the Barracuda headset? Use its physical button to turn it on again.",
-                "¿Apagar los auriculares Barracuda? Usa su botón físico para encenderlos de nuevo.")
+                "Turn off the headset through the USB dongle? Use its button to turn it on again.",
+                "¿Apagar el auricular mediante el dongle USB? Usa su botón para encenderlo de nuevo.")
             : summary.powerError.length > 0 ? summary.powerError : summary.powerResult
     }
     RowLayout {
@@ -377,7 +374,7 @@ ColumnLayout {
         visible: summary.confirmingPowerOff
         PC3.Button {
             objectName: "confirmPowerOffButton"
-            text: summary.label("Turn off", "Apagar")
+            text: summary.label("Turn Off", "Apagar")
             enabled: !summary.pairingBusy && !summary.powerBusy && !summary.adapterMissing
             onClicked: {
                 summary.confirmingPowerOff = false;
@@ -413,7 +410,7 @@ ColumnLayout {
         objectName: "gaming"
         visible: summary.connected
         iconName: "input-gamepad-symbolic"
-        text: summary.label("Bluetooth gaming mode", "Modo gaming Bluetooth")
+        text: summary.label("Bluetooth Gaming Mode", "Modo gaming Bluetooth")
         value: summary.gamingState
         busy: summary.settingsBusy
         localeName: summary.localeName

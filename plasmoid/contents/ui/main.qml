@@ -104,14 +104,11 @@ PlasmoidItem {
             disconnectSource(sourceName);
             root.powerBusy = false;
             linkMonitor.refresh();
-            if (data["exit code"] === 0)
-                root.powerResult = root.label(
-                    "Power-off request sent. Use the headset button to turn it on again.",
-                    "Solicitud de apagado enviada. Usa el botón de los auriculares para encenderlos de nuevo.");
+            const outcome = Output.powerOutcome(data, Qt.locale().name);
+            if (outcome.ok)
+                root.powerResult = outcome.text;
             else
-                root.powerError = root.label("Could not send the power-off request.",
-                    "No se pudo enviar la solicitud de apagado.") + "\n"
-                    + String(data.stderr || data.stdout || "").trim();
+                root.powerError = outcome.text;
         }
     }
 
@@ -173,16 +170,11 @@ PlasmoidItem {
             disconnectSource(sourceName);
             root.pairingBusy = false;
             linkMonitor.refresh();
-            const details = String(data.stdout || "").trim() + "\n" + String(data.stderr || "").trim();
-            if (data["exit code"] === 0)
-                root.pairingResult = root.label(
-                    "Paired. Turn the headset off and on to start the link.",
-                    "Emparejado. Apaga y enciende los auriculares para iniciar la conexión.");
+            const outcome = Output.pairingOutcome(data, Qt.locale().name);
+            if (outcome.ok)
+                root.pairingResult = outcome.text;
             else
-                root.pairingError = root.label(
-                    "Pairing failed. Check the adapter and HID permissions, and that barracuda-pair is installed on your PATH.",
-                    "No se pudo emparejar. Comprueba el adaptador, los permisos HID y que barracuda-pair esté instalado en tu PATH.")
-                    + "\n" + details.trim();
+                root.pairingError = outcome.text;
         }
     }
 
@@ -197,17 +189,13 @@ PlasmoidItem {
     })[Output.trayStatus(connection, battery)]
     Plasmoid.contextualActions: [
         PlasmaCore.Action {
-            text: root.target.transport === "bluetooth"
-                ? root.label("Pair USB dongle…", "Emparejar dongle USB…")
-                : root.label("Pair Barracuda…", "Emparejar Barracuda…")
+            text: root.label("Pair USB Dongle…", "Emparejar dongle USB…")
             icon.name: "network-wireless"
             enabled: !root.pairingBusy && !root.powerBusy && !Output.adapterMissing(root.linkStatus)
             onTriggered: root.requestConfirmation("pairing")
         },
         PlasmaCore.Action {
-            text: root.target.transport === "bluetooth"
-                ? root.label("Turn off through USB dongle…", "Apagar mediante dongle USB…")
-                : root.label("Turn off headset…", "Apagar auricular…")
+            text: root.label("Turn Off Headset…", "Apagar auricular…")
             icon.name: "system-shutdown"
             enabled: !root.pairingBusy && !root.powerBusy && !Output.adapterMissing(root.linkStatus)
             onTriggered: root.requestConfirmation("power-off")
@@ -231,7 +219,7 @@ PlasmoidItem {
         },
         PlasmaCore.Action {
             id: gamingAction
-            text: root.label("Bluetooth gaming mode", "Modo gaming Bluetooth")
+            text: root.label("Bluetooth Gaming Mode", "Modo gaming Bluetooth")
             icon.name: "input-gamepad"
             checkable: true
             checked: root.gamingState === true
@@ -249,7 +237,9 @@ PlasmoidItem {
         }
     ]
 
-    toolTipMainText: "Razer Barracuda X"
+    // The widget names itself as Plasma does: the tray heading, the configure
+    // action and the configuration window use the same metadata name.
+    toolTipMainText: Plasmoid.title
     toolTipSubText: statusText
         + (battery ? "\n" + label("Battery: ", "Batería: ")
             + Output.batteryText(battery, Qt.locale().name) : "")
@@ -288,7 +278,7 @@ PlasmoidItem {
                 emblemSize: Math.min(Kirigami.Units.iconSizes.small, width / 2)
             }
         }
-        Accessible.name: "Razer Barracuda X"
+        Accessible.name: Plasmoid.title
         Accessible.description: root.statusText
         onClicked: root.expanded = !root.expanded
     }
