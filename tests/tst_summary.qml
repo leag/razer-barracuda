@@ -1095,6 +1095,60 @@ Item {
             summary.activeView = true
             verify(!summary.confirmingPairing)
         }
+        function test_hidden_confirmation_takes_no_keys() {
+            // A confirmation that closes by itself leaves nothing to accept:
+            // keyboard focus returns to the command that opened it, so a key
+            // can only ask again.
+            const pair = findChild(summary, "pairButton")
+            const confirmPair = findChild(summary, "confirmPairingButton")
+            const power = findChild(summary, "powerOffButton")
+            const confirmPower = findChild(summary, "confirmPowerOffButton")
+            pairingSpy.clear()
+            powerSpy.clear()
+            for (const dismiss of [() => { summary.status = linked("connected") },
+                                   () => { summary.battery = {percent: 65, state: "Discharging"} }]) {
+                summary.status = linked("disconnected")
+                summary.battery = null
+                mouseClick(pair)
+                tryVerify(() => confirmPair.activeFocus)
+                dismiss()
+                verify(!summary.confirmingPairing)
+                verify(!confirmPair.visible)
+                verify(!confirmPair.enabled)
+                verify(!confirmPair.activeFocus)
+                verify(pair.activeFocus)
+                keyClick(Qt.Key_Space)
+                compare(pairingSpy.count, 0)
+                verify(summary.confirmingPairing)
+                tryVerify(() => confirmPair.activeFocus)
+                mouseClick(findChild(summary, "cancelPairingButton"))
+                verify(!summary.confirmingPairing)
+                keyClick(Qt.Key_Space)
+                compare(pairingSpy.count, 0)
+                summary.confirmingPairing = false
+            }
+            // Closing and reopening the popup.
+            summary.battery = null
+            summary.status = linked("connected")
+            mouseClick(power)
+            tryVerify(() => confirmPower.activeFocus)
+            summary.activeView = false
+            summary.activeView = true
+            verify(!summary.confirmingPowerOff)
+            verify(!confirmPower.enabled)
+            verify(!confirmPower.activeFocus)
+            verify(power.activeFocus)
+            keyClick(Qt.Key_Space)
+            compare(powerSpy.count, 0)
+            verify(summary.confirmingPowerOff)
+            summary.confirmingPowerOff = false
+            // A hidden confirm button ignores a direct click too.
+            confirmPair.clicked()
+            confirmPower.clicked()
+            compare(pairingSpy.count, 0)
+            compare(powerSpy.count, 0)
+            summary.status = null
+        }
         // A status reply from the settings controller.
         function read(state, transport) {
             fakeSettings.response = {ok: true, transport: transport || "usb", state: state, errors: {}}

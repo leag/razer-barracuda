@@ -78,8 +78,8 @@ ColumnLayout {
     property bool showDetails: false
     onActiveViewChanged: {
         if (!activeView) {
-            confirmingPairing = false;
-            confirmingPowerOff = false;
+            dismiss("pairing");
+            dismiss("power-off");
             showDetails = false;
         }
     }
@@ -101,17 +101,17 @@ ColumnLayout {
         ? label("Connect the USB dongle first.", "Conecta primero el dongle USB.") : ""
     onAdapterMissingChanged: {
         if (adapterMissing) {
-            confirmingPairing = false;
-            confirmingPowerOff = false;
+            dismiss("pairing");
+            dismiss("power-off");
         }
     }
     onBatteryAvailableChanged: {
         if (batteryAvailable)
-            confirmingPairing = false;
+            dismiss("pairing");
     }
     onConnectedChanged: {
         if (connected)
-            confirmingPairing = false;
+            dismiss("pairing");
     }
     signal pairingRequested()
     signal powerOffRequested()
@@ -129,6 +129,20 @@ ColumnLayout {
             return;
         confirmingPairing = action === "pairing";
         confirmingPowerOff = action === "power-off";
+    }
+    // Closes the confirmation for "pairing" or "power-off". Keyboard focus on
+    // its buttons returns to the command that opened it, so no key reaches a
+    // hidden button; the confirm buttons are also disabled while hidden.
+    function dismiss(action) {
+        const pairing = action === "pairing";
+        const focused = (pairing ? [confirmPairingButton, cancelPairingButton]
+                                 : [confirmPowerOffButton, cancelPowerOffButton]).find(button => button.activeFocus);
+        if (focused)
+            (pairing ? pairButton : powerOffButton).forceActiveFocus(focused.focusReason);
+        if (pairing)
+            confirmingPairing = false;
+        else
+            confirmingPowerOff = false;
     }
 
     Layout.minimumWidth: Kirigami.Units.gridUnit * 16
@@ -250,6 +264,7 @@ ColumnLayout {
         Layout.rightMargin: Kirigami.Units.largeSpacing
         spacing: Kirigami.Units.smallSpacing
         PC3.Button {
+            id: pairButton
             objectName: "pairButton"
             text: summary.label("Pair USB Dongle…", "Emparejar dongle USB…")
             icon.name: "network-wireless"
@@ -259,6 +274,7 @@ ColumnLayout {
             PC3.ToolTip.visible: hovered && summary.commandsHint.length > 0
         }
         PC3.Button {
+            id: powerOffButton
             objectName: "powerOffButton"
             text: summary.label("Turn Off Headset…", "Apagar auricular…")
             icon.name: "system-shutdown"
@@ -291,10 +307,12 @@ ColumnLayout {
         Layout.rightMargin: Kirigami.Units.largeSpacing
         visible: summary.confirmingPairing
         PC3.Button {
+            id: confirmPairingButton
             objectName: "confirmPairingButton"
             text: summary.label("Pair", "Emparejar")
             icon.name: "network-wireless"
-            enabled: !summary.pairingBusy && !summary.powerBusy && !summary.adapterMissing
+            // Usable only while its confirmation is on screen.
+            enabled: summary.confirmingPairing && !summary.pairingBusy && !summary.powerBusy && !summary.adapterMissing
             // The confirming button is the primary one: it takes keyboard
             // focus, which Plasma draws highlighted.
             onVisibleChanged: {
@@ -302,15 +320,18 @@ ColumnLayout {
                     forceActiveFocus(Qt.TabFocusReason);
             }
             onClicked: {
-                summary.confirmingPairing = false;
+                if (!summary.confirmingPairing)
+                    return;
+                summary.dismiss("pairing");
                 summary.pairingRequested();
             }
         }
         PC3.Button {
+            id: cancelPairingButton
             objectName: "cancelPairingButton"
             text: summary.label("Cancel", "Cancelar")
             icon.name: "dialog-cancel"
-            onClicked: summary.confirmingPairing = false
+            onClicked: summary.dismiss("pairing")
         }
     }
     PC3.ProgressBar {
@@ -361,24 +382,28 @@ ColumnLayout {
         Layout.rightMargin: Kirigami.Units.largeSpacing
         visible: summary.confirmingPowerOff
         PC3.Button {
+            id: confirmPowerOffButton
             objectName: "confirmPowerOffButton"
             text: summary.label("Turn Off", "Apagar")
             icon.name: "system-shutdown"
-            enabled: !summary.pairingBusy && !summary.powerBusy && !summary.adapterMissing
+            enabled: summary.confirmingPowerOff && !summary.pairingBusy && !summary.powerBusy && !summary.adapterMissing
             onVisibleChanged: {
                 if (visible)
                     forceActiveFocus(Qt.TabFocusReason);
             }
             onClicked: {
-                summary.confirmingPowerOff = false;
+                if (!summary.confirmingPowerOff)
+                    return;
+                summary.dismiss("power-off");
                 summary.powerOffRequested();
             }
         }
         PC3.Button {
+            id: cancelPowerOffButton
             objectName: "cancelPowerOffButton"
             text: summary.label("Cancel", "Cancelar")
             icon.name: "dialog-cancel"
-            onClicked: summary.confirmingPowerOff = false
+            onClicked: summary.dismiss("power-off")
         }
     }
 
