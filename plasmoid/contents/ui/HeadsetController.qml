@@ -59,8 +59,8 @@ Plasma5Support.DataSource {
     // last reading stays, so controls keep showing confirmed values. Any other
     // failure of a change (a timeout, an unconfirmed change) may have changed
     // the headset, so nothing stays known. Neither does a failed chain of
-    // several changes: its reply is the failing step's, and the steps before
-    // it changed the headset.
+    // several changes: its reply is the failing step's alone, and a step
+    // before it may already have changed the headset.
     readonly property var unchangedCodes: ["rejected", "busy", "gaming-active", "unknown-device", "gaming-not-applied",
                                            "missing-adapter", "unknown-link", "permission-denied", "driver-required"]
     function request(value) {
