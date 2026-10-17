@@ -131,17 +131,19 @@ ColumnLayout {
 
     PC3.ScrollView {
         id: overviewScroll
+        objectName: "overviewScroll"
         Layout.fillWidth: true
         Layout.fillHeight: true
         implicitWidth: 0
         PC3.ScrollBar.horizontal.policy: PC3.ScrollBar.AlwaysOff
         PC3.ScrollBar.vertical.policy: PC3.ScrollBar.AsNeeded
-        // Keep wrapping stable while the vertical scrollbar changes visibility.
-        contentWidth: width
+        // The body takes the width the vertical scrollbar leaves, so the
+        // scrollbar covers no control and the body never scrolls sideways.
+        contentWidth: availableWidth
         ConnectionSummary {
             id: overview
             objectName: "connectionOverview"
-            width: overviewScroll.width
+            width: overviewScroll.availableWidth
             // Fill a taller popup (the system tray's fixed size) without
             // making the content scroll.
             height: Math.max(implicitHeight, overviewScroll.availableHeight)

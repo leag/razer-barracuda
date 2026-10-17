@@ -54,6 +54,16 @@ Item {
         visible: false
         menuActions: host.fakeActions
     }
+    // The system tray's popup: no heading of its own and a fixed size that
+    // can be shorter than the summary.
+    HeadsetPanel {
+        id: trayPanel
+        width: Kirigami.Units.gridUnit * 24
+        height: 300
+        visible: false
+        showHeader: false
+        localeName: "en_US"
+    }
     PlasmaCore.Dialog {
         id: sizeDialog
         visible: false
@@ -505,6 +515,52 @@ Item {
             summary.status = linked("disconnected")
             verify(!icon.visible)
             summary.status = null
+        }
+        function test_scrolling_body_keeps_controls_inside() {
+            // When the tray's popup is shorter than the summary, the vertical
+            // scrollbar takes the right edge; the body narrows to the space
+            // left, so no switch or button sits under it, and it never
+            // scrolls sideways.
+            summary.visible = false
+            trayPanel.visible = true
+            trayPanel.activeView = true
+            trayPanel.settings = fakeSettings
+            trayPanel.status = linked("connected")
+            trayPanel.battery = {percent: 65, state: "Discharging"}
+            read({dnd: false, gaming: false, devices: [{address: "0a0b0c0d0e0f", name: "Phone", active: true},
+                                                       {address: "010203040506", name: "Laptop", active: false}]})
+            const scroll = findChild(trayPanel, "overviewScroll")
+            const flick = scroll.contentItem
+            const overview = findChild(trayPanel, "connectionOverview")
+            const right = item => item.mapToItem(flick, item.width, 0).x
+            const inside = () => {
+                const dnd = findChild(trayPanel, "dndSwitch")
+                const rows = findChildren(trayPanel, "quickConnectDevice")
+                const button = rows.length === 2 ? findChild(rows[1], "quickConnectButton") : null
+                return dnd.visible && button !== null && button.visible
+                    && right(dnd) <= flick.width + 0.5 && right(button) <= flick.width + 0.5
+            }
+            for (const height of [300, 2000]) {
+                trayPanel.height = height
+                const scrolling = height === 300
+                tryCompare(scroll.PC3.ScrollBar.vertical, "visible", scrolling)
+                tryCompare(overview, "width", scroll.availableWidth)
+                compare(flick.width, scroll.availableWidth)
+                verify(flick.contentWidth <= flick.width)
+                verify(scrolling ? scroll.availableWidth < scroll.width : scroll.availableWidth === scroll.width)
+                tryVerify(inside)
+                flick.contentX = 0
+                mouseWheel(scroll, scroll.width / 2, scroll.height / 2, -120, 0)
+                wait(50)
+                compare(flick.contentX, 0)
+            }
+            trayPanel.height = 300
+            trayPanel.visible = false
+            trayPanel.settings = null
+            trayPanel.status = null
+            trayPanel.battery = null
+            fakeSettings.response = null
+            summary.visible = true
         }
         function test_fixed_height_leaves_free_space_below() {
             // The system tray gives every applet the same popup size.
