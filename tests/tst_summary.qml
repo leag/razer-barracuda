@@ -433,6 +433,48 @@ Item {
             fakeSettings.response = null
             summary.status = null
         }
+        function test_settings_feedback_needs_the_link() {
+            // Without a confirmed link Refresh cannot run, so an earlier
+            // notice is not shown, also after the popup closes and reopens.
+            summary.localeName = "en_US"
+            const modesError = findChild(summary, "connectionModesError")
+            const quickError = findChild(summary, "quickConnectError")
+            const message = findChild(summary, "quickConnectMessage")
+            summary.status = linked("connected")
+            read({dnd: false, gaming: false, devices: []})
+            // A failed Do Not Disturb change.
+            fakeSettings.requestFeature = "dnd"
+            fakeSettings.response = null
+            fakeSettings.error = "The headset did not answer. Its state is unknown."
+            verify(modesError.visible)
+            for (const state of [linked("disconnected"), linked("unknown"), null,
+                                 {ok: true, usb: {adapter: "missing"}, bluetooth: null}]) {
+                summary.status = state
+                verify(!modesError.visible)
+                summary.activeView = false
+                summary.activeView = true
+                verify(!modesError.visible)
+            }
+            // A failed switch.
+            fakeSettings.requestFeature = "devices"
+            summary.status = linked("connected")
+            verify(quickError.visible)
+            summary.status = linked("disconnected")
+            verify(!quickError.visible)
+            // A requested switch.
+            fakeSettings.error = ""
+            fakeSettings.response = {ok: true, sent: "devices", transport: "usb", errors: {},
+                                     state: {gaming: false, devices: []}}
+            fakeSettings.message = "Connection switch requested. Refresh to check the active device."
+            summary.status = linked("connected")
+            verify(message.visible)
+            summary.status = linked("unknown")
+            verify(!message.visible)
+            fakeSettings.message = ""
+            fakeSettings.response = null
+            fakeSettings.requestFeature = ""
+            summary.status = null
+        }
         function test_panel_relays_requests() {
             const overview = findChild(panel, "connectionOverview")
             for (const [name, args] of [["pairingRequested", []], ["powerOffRequested", []],

@@ -42,19 +42,21 @@ ColumnLayout {
     // Settings change only with a confirmed link and while nothing else runs.
     readonly property bool settingsEnabled: connected && !settingsBusy && !pairingBusy && !powerBusy
     // Feedback for the connection modes: a failed request for them or a failed
-    // read, and the modes' own read errors.
-    readonly property string modesError: settings === null ? ""
+    // read, and the modes' own read errors. Like the values, every settings
+    // notice needs a confirmed link, without which Refresh cannot run, so an
+    // earlier one does not outlast the link.
+    readonly property string modesError: settings === null || !connected ? ""
         : settings.error.length > 0 && settings.requestFeature !== "devices" ? settings.error
         : featureError(["dnd", "gaming"])
     // Feedback for Quick Connect: a failed switch request, or a read error of
     // the device list that the modes' notice does not already give.
-    readonly property string quickConnectError: settings === null ? ""
+    readonly property string quickConnectError: settings === null || !connected ? ""
         : settings.requestFeature === "devices" ? settings.error
         : settings.error.length > 0 || featureError(["devices"]) === modesError ? ""
         : featureError(["devices"])
     // A switch request does not confirm the new active device; only a new
     // read can, so its notice offers Refresh.
-    readonly property string switchMessage: settings !== null && settings.response
+    readonly property string switchMessage: connected && settings !== null && settings.response
         && settings.response.sent === "devices" ? settings.message : ""
     function featureName(feature) {
         return ({dnd: label("Do Not Disturb", "No molestar"),
