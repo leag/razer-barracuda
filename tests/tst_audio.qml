@@ -311,32 +311,81 @@ Item {
             nativeSettings.visible = false;
         }
         function test_native_error_clears_confirmed_state() {
+            // A failed read leaves nothing known.
+            nativeBackend.requestFeature = "";
             nativeBackend.response = {state: {preset: 7}};
-            nativeBackend.newData("fake", {stdout: JSON.stringify({ok: false, error: "unconfirmed"})});
+            nativeBackend.newData("fake", {stdout: JSON.stringify({ok: false, error: "rejected"})});
             compare(nativeBackend.response, null);
-            verify(nativeBackend.error.length > 0);
-            nativeBackend.localeName = "es_CL";
-            nativeBackend.newData("fake", {stdout: JSON.stringify({ok: false, error: "gaming-not-applied"})});
-            verify(nativeBackend.error.includes("no cambió de modo"));
+            compare(nativeBackend.errorCode, "rejected");
+            // A change that may have reached the headset leaves nothing known.
+            nativeBackend.requestFeature = "dnd";
+            for (const code of ["timeout", "unconfirmed", "invalid-response", "bluetooth-unavailable", "route-failed"]) {
+                nativeBackend.response = {state: {dnd: true}};
+                nativeBackend.newData("fake", {stdout: JSON.stringify({ok: false, error: code})});
+                compare(nativeBackend.response, null, code);
+                compare(nativeBackend.errorCode, code);
+                compare(nativeBackend.error, nativeBackend.errorLabel(code));
+            }
+            // A change the headset certainly did not apply keeps the reading,
+            // so the controls stay at confirmed values.
+            for (const code of ["rejected", "busy", "gaming-active", "unknown-device", "gaming-not-applied",
+                                "missing-adapter", "unknown-link", "permission-denied", "driver-required"]) {
+                const reading = {state: {dnd: true}};
+                nativeBackend.response = reading;
+                nativeBackend.newData("fake", {stdout: JSON.stringify({ok: false, error: code})});
+                compare(nativeBackend.response, reading, code);
+                compare(nativeBackend.errorCode, code);
+            }
+            // An unreadable reply means the helper is missing or too old; its
+            // output goes to the journal, not to the view.
+            nativeBackend.newData("fake", {stdout: "barracuda-headset: command not found", stderr: ""});
             compare(nativeBackend.response, null);
-            nativeBackend.localeName = "en_US";
-            verify(nativeBackend.errorLabel("gaming-not-applied").includes("did not change"));
+            compare(nativeBackend.errorCode, "helper-missing");
+            compare(nativeBackend.error, "Install or update the barracuda-pair package.");
+            nativeBackend.requestFeature = "";
+            nativeBackend.error = "";
+            nativeBackend.errorCode = "";
         }
-        function test_error_labels_name_the_usb_dongle() {
+        function test_error_labels_in_plain_language() {
             const expected = {
-                "missing-adapter": ["USB dongle not detected.", "Dongle USB no detectado."],
-                "route-failed": ["Could not restore the USB dongle route. Reconnect the dongle.",
-                                 "No se pudo restaurar la ruta del dongle USB. Reconecta el dongle."],
-                "gaming-active": ["Turn off Bluetooth Gaming Mode before switching Bluetooth devices.",
-                                  "Desactiva el modo gaming Bluetooth antes de cambiar de dispositivo Bluetooth."],
-                "unknown-device": ["The headset no longer lists this device. Refresh to read its known devices.",
-                                   "El auricular ya no tiene este dispositivo en su lista. Actualiza para leer sus dispositivos conocidos."]
+                "helper-missing": ["Install or update the barracuda-pair package.",
+                                   "Instala o actualiza el paquete barracuda-pair."],
+                "driver-required": ["Install or update the Barracuda driver.",
+                                    "Instala o actualiza el driver del Barracuda."],
+                "missing-adapter": ["Plug in the USB dongle.", "Conecta el dongle USB."],
+                "unknown-link": ["The headset link is not confirmed.", "La conexión del auricular no está confirmada."],
+                "permission-denied": ["Install or update the barracuda-pair package to allow headset access.",
+                                      "Instala o actualiza el paquete barracuda-pair para permitir el acceso al auricular."],
+                "bluetooth-runtime-unavailable": ["Install or update the barracuda-pair package to use Bluetooth.",
+                                                  "Instala o actualiza el paquete barracuda-pair para usar Bluetooth."],
+                "bluetooth-unsupported": ["This headset can't be controlled over Bluetooth.",
+                                          "Este auricular no se puede controlar por Bluetooth."],
+                "bluetooth-unavailable": ["The headset didn't answer over Bluetooth.", "El auricular no respondió por Bluetooth."],
+                "invalid-response": ["The headset sent an unexpected answer.", "El auricular envió una respuesta inesperada."],
+                "busy": ["Another headset command is running. Try again in a moment.",
+                         "Hay otra orden en curso. Vuelve a intentarlo en un momento."],
+                "timeout": ["The headset didn't answer.", "El auricular no respondió."],
+                "route-failed": ["Unplug the USB dongle and plug it in again.", "Desconecta el dongle USB y vuelve a conectarlo."],
+                "rejected": ["The headset rejected the change.", "El auricular rechazó el cambio."],
+                "unconfirmed": ["The headset didn't confirm the change.", "El auricular no confirmó el cambio."],
+                "gaming-active": ["Turn off Bluetooth gaming mode first.", "Desactiva primero el modo gaming Bluetooth."],
+                "unknown-device": ["The headset no longer knows this device.", "El auricular ya no conoce este dispositivo."],
+                "gaming-not-applied": ["The headset didn't change Bluetooth gaming mode.",
+                                       "El auricular no cambió el modo gaming Bluetooth."],
+                "device-error": ["This setting isn't available on this headset.",
+                                 "Este ajuste no está disponible en este auricular."]
             };
             for (const code of Object.keys(expected)) {
                 nativeBackend.localeName = "en_US";
                 compare(nativeBackend.errorLabel(code), expected[code][0]);
                 nativeBackend.localeName = "es_CL";
                 compare(nativeBackend.errorLabel(code), expected[code][1]);
+            }
+            // No label names a helper command, PATH or HID.
+            for (const locale of ["en_US", "es_CL"]) {
+                nativeBackend.localeName = locale;
+                for (const code of Object.keys(expected))
+                    verify(!/barracuda-headset|PATH|HID/.test(nativeBackend.errorLabel(code)), code);
             }
             nativeBackend.localeName = "en_US";
         }

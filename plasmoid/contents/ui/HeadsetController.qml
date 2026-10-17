@@ -13,6 +13,7 @@ Plasma5Support.DataSource {
     onTargetKeyChanged: {
         response = null;
         error = "";
+        errorCode = "";
         message = "";
         if (activeView && !busy)
             Qt.callLater(() => request({op: "status"}));
@@ -20,6 +21,8 @@ Plasma5Support.DataSource {
     property bool busy: false
     property var response: null
     property string error: ""
+    // The helper's code for the last failure, so a view can word what failed.
+    property string errorCode: ""
     property string message: ""
     // The feature of the last set request ("dnd", "gaming", "devices", …), or
     // empty for a status read, so its feedback can appear beside its control.
@@ -27,32 +30,42 @@ Plasma5Support.DataSource {
     property string localeName: Qt.locale().name
     signal loaded(var result)
     function label(en, es) { return Output.text(en, es, localeName); }
+    // Plain sentences: what happened and what the user can do. Helper names,
+    // PATH and HID details go to the journal, never to a view.
     function errorLabel(code) {
         const labels = {
-            "driver-required": label("Update the Barracuda driver to use native controls.", "Actualiza el driver del Barracuda para usar los controles nativos."),
-            "missing-adapter": label("USB dongle not detected.", "Dongle USB no detectado."),
+            "helper-missing": label("Install or update the barracuda-pair package.", "Instala o actualiza el paquete barracuda-pair."),
+            "driver-required": label("Install or update the Barracuda driver.", "Instala o actualiza el driver del Barracuda."),
+            "missing-adapter": label("Plug in the USB dongle.", "Conecta el dongle USB."),
             "unknown-link": label("The headset link is not confirmed.", "La conexión del auricular no está confirmada."),
-            "permission-denied": label("Install the headset-control permissions rule.", "Instala la regla de permisos de control del auricular."),
-            "bluetooth-runtime-unavailable": label("Install the helper with the system Python to enable Bluetooth sockets.", "Instala la utilidad con el Python del sistema para habilitar Bluetooth."),
-            "bluetooth-unsupported": label("The headset has no supported Bluetooth control service.", "El auricular no ofrece un servicio de control Bluetooth compatible."),
-            "bluetooth-unavailable": label("Bluetooth controls could not connect. Refresh to try again.", "No se pudo conectar al control Bluetooth. Actualiza para volver a intentarlo."),
-            "invalid-response": label("The headset returned an invalid response. Refresh to read its state.", "El auricular devolvió una respuesta inválida. Actualiza para leer su estado."),
-            "busy": label("Another headset operation is running. Try again shortly.", "Hay otra operación en curso. Vuelve a intentarlo en unos segundos."),
-            "timeout": label("The headset did not answer. Its state is unknown.", "El auricular no respondió. Su estado es desconocido."),
-            "route-failed": label("Could not restore the USB dongle route. Reconnect the dongle.", "No se pudo restaurar la ruta del dongle USB. Reconecta el dongle."),
-            "rejected": label("The headset rejected this change.", "El auricular rechazó este cambio."),
-            "unconfirmed": label("The change could not be confirmed. Refresh before trying again.", "No se pudo confirmar el cambio. Actualiza antes de volver a intentarlo."),
-            "gaming-active": label("Turn off Bluetooth Gaming Mode before switching Bluetooth devices.", "Desactiva el modo gaming Bluetooth antes de cambiar de dispositivo Bluetooth."),
-            "unknown-device": label("The headset no longer lists this device. Refresh to read its known devices.", "El auricular ya no tiene este dispositivo en su lista. Actualiza para leer sus dispositivos conocidos."),
-            "gaming-not-applied": label("The headset accepted the Gaming request but did not change its mode. Activation over USB is unverified; this does not enable the Game EQ preset.", "El auricular aceptó la solicitud Gaming, pero no cambió de modo. Su activación por USB no está confirmada; esto no activa el perfil EQ Juegos.")
+            "permission-denied": label("Install or update the barracuda-pair package to allow headset access.", "Instala o actualiza el paquete barracuda-pair para permitir el acceso al auricular."),
+            "bluetooth-runtime-unavailable": label("Install or update the barracuda-pair package to use Bluetooth.", "Instala o actualiza el paquete barracuda-pair para usar Bluetooth."),
+            "bluetooth-unsupported": label("This headset can't be controlled over Bluetooth.", "Este auricular no se puede controlar por Bluetooth."),
+            "bluetooth-unavailable": label("The headset didn't answer over Bluetooth.", "El auricular no respondió por Bluetooth."),
+            "invalid-response": label("The headset sent an unexpected answer.", "El auricular envió una respuesta inesperada."),
+            "busy": label("Another headset command is running. Try again in a moment.", "Hay otra orden en curso. Vuelve a intentarlo en un momento."),
+            "timeout": label("The headset didn't answer.", "El auricular no respondió."),
+            "route-failed": label("Unplug the USB dongle and plug it in again.", "Desconecta el dongle USB y vuelve a conectarlo."),
+            "rejected": label("The headset rejected the change.", "El auricular rechazó el cambio."),
+            "unconfirmed": label("The headset didn't confirm the change.", "El auricular no confirmó el cambio."),
+            "gaming-active": label("Turn off Bluetooth gaming mode first.", "Desactiva primero el modo gaming Bluetooth."),
+            "unknown-device": label("The headset no longer knows this device.", "El auricular ya no conoce este dispositivo."),
+            "gaming-not-applied": label("The headset didn't change Bluetooth gaming mode.", "El auricular no cambió el modo gaming Bluetooth.")
         };
-        return labels[code] || label("This control is unavailable on the current headset.", "Este control no está disponible en el auricular actual.");
+        return labels[code] || label("This setting isn't available on this headset.", "Este ajuste no está disponible en este auricular.");
     }
+    // Failures after which the headset certainly kept its previous state: the
+    // last reading stays, so controls keep showing confirmed values. Any other
+    // failure of a change (a timeout, an unconfirmed change) may have changed
+    // the headset, so nothing stays known.
+    readonly property var unchangedCodes: ["rejected", "busy", "gaming-active", "unknown-device", "gaming-not-applied",
+                                           "missing-adapter", "unknown-link", "permission-denied", "driver-required"]
     function request(value) {
         if (busy)
             return;
         busy = true;
         error = "";
+        errorCode = "";
         message = "";
         requestFeature = value.op === "set" ? String(value.feature) : "";
         requestedKey = targetKey;
@@ -66,6 +79,7 @@ Plasma5Support.DataSource {
             return;
         busy = true;
         error = "";
+        errorCode = "";
         message = "";
         requestFeature = String(values[values.length - 1].feature);
         requestedKey = targetKey;
@@ -82,13 +96,18 @@ Plasma5Support.DataSource {
         let result;
         try { result = JSON.parse(String(data.stdout)); }
         catch (e) {
+            console.warn("barracuda-headset gave no readable reply:", String(data.stdout || "").trim(),
+                         String(data.stderr || "").trim());
             response = null;
-            error = label("Native controls require barracuda-headset on PATH.", "Los controles nativos requieren barracuda-headset en PATH.");
+            errorCode = "helper-missing";
+            error = errorLabel(errorCode);
             return;
         }
         if (!result.ok) {
-            response = null;
-            error = errorLabel(result.error);
+            errorCode = String(result.error || "");
+            if (requestFeature === "" || !unchangedCodes.includes(errorCode))
+                response = null;
+            error = errorLabel(errorCode);
             return;
         }
         response = result;
