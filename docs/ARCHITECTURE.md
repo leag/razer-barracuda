@@ -13,26 +13,29 @@
 - `plasmoid/`: native Plasma 6.7+ QML widget for the headset connection. It
   runs the read-only `barracuda-headset` link query through Plasma5Support's
   executable engine: on load, every 5 s while the popup is open, and when a
-  Barracuda battery appears or disappears or the default output changes.
-  Pure JavaScript (`contents/code/output.js`) turns the result into distinct
+  Barracuda battery appears or disappears or the default output changes. Pure
+  JavaScript (`contents/code/output.js`) turns the result into distinct
   connected, disconnected, unconfirmed, missing-dongle and unavailable states
-  and holds every popup string with its English default and Spanish
-  translation. `Server.defaultSink` only chooses the native-control transport
-  when the link reports do not. Each function has one place and one visual
-  form, taken from Plasma's system applets. The commands are
-  `Plasmoid.contextualActions`: the high-priority **Pair Headset…**, which the
-  tray draws as the heading's '+', and **Turn Off Headset…**, a separator and
-  **Configure Audio Devices…**, which it draws in More actions; in a panel or
-  on the desktop the widget's own heading (`HeadsetHeading`, a
+  and holds the status strings; the QML views word their own controls and
+  messages. Every string has an English default and a Spanish translation,
+  chosen by `Output.text()`. `Server.defaultSink` only chooses the
+  native-control transport when the link reports do not. Each function has one
+  place and one visual form, taken from Plasma's system applets. The commands
+  are `Plasmoid.contextualActions`: the high-priority **Pair Headset…**, which
+  the tray draws as the heading's '+', and **Turn Off Headset…**, a separator
+  and **Configure Audio Devices…**, which it draws in More actions; in a panel
+  or on the desktop the widget's own heading (`HeadsetHeading`, a
   `PlasmoidHeading`) draws the same row with the same selection rules, next to
-  a gear for the configuration window. Each command opens a
-  `Kirigami.PromptDialog` (`HeadsetPrompt`) in the popup and runs the existing
-  CLI with `--yes` only after that confirmation. The popup (`HeadsetView`, a
-  `PlasmaExtras.Representation` with one `ListView`) shows, with a confirmed
-  link, the headset card (`HeroCard`, `DetailsGrid`), the Modes switch rows
-  (`ModeSwitch`) and the Bluetooth Devices as `ExpandableListItem` rows, all
-  fed by one `barracuda-headset` status read each time the full view is shown
-  with a confirmed link; every other state, and pairing, shows one
+  a gear for the configuration window. **Pair Headset…** and **Turn Off
+  Headset…** open a `Kirigami.PromptDialog` (`HeadsetPrompt`) in the popup and
+  run the existing CLI with `--yes` only after that confirmation; **Configure
+  Audio Devices…** and the gear open their settings directly. The popup
+  (`HeadsetView`, a `PlasmaExtras.Representation` with one `ListView`) shows,
+  with a confirmed link, the headset card (`HeroCard`, `DetailsGrid`), the
+  Modes switch rows (`ModeSwitch`) and the Bluetooth Devices as
+  `ExpandableListItem` rows, all fed by one `barracuda-headset` status read
+  each time the full view is shown with a confirmed link; every other state,
+  pairing and a power-off without a confirmed link show one
   `StatePlaceholder`, whose Disconnected state offers the pairing action. One
   `Kirigami.InlineMessage` holds outcomes and problems. The configuration
   window (`contents/config`) has one **Headset** page (`HeadsetConfigPage`,

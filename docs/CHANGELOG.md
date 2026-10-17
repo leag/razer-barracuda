@@ -15,20 +15,21 @@
   Bluetooth applet: **+** is **Pair Headset…**, and **More actions** holds
   **Turn Off Headset…** and **Configure Audio Devices…**; the system tray
   draws the same row, on every supported Plasma version, and the right-click
-  menu lists the same commands. Each command asks first in a dialog whose
-  default is **Cancel** and which closes by itself when the command stops
-  being possible. With a confirmed link the popup shows a headset card
-  (artwork with transport glyphs, state, percentage, battery bar, transport and
-  charge state, and expandable details), **Modes** with **Do not disturb** and
-  **Bluetooth gaming mode** switch rows (no switch for an unknown value; one
-  trailing slot for Reading…, Unknown, Only over Bluetooth or a busy
-  indicator) and **Bluetooth Devices** (Quick Connect) with **Connect** rows.
-  Every state without a confirmed link, and pairing, replaces the body with
-  one message with its own artwork; **Disconnected** offers **Pair Headset…**.
-  One closable message slot holds outcomes and problems in plain words, with
-  **Try Again** where it helps; helper output goes to the journal. No colour is
-  added. The tooltip is one line, and the tray icon spins while a command runs.
-  The desktop view reads the headset settings too.
+  menu lists the same commands. **Pair Headset…** and **Turn Off Headset…**
+  ask first in a dialog whose default is **Cancel** and which closes by itself
+  when the command stops being possible. With a confirmed link the popup shows
+  a headset card (artwork with transport glyphs, state, percentage, battery
+  bar, transport and charge state, and expandable details), **Modes** with
+  **Do not disturb** and **Bluetooth gaming mode** switch rows (no switch for
+  an unknown value; one trailing slot for Reading…, Unknown, Only over
+  Bluetooth or a busy indicator) and **Bluetooth Devices** (Quick Connect)
+  with **Connect** rows. Every state without a confirmed link, pairing, and a
+  power-off started without a confirmed link replace the body with one message
+  with its own artwork; **Disconnected** offers **Pair Headset…**. One
+  closable message slot holds outcomes and problems in plain words, with **Try
+  Again** where it helps; helper output goes to the journal. No colour is
+  added. The tooltip is one line, and the tray icon spins while a command
+  runs. The desktop view reads the headset settings too.
 - Merge the configuration window into one **Headset** page: the sound profile
   with its custom bands, and idle shutdown. Changes wait for Apply or OK, which
   send them as one chain that stops at the first failure and finishes even

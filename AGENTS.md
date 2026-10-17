@@ -10,24 +10,24 @@ user in their conversation language. Read README.md and docs/PROTOCOL.md first.
 
 ## Layout
 
-- plasmoid/: Plasma 6.7+ system tray/panel widget; each function has one
-  place and one visual form. Its heading (drawn by the tray, or by the widget
-  in a panel or on the desktop) holds the commands: the '+' is Pair Headset…
-  (the high-priority action), More actions holds Turn Off Headset…, a
-  separator and Configure Audio Devices…, and a gear opens the configuration
-  window. Each command asks first in a Kirigami.PromptDialog with focus on
-  Cancel. With a confirmed link the popup shows a headset card (artwork,
-  state, battery, transport, expandable details), Modes (Do Not Disturb and
-  Bluetooth gaming mode switch rows; gaming mode settable only over
-  Bluetooth) and Bluetooth Devices (Quick Connect rows), from one settings
-  read each time the full view is shown with a confirmed link. Every other
-  state, and pairing, shows one placeholder instead; Disconnected offers the
-  pairing action. One closable message slot holds outcomes and problems. The
-  configuration window has one Headset page (contents/config): sound
-  profile, custom bands and idle shutdown, sent on Apply or OK. Help uses at
-  most one contextual help button per view, not a help page. Panel and tray
-  icons use the theme's symbolic glyph; the popup loads detailed Breeze
-  headset artwork.
+- plasmoid/: Plasma 6.7+ system tray/panel widget; each function has one place
+  and one visual form. Its heading (drawn by the tray, or by the widget in a
+  panel or on the desktop) holds the commands: the '+' is Pair Headset… (the
+  high-priority action), More actions holds Turn Off Headset…, a separator and
+  Configure Audio Devices…, and a gear opens the configuration window. Pair
+  Headset… and Turn Off Headset… ask first in a Kirigami.PromptDialog with
+  focus on Cancel. With a confirmed link the popup shows a headset card
+  (artwork, state, battery, transport, expandable details), Modes (Do Not
+  Disturb and Bluetooth gaming mode switch rows; gaming mode settable only
+  over Bluetooth) and Bluetooth Devices (Quick Connect rows), from one
+  settings read each time the full view is shown with a confirmed link. Every
+  other state, pairing and a power-off without a confirmed link show one
+  placeholder instead; Disconnected offers the pairing action. One closable
+  message slot holds outcomes and problems. The configuration window has one
+  Headset page (contents/config): sound profile, custom bands and idle
+  shutdown, sent on Apply or OK. Help uses at most one contextual help button
+  per view, not a help page. Panel and tray icons use the theme's symbolic
+  glyph; the popup loads detailed Breeze headset artwork.
 - barracuda_pair/pairing.py: pairing sequence, `barracuda-pair` CLI and hidraw lookup.
 - barracuda_pair/i18n.py: explicit UI translations.
 - tests/: hardware-independent unittest suite.
