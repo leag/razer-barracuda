@@ -6,16 +6,27 @@ import "../plasmoid/contents/code/output.js" as Output
 TestCase {
     name: "HeadsetLogic"
     property list<QtObject> actions: [
-        PlasmaCore.Action { id: audio; text: "Configure Audio Devices…" },
+        PlasmaCore.Action { id: leadingSeparator; isSeparator: true },
+        PlasmaCore.Action { id: high; text: "Pair Headset…"; priority: PlasmaCore.Action.HighPriority },
+        PlasmaCore.Action { id: powerOff; text: "Turn Off Headset…" },
         PlasmaCore.Action { id: hidden; text: "Hidden"; visible: false },
         PlasmaCore.Action { id: separator; isSeparator: true },
-        PlasmaCore.Action { id: high; text: "High"; priority: PlasmaCore.Action.HighPriority },
-        PlasmaCore.Action { id: configure; text: "&Configure Barracuda Headset…" }
+        PlasmaCore.Action { id: doubled; isSeparator: true },
+        PlasmaCore.Action { id: audio; text: "Configure Audio Devices…" },
+        PlasmaCore.Action { id: configure; text: "&Configure Barracuda Headset…" },
+        PlasmaCore.Action { id: trailingSeparator; isSeparator: true }
     ]
     function test_more_actions_match_the_tray() {
-        compare(Output.moreActions(actions, configure, PlasmaCore.Action.NormalPriority), [audio]);
+        // Visible normal-priority actions without Plasma's configure action;
+        // a separator stays only between two entries, once.
+        compare(Output.moreActions(actions, configure, PlasmaCore.Action.NormalPriority), [powerOff, doubled, audio]);
+        compare(Output.moreActions([audio, separator], configure, PlasmaCore.Action.NormalPriority), [audio]);
+        compare(Output.moreActions([separator, audio], configure, PlasmaCore.Action.NormalPriority), [audio]);
         compare(Output.moreActions([], configure, PlasmaCore.Action.NormalPriority), []);
         compare(Output.moreActions(null, null, PlasmaCore.Action.NormalPriority), []);
+        // The heading's icon buttons are the high-priority actions.
+        compare(Output.primaryActions(actions, PlasmaCore.Action.HighPriority), [high]);
+        compare(Output.primaryActions(null, PlasmaCore.Action.HighPriority), []);
     }
     function linked(link, bluetooth, battery) {
         return {ok: true, usb: {adapter: "present", driver: true, link: link, battery: battery || null},
@@ -188,9 +199,13 @@ TestCase {
         for (const state of ["connected", "unknown", "disconnected", "no-adapter", "unavailable", "checking"])
             compare(Output.trayStatus({state: state}, null), "active");
         compare(Output.trayStatus({state: "connected"}, {percent: 10, state: "Discharging"}), "attention");
+        compare(Output.trayStatus({state: "connected"}, {percent: 10, state: "Unknown"}), "attention");
         compare(Output.trayStatus({state: "connected"}, {percent: 10, state: "Charging"}), "active");
+        compare(Output.trayStatus({state: "connected"}, {percent: 5, state: "FullyCharged"}), "active");
+        compare(Output.trayStatus({state: "connected"}, {percent: 11, state: "Discharging"}), "active");
         // A stale low reading without a confirmed link does not ask for attention.
         compare(Output.trayStatus({state: "disconnected"}, {percent: 5, state: "Discharging"}), "active");
+        compare(Output.trayStatus({state: "unknown"}, {percent: 5, state: "Discharging"}), "active");
     }
     function test_commands_disabled_only_for_confirmed_missing_adapter() {
         verify(Output.adapterMissing({ok: true, usb: {adapter: "missing"}, bluetooth: null}));
@@ -336,7 +351,218 @@ TestCase {
         compare(Output.artwork("audio-headset-usb"), Output.artwork("audio-headset"));
         compare(Output.artwork("audio-speakers"),
                 "file:///usr/share/icons/breeze/devices/64/audio-speakers.svg");
+        // The missing USB dongle is drawn as the dongle.
+        compare(Output.artwork("drive-removable-media-usb"),
+                "file:///usr/share/icons/breeze/devices/64/drive-removable-media-usb.svg");
         compare(Output.artwork("video-display"), "video-display");
         compare(Output.artwork("audio-card"), "audio-card");
+    }
+
+    readonly property string nbsp: " "
+    function test_percentages_as_each_language_writes_them() {
+        compare(Output.percentText(80, "en_US"), "80%");
+        compare(Output.percentText(80, "es_CL"), "80" + nbsp + "%");
+        compare(Output.percentText(5, "es_ES"), "5" + nbsp + "%");
+        compare(Output.percentText(100, "de_DE"), "100%");
+    }
+    function test_low_battery_and_charge_notes() {
+        verify(!Output.lowBattery(null));
+        verify(!Output.lowBattery(undefined));
+        verify(Output.lowBattery({percent: 10, state: "Discharging"}));
+        verify(Output.lowBattery({percent: 0, state: "Unknown"}));
+        verify(!Output.lowBattery({percent: 11, state: "Discharging"}));
+        verify(!Output.lowBattery({percent: 3, state: "Charging"}));
+        verify(!Output.lowBattery({percent: 3, state: "FullyCharged"}));
+        const notes = [[null, "Battery unavailable", "Batería no disponible"],
+                       [{percent: 60, state: "Charging"}, "Charging", "Cargando"],
+                       [{percent: 100, state: "FullyCharged"}, "Fully charged", "Carga completa"],
+                       [{percent: 8, state: "Discharging"}, "Low battery", "Batería baja"],
+                       // The percentage and the bar already say it.
+                       [{percent: 80, state: "Discharging"}, "", ""],
+                       [{percent: 80, state: "Unknown"}, "", ""]];
+        for (const [battery, english, spanish] of notes) {
+            compare(Output.chargeNote(battery, "en_US"), english);
+            compare(Output.chargeNote(battery, "es_CL"), spanish);
+        }
+    }
+    function test_headset_card_lines() {
+        const usb = {state: "connected", transport: "usb"};
+        const discharging = {percent: 80, state: "Discharging"};
+        compare(Output.hero(usb, discharging, false, "en_US"),
+                {headline: "Connected", percent: "80%", line: "USB dongle",
+                 accessible: "Connected, 80% battery, USB dongle"});
+        compare(Output.hero(usb, discharging, false, "es_CL"),
+                {headline: "Conectado", percent: "80" + nbsp + "%", line: "Dongle USB",
+                 accessible: "Conectado, 80" + nbsp + "% de batería, dongle USB"});
+        compare(Output.hero({state: "connected", transport: "bluetooth"}, {percent: 65, state: "Charging"}, false, "en_US"),
+                {headline: "Connected", percent: "65%", line: "Bluetooth · Charging",
+                 accessible: "Connected, 65% battery, Bluetooth, charging"});
+        compare(Output.hero({state: "connected", transport: "both"}, {percent: 8, state: "Discharging"}, false, "es_CL"),
+                {headline: "Conectado", percent: "8" + nbsp + "%", line: "Dongle USB y Bluetooth · Batería baja",
+                 accessible: "Conectado, 8" + nbsp + "% de batería, dongle USB y Bluetooth, batería baja"});
+        compare(Output.hero({state: "connected", transport: "both"}, {percent: 100, state: "FullyCharged"}, false, "en_US").line,
+                "USB dongle and Bluetooth · Fully charged");
+        // Without a reading the line says so and there is no percentage.
+        compare(Output.hero(usb, null, false, "en_US"),
+                {headline: "Connected", percent: "", line: "USB dongle · Battery unavailable",
+                 accessible: "Connected, USB dongle, battery unavailable"});
+        compare(Output.hero(usb, null, false, "es_CL").line, "Dongle USB · Batería no disponible");
+        // A command running on the headset replaces the state.
+        compare(Output.hero(usb, discharging, true, "en_US").headline, "Turning off…");
+        compare(Output.hero(usb, discharging, true, "es_CL").headline, "Apagando…");
+        compare(Output.hero(usb, discharging, true, "es_CL").accessible, "Apagando…, 80" + nbsp + "% de batería, dongle USB");
+    }
+    function test_transport_glyphs_beside_the_artwork() {
+        compare(Output.transportEmblems({state: "connected", transport: "usb"}), ["drive-removable-media-usb-symbolic"]);
+        compare(Output.transportEmblems({state: "connected", transport: "bluetooth"}), ["network-bluetooth-symbolic"]);
+        // Bottom first: the dongle, then Bluetooth above it.
+        compare(Output.transportEmblems({state: "connected", transport: "both"}),
+                ["drive-removable-media-usb-symbolic", "network-bluetooth-symbolic"]);
+        for (const state of ["disconnected", "unknown", "no-adapter", "unavailable", "checking"])
+            compare(Output.transportEmblems({state: state, transport: "usb"}), []);
+    }
+    // Each state without a confirmed link has its own words and artwork.
+    function test_placeholders_keep_states_distinct() {
+        const expect = (status, battery, pairing, english, spanish, look) => {
+            for (const [locale, words] of [["en_US", english], ["es_CL", spanish]]) {
+                const value = Output.placeholder(status, Output.connection(status), battery, pairing, locale);
+                compare(value.title, words[0]);
+                compare(value.explanation, words[1]);
+                compare(value.state, look[0]);
+                compare(value.artwork, look[1]);
+                compare(value.dimmed, look[2]);
+                compare(value.emblem, look[3]);
+                compare(value.busy, look[4]);
+            }
+        };
+        expect(null, null, false, ["Checking…", ""], ["Comprobando…", ""],
+               ["checking", "audio-headset", true, "", true]);
+        expect(linked("disconnected"), null, false, ["Disconnected", "Turn on the headset."],
+               ["Desconectado", "Enciende el auricular."], ["disconnected", "audio-headset", true, "", false]);
+        // Without the dongle, pairing waits for it; the words say so.
+        expect({ok: true, usb: {adapter: "missing"}, bluetooth: {state: "disconnected"}}, null, false,
+               ["Disconnected", "Turn on the headset or plug in the USB dongle."],
+               ["Desconectado", "Enciende el auricular o conecta el dongle USB."],
+               ["disconnected", "audio-headset", true, "", false]);
+        expect(linked("unknown"), null, false,
+               ["Link not confirmed", "The headset may still be on."],
+               ["Conexión no confirmada", "El auricular puede seguir encendido."],
+               ["unknown", "audio-headset", false, "emblem-question", false]);
+        expect(linked("unknown"), {percent: 80, state: "Discharging"}, false,
+               ["Link not confirmed", "The headset may still be on. Last battery reading: 80%."],
+               ["Conexión no confirmada", "El auricular puede seguir encendido. Última lectura de batería: 80" + nbsp + "%."],
+               ["unknown", "audio-headset", false, "emblem-question", false]);
+        expect({ok: true, usb: {adapter: "multiple"}, bluetooth: null}, null, false,
+               ["Link not confirmed", "More than one Barracuda USB dongle is plugged in. Leave only one."],
+               ["Conexión no confirmada", "Hay más de un dongle USB Barracuda conectado. Deja solo uno."],
+               ["unknown", "audio-headset", false, "emblem-question", false]);
+        expect({ok: true, usb: {adapter: "present", driver: false, link: "unknown"}, bluetooth: null}, null, false,
+               ["Link not confirmed", "Install or update the Barracuda driver."],
+               ["Conexión no confirmada", "Instala o actualiza el driver del Barracuda."],
+               ["unknown", "audio-headset", false, "emblem-question", false]);
+        expect({ok: true, usb: {adapter: "missing"}, bluetooth: null}, null, false,
+               ["USB dongle not detected", "Plug in the dongle, or use the headset over Bluetooth."],
+               ["Dongle USB no detectado", "Conecta el dongle o usa el auricular por Bluetooth."],
+               ["no-adapter", "drive-removable-media-usb", true, "", false]);
+        expect({ok: false}, null, false,
+               ["Status unavailable", "Install or update the barracuda-pair package."],
+               ["Estado no disponible", "Instala o actualiza el paquete barracuda-pair."],
+               ["unavailable", "audio-headset", false, "emblem-warning", false]);
+        // Pairing replaces any link, also a confirmed one.
+        for (const status of [linked("disconnected"), linked("connected")])
+            expect(status, null, true,
+                   ["Pairing…", "Keep the headset in pairing mode. This can take up to a minute."],
+                   ["Emparejando…", "Mantén el auricular en modo de emparejamiento. Puede tardar hasta un minuto."],
+                   ["pairing", "audio-headset", false, "", true]);
+        compare(Output.placeholder(linked("connected"), Output.connection(linked("connected")), null, false, "en_US").state,
+                "connected");
+    }
+    function test_detail_rows() {
+        compare(Output.detailRows(null, null, "en_US"), []);
+        compare(Output.detailRows({ok: false}, null, "en_US"), []);
+        const battery = {percent: 65, status: "Charging", cable: true, voltage_mv: 4123};
+        compare(Output.detailRows(linked("connected", null, battery), {percent: 65, state: "Charging"}, "en_US"),
+                [["USB dongle", "Detected"], ["2.4 GHz link", "Connected"],
+                 ["Charging cable", "Connected"], ["Battery voltage", "4.12 V"]]);
+        // A discharging battery, which the card's line leaves out, is named here.
+        compare(Output.detailRows(linked("connected", {state: "disconnected"}), {percent: 65, state: "Discharging"}, "es_CL"),
+                [["Dongle USB", "Detectado"], ["Enlace 2,4 GHz", "Conectado"], ["Bluetooth", "No conectado"],
+                 ["Carga", "Con batería"]]);
+        compare(Output.detailRows(linked("connected"), {percent: 65, state: "Discharging"}, "en_US").slice(-1),
+                [["Charge", "On battery"]]);
+        compare(Output.detailRows({ok: true, usb: {adapter: "missing"}, bluetooth: {state: "connected"}},
+                                  {percent: 65, state: "FullyCharged"}, "en_US"),
+                [["USB dongle", "Not detected"], ["Bluetooth", "Connected"]]);
+    }
+    function test_tooltip_is_one_line() {
+        const usb = Output.connection(linked("connected"));
+        compare(Output.toolTip(usb, {percent: 80, state: "Discharging"}, "en_US"), "Connected · USB dongle · 80% Battery");
+        compare(Output.toolTip(usb, {percent: 80, state: "Discharging"}, "es_CL"),
+                "Conectado · Dongle USB · 80" + nbsp + "% de batería");
+        compare(Output.toolTip(usb, {percent: 80, state: "Charging"}, "es_CL"),
+                "Conectado · Dongle USB · 80" + nbsp + "% de batería · Cargando");
+        compare(Output.toolTip({state: "connected", transport: "both"}, {percent: 8, state: "Discharging"}, "en_US"),
+                "Connected · USB dongle and Bluetooth · 8% Battery · Low battery");
+        compare(Output.toolTip(usb, null, "en_US"), "Connected · USB dongle");
+        compare(Output.toolTip({state: "disconnected"}, null, "es_CL"), "Desconectado");
+        compare(Output.toolTip({state: "unknown"}, {percent: 40, state: "Charging"}, "en_US"),
+                "Link not confirmed · 40% Battery");
+        compare(Output.toolTip({state: "no-adapter"}, null, "en_US"), "USB dongle not detected");
+        compare(Output.toolTip({state: "unavailable"}, null, "es_CL"), "Estado no disponible");
+        compare(Output.toolTip({state: "checking"}, null, "en_US"), "Checking…");
+        verify(!Output.toolTip(usb, {percent: 80, state: "Charging"}, "en_US").includes("\n"));
+    }
+    function test_settings_feedback_words() {
+        compare(Output.settingName("dnd", "en_US"), "the Do not disturb setting");
+        compare(Output.settingName("dnd", "es_CL"), "el ajuste No molestar");
+        compare(Output.settingName("gaming", "en_US"), "Bluetooth gaming mode");
+        compare(Output.settingName("gaming", "es_CL"), "el modo gaming Bluetooth");
+        compare(Output.settingName("devices", "en_US"), "the list of Bluetooth devices");
+        compare(Output.settingName("devices", "es_CL"), "la lista de dispositivos Bluetooth");
+        compare(Output.settingName("preset", "en_US"), "");
+        // A failed read names a reason only when the user can act on it.
+        for (const code of ["driver-required", "permission-denied", "helper-missing", "bluetooth-runtime-unavailable",
+                            "route-failed", "missing-adapter", "busy", "bluetooth-unsupported"]) {
+            verify(Output.actionableError(code), code);
+            compare(Output.settingsFailure("", code, "Do this.", "en_US"), "Couldn't read the headset. Do this.");
+        }
+        for (const code of ["timeout", "invalid-response", "bluetooth-unavailable", "unconfirmed", "rejected", ""]) {
+            verify(!Output.actionableError(code), code);
+            compare(Output.settingsFailure("", code, "The headset didn't answer.", "en_US"), "Couldn't read the headset.");
+        }
+        compare(Output.settingsFailure("", "timeout", "x", "es_CL"), "No se pudo leer el auricular.");
+        compare(Output.settingsFailure("", "missing-adapter", "Conecta el dongle USB.", "es_CL"),
+                "No se pudo leer el auricular. Conecta el dongle USB.");
+        // A failed change always says why.
+        const changes = {dnd: ["Couldn't change the Do not disturb setting.", "No se pudo cambiar el ajuste No molestar."],
+                         gaming: ["Couldn't change Bluetooth gaming mode.", "No se pudo cambiar el modo gaming Bluetooth."],
+                         devices: ["Couldn't switch devices.", "No se pudo cambiar de dispositivo."],
+                         other: ["Couldn't change the setting.", "No se pudo cambiar el ajuste."]};
+        for (const feature of Object.keys(changes)) {
+            compare(Output.settingsFailure(feature, "timeout", "Reason.", "en_US"), changes[feature][0] + " Reason.");
+            compare(Output.settingsFailure(feature, "timeout", "Motivo.", "es_CL"), changes[feature][1] + " Motivo.");
+        }
+        compare(Output.readFailure(["gaming"], "en_US"), "Couldn't read Bluetooth gaming mode.");
+        compare(Output.readFailure(["gaming"], "es_CL"), "No se pudo leer el modo gaming Bluetooth.");
+        compare(Output.readFailure(["dnd"], "en_US"), "Couldn't read the Do not disturb setting.");
+        compare(Output.readFailure(["devices"], "es_CL"), "No se pudo leer la lista de dispositivos Bluetooth.");
+        compare(Output.readFailure(["dnd", "gaming"], "en_US"), "Couldn't read some settings.");
+        compare(Output.readFailure(["dnd", "devices"], "es_CL"), "No se pudieron leer algunos ajustes.");
+    }
+    function test_bluetooth_devices_note() {
+        const devices = [{address: "010203040506", name: "Phone", active: true}];
+        compare(Output.devicesNote(null, true, null, "en_US"), "Reading…");
+        compare(Output.devicesNote(null, true, null, "es_CL"), "Leyendo…");
+        compare(Output.devicesNote(null, false, null, "en_US"), "");
+        compare(Output.devicesNote([], false, false, "en_US"), "No known devices.");
+        compare(Output.devicesNote([], false, true, "es_CL"), "Sin dispositivos conocidos.");
+        compare(Output.devicesNote(devices, false, true, "en_US"), "Turn off Bluetooth gaming mode to switch devices.");
+        compare(Output.devicesNote(devices, false, true, "es_CL"),
+                "Desactiva el modo gaming Bluetooth para cambiar de dispositivo.");
+        compare(Output.devicesNote(devices, false, null, "en_US"),
+                "Switching devices needs Bluetooth gaming mode to be read first.");
+        compare(Output.devicesNote(devices, false, null, "es_CL"),
+                "Para cambiar de dispositivo, primero hay que leer el modo gaming Bluetooth.");
+        compare(Output.devicesNote(devices, false, false, "en_US"), "");
     }
 }

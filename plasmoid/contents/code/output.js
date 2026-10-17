@@ -201,24 +201,20 @@ function slashed(value) {
     return value.state === "disconnected" || value.state === "no-adapter";
 }
 
-// Corner emblem for an unconfirmed or unreadable state, and for a low battery.
+// Emblem of the panel and tray glyph: an unconfirmed or unreadable state, or
+// a low battery.
 function emblem(value, battery) {
     if (value.state === "unknown" || value.state === "unavailable")
         return "emblem-question";
-    if (value.state === "connected" && battery && battery.percent <= 10
-            && !["Charging", "FullyCharged"].includes(battery.state))
+    if (value.state === "connected" && lowBattery(battery))
         return "emblem-warning";
     return "";
 }
 
-// System tray visibility. A confirmed or unconfirmed link and a running action
-// keep the icon shown; a disconnected headset, a missing adapter and an
-// unavailable helper move it to the tray's hidden items. A low battery asks for
-// attention.
-// The tray icon never hides itself: without a connection the popup holds the
-// controls needed to pair. The tray's own visibility setting still wins.
+// The tray icon never hides itself (never Passive): without a link the popup
+// is where the user pairs. A low battery asks for attention.
 function trayStatus(value, battery) {
-    return emblem(value, battery) === "emblem-warning" ? "attention" : "active";
+    return value.state === "connected" && lowBattery(battery) ? "attention" : "active";
 }
 
 // Pairing and power-off need the dongle. Only a confirmed missing adapter
@@ -250,10 +246,26 @@ function powerOutcome(data, locale) {
 }
 
 // The More actions entries, chosen as the system tray chooses them: visible,
-// normal-priority actions other than Plasma's own configure action.
+// normal-priority actions other than Plasma's own configure action, with a
+// separator kept only between two entries.
 function moreActions(actions, configure, normalPriority) {
-    return Array.from(actions || []).filter(action => action && action.visible && !action.isSeparator
+    const candidates = Array.from(actions || []).filter(action => action && action.visible
         && action.priority === normalPriority && action !== configure);
+    return candidates.reduce((entries, action, index) => {
+        if (!action.isSeparator) {
+            const previous = candidates[index - 1];
+            if (previous && previous.isSeparator && entries.length > 0)
+                entries.push(previous);
+            entries.push(action);
+        }
+        return entries;
+    }, []);
+}
+
+// The heading's icon buttons: high-priority actions, as the tray draws them.
+function primaryActions(actions, highPriority) {
+    return Array.from(actions || []).filter(action => action && !action.isSeparator
+        && action.priority === highPriority);
 }
 
 // Plasma action texts carry a keyboard accelerator marker; buttons, tooltips
@@ -356,9 +368,206 @@ function artwork(iconName) {
         return "file:///usr/share/icons/breeze/devices/64/audio-headset.svg";
     if (/^audio-speakers(-|$)/.test(iconName))
         return "file:///usr/share/icons/breeze/devices/64/audio-speakers.svg";
+    if (iconName === "drive-removable-media-usb")
+        return "file:///usr/share/icons/breeze/devices/64/drive-removable-media-usb.svg";
     return iconName;
 }
 
 function powerOffCommand(locale) {
     return "barracuda-power --off --yes --language " + (String(locale).toLowerCase().startsWith("es") ? "es" : "en");
+}
+
+// A percentage as each language writes it: "80%" in English, "80 %" with a
+// no-break space in Spanish, as KDE's Spanish catalogue does.
+function percentText(value, locale) {
+    return /^es([_-]|$)/i.test(locale) ? value + " %" : value + "%";
+}
+
+// Ten percent or less and not on the charger.
+function lowBattery(value) {
+    return value !== null && value !== undefined && value.percent <= 10
+        && !["Charging", "FullyCharged"].includes(value.state);
+}
+
+// The charge words after the transport. A discharging battery adds nothing,
+// since the percentage and the bar already say it, unless it is low.
+function chargeNote(value, locale) {
+    if (!value)
+        return text("Battery unavailable", "Batería no disponible", locale);
+    if (value.state === "Charging")
+        return text("Charging", "Cargando", locale);
+    if (value.state === "FullyCharged")
+        return text("Fully charged", "Carga completa", locale);
+    if (lowBattery(value))
+        return text("Low battery", "Batería baja", locale);
+    return "";
+}
+
+// The transport in the middle of a sentence.
+function transportPhrase(transport, locale) {
+    switch (transport) {
+    case "usb":
+        return text("USB dongle", "dongle USB", locale);
+    case "both":
+        return text("USB dongle and Bluetooth", "dongle USB y Bluetooth", locale);
+    default:
+        return transportText(transport, locale);
+    }
+}
+
+// The headset card's words for a confirmed link: the state (or the command
+// running on the headset), the percentage beside it, the line under the
+// battery bar and one sentence for screen readers.
+function hero(value, battery, turningOff, locale) {
+    const note = chargeNote(battery, locale);
+    const headline = turningOff ? text("Turning off…", "Apagando…", locale) : text("Connected", "Conectado", locale);
+    const spoken = [headline];
+    if (battery)
+        spoken.push(text("%1 battery", "%1 de batería", locale).replace("%1", percentText(battery.percent, locale)));
+    spoken.push(transportPhrase(value.transport, locale));
+    if (note)
+        spoken.push(note.toLowerCase());
+    return {
+        headline: headline,
+        percent: battery ? percentText(battery.percent, locale) : "",
+        line: transportText(value.transport, locale) + (note ? " · " + note : ""),
+        accessible: spoken.join(", ")
+    };
+}
+
+// Transport glyphs drawn beside the card's artwork, bottom first: the USB
+// dongle, then Bluetooth above it when both links are confirmed.
+function transportEmblems(value) {
+    if (value.state !== "connected")
+        return [];
+    if (value.transport === "both")
+        return ["drive-removable-media-usb-symbolic", "network-bluetooth-symbolic"];
+    return [value.transport === "bluetooth" ? "network-bluetooth-symbolic" : "drive-removable-media-usb-symbolic"];
+}
+
+// The whole-view message for every state without a confirmed link, and for
+// pairing, which replaces the link. Each state has its own words and its own
+// artwork treatment: which artwork, dimmed or not, which state emblem, and
+// whether the view waits.
+function placeholder(status, value, battery, pairing, locale) {
+    const headset = "audio-headset";
+    if (pairing)
+        return {state: "pairing", artwork: headset, dimmed: false, emblem: "", busy: true,
+                title: text("Pairing…", "Emparejando…", locale),
+                explanation: text("Keep the headset in pairing mode. This can take up to a minute.",
+                                  "Mantén el auricular en modo de emparejamiento. Puede tardar hasta un minuto.", locale)};
+    switch (value.state) {
+    case "connected":
+        return {state: "connected", artwork: headset, dimmed: false, emblem: "", busy: false, title: "", explanation: ""};
+    case "disconnected":
+        return {state: "disconnected", artwork: headset, dimmed: true, emblem: "", busy: false,
+                title: text("Disconnected", "Desconectado", locale),
+                explanation: adapterMissing(status)
+                    ? text("Turn on the headset or plug in the USB dongle.",
+                           "Enciende el auricular o conecta el dongle USB.", locale)
+                    : text("Turn on the headset.", "Enciende el auricular.", locale)};
+    case "unknown": {
+        let explanation;
+        if (status.usb.adapter === "multiple")
+            explanation = text("More than one Barracuda USB dongle is plugged in. Leave only one.",
+                               "Hay más de un dongle USB Barracuda conectado. Deja solo uno.", locale);
+        else if (status.usb.driver === false)
+            explanation = text("Install or update the Barracuda driver.",
+                               "Instala o actualiza el driver del Barracuda.", locale);
+        else
+            explanation = text("The headset may still be on.", "El auricular puede seguir encendido.", locale);
+        if (battery)
+            explanation += " " + text("Last battery reading: %1.", "Última lectura de batería: %1.", locale)
+                .replace("%1", percentText(battery.percent, locale));
+        return {state: "unknown", artwork: headset, dimmed: false, emblem: "emblem-question", busy: false,
+                title: text("Link not confirmed", "Conexión no confirmada", locale), explanation: explanation};
+    }
+    case "no-adapter":
+        // The missing object is the dongle, so the dongle is what is shown.
+        return {state: "no-adapter", artwork: "drive-removable-media-usb", dimmed: true, emblem: "", busy: false,
+                title: text("USB dongle not detected", "Dongle USB no detectado", locale),
+                explanation: text("Plug in the dongle, or use the headset over Bluetooth.",
+                                  "Conecta el dongle o usa el auricular por Bluetooth.", locale)};
+    case "unavailable":
+        // What the user does, not which helper failed.
+        return {state: "unavailable", artwork: headset, dimmed: false, emblem: "emblem-warning", busy: false,
+                title: text("Status unavailable", "Estado no disponible", locale),
+                explanation: text("Install or update the barracuda-pair package.",
+                                  "Instala o actualiza el paquete barracuda-pair.", locale)};
+    default:
+        return {state: "checking", artwork: headset, dimmed: true, emblem: "", busy: true,
+                title: text("Checking…", "Comprobando…", locale), explanation: ""};
+    }
+}
+
+// Key/value rows of the card's details: the connection rows, then the charge
+// state when the card's line leaves it out.
+function detailRows(status, battery, locale) {
+    return connectionDetails(status, locale).map(row => [row[0], row[1]])
+        .concat(battery && battery.state === "Discharging"
+            ? [[text("Charge", "Carga", locale), text("On battery", "Con batería", locale)]] : []);
+}
+
+// The tooltip's sub text: one line of facts joined with " · ", as the
+// Bluetooth applet writes it.
+function toolTip(value, battery, locale) {
+    const parts = [connectionText(value, locale, false)];
+    if (value.state === "connected")
+        parts.push(transportText(value.transport, locale));
+    if (battery)
+        parts.push(text("%1 Battery", "%1 de batería", locale).replace("%1", percentText(battery.percent, locale)));
+    const note = value.state === "connected" && battery ? chargeNote(battery, locale) : "";
+    if (note)
+        parts.push(note);
+    return parts.join(" · ");
+}
+
+// A popup setting in the middle of a sentence.
+function settingName(feature, locale) {
+    return ({dnd: text("the Do not disturb setting", "el ajuste No molestar", locale),
+             gaming: text("Bluetooth gaming mode", "el modo gaming Bluetooth", locale),
+             devices: text("the list of Bluetooth devices", "la lista de dispositivos Bluetooth", locale)})[feature] || "";
+}
+
+// Error codes after which the user has something to do; the others (a
+// headset that did not answer, an unexpected reply) only need a retry.
+function actionableError(code) {
+    return ["driver-required", "permission-denied", "helper-missing", "bluetooth-runtime-unavailable",
+            "route-failed", "missing-adapter", "busy", "bluetooth-unsupported"].includes(code);
+}
+
+// The popup's feedback for a failed settings request: "feature" is the
+// setting a change was for, or empty for the read of every setting. A read
+// adds the reason only when the user can act on it; a change always does.
+function settingsFailure(feature, code, reason, locale) {
+    if (feature === "")
+        return text("Couldn't read the headset.", "No se pudo leer el auricular.", locale)
+            + (actionableError(code) ? " " + reason : "");
+    const change = {dnd: text("Couldn't change the Do not disturb setting.", "No se pudo cambiar el ajuste No molestar.", locale),
+                    gaming: text("Couldn't change Bluetooth gaming mode.", "No se pudo cambiar el modo gaming Bluetooth.", locale),
+                    devices: text("Couldn't switch devices.", "No se pudo cambiar de dispositivo.", locale)}[feature]
+        || text("Couldn't change the setting.", "No se pudo cambiar el ajuste.", locale);
+    return change + " " + reason;
+}
+
+// The settings one reading could not return.
+function readFailure(features, locale) {
+    if (features.length !== 1)
+        return text("Couldn't read some settings.", "No se pudieron leer algunos ajustes.", locale);
+    return text("Couldn't read %1.", "No se pudo leer %1.", locale).replace("%1", settingName(features[0], locale));
+}
+
+// The one line under the Bluetooth Devices heading, when there is one.
+function devicesNote(devices, reading, gaming, locale) {
+    if (devices === null)
+        return reading ? text("Reading…", "Leyendo…", locale) : "";
+    if (devices.length === 0)
+        return text("No known devices.", "Sin dispositivos conocidos.", locale);
+    if (gaming === true)
+        return text("Turn off Bluetooth gaming mode to switch devices.",
+                    "Desactiva el modo gaming Bluetooth para cambiar de dispositivo.", locale);
+    if (gaming !== false)
+        return text("Switching devices needs Bluetooth gaming mode to be read first.",
+                    "Para cambiar de dispositivo, primero hay que leer el modo gaming Bluetooth.", locale);
+    return "";
 }
