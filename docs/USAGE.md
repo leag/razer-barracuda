@@ -240,7 +240,10 @@ sends the profile first, then the edited bands, then idle shutdown, and stops at
 the first failure. Plasma closes the page as soon as **OK** is pressed or
 another category opens, so the changes are sent by a background process that
 finishes on its own. When a send fails, the page says the changes were not
-applied and keeps your choices for another **Apply**. A setting the reading
+applied and keeps your choices for another **Apply**. When that **Apply** sent
+more than one change, an earlier one may already have been applied, so the page
+no longer knows what the headset stores: it shows **Settings not read**, and
+**Try Again** reads the headset before the next **Apply**. A setting the reading
 could not return is shown as a disabled selector saying **Unknown**, and the
 message at the top of the page names it, with **Try Again**. Preset names follow
 the desktop language (English or Spanish). Session buffer and sample-rate tuning
