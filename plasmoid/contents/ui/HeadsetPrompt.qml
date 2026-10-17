@@ -37,6 +37,9 @@ QtObject {
     readonly property Component component: Component {
         Kirigami.PromptDialog {
             id: dialog
+            // Over the popup, as ForgetDeviceDialog is given its applet, never
+            // over another window's overlay.
+            parent: prompt.popup
             title: prompt.title
             subtitle: prompt.subtitle
             showCloseButton: false

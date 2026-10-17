@@ -665,7 +665,8 @@ Item {
             const cancelButton = prompt.customFooterButton(cancel)
             tryVerify(() => cancelButton.activeFocus)
             verify(cancelButton.visualFocus)
-            // Inside the popup, with a grid unit of it on each side.
+            // Over the popup, with a grid unit of it on each side.
+            compare(prompt.parent, view)
             verify(prompt.width <= view.width - Kirigami.Units.gridUnit * 2 + 0.5)
             // One question at a time.
             view.confirmPairing()
