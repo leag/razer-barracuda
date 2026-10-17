@@ -1031,8 +1031,9 @@ Item {
             compare(rows().length, 0)
         }
         function test_feedback_slot() {
-            // A failed pairing: an error with Try Again under the placeholder,
-            // which asks again.
+            // A failed pairing: an error under the placeholder. Under
+            // Disconnected it has no Try Again, since the placeholder's Pair
+            // Headset… just above it opens the same confirmation.
             host.status = linked("disconnected")
             host.pairingError = "Couldn't pair."
             let message = feedback()
@@ -1041,6 +1042,23 @@ Item {
             compare(message.text, "Couldn't pair.")
             verify(message.showCloseButton)
             tryVerify(() => message.mapToItem(view, 0, 0).y > placeholder().mapToItem(view, 0, 0).y)
+            for (const locale of ["en_US", "es_CL"]) {
+                host.localeName = locale
+                for (const target of [view, trayView]) {
+                    compare(feedback(target).actions.length, 0)
+                    const button = findChild(placeholder(target), "placeholderAction")
+                    verify(button.visible)
+                    verify(button.enabled)
+                    compare(button.text, locale === "en_US" ? "Pair Headset…" : "Emparejar auricular…")
+                }
+            }
+            host.localeName = "en_US"
+            // Under any other placeholder, and under the headset card, the
+            // error offers Try Again, which asks again.
+            host.status = linked("unknown")
+            message = feedback()
+            compare(message.type, Kirigami.MessageType.Error)
+            verify(!findChild(placeholder(), "placeholderAction").visible)
             compare(message.actions.length, 1)
             const retry = message.actions[0]
             compare(retry.text, "Try Again")
@@ -1050,13 +1068,24 @@ Item {
             compare(openedPrompt().title, "Pair Headset?")
             closePrompt()
             host.localeName = "es_CL"
+            compare(feedback().actions.length, 1)
             compare(feedback().actions[0].text, "Reintentar")
             host.localeName = "en_US"
+            host.status = {ok: false}
+            compare(feedback().actions.length, 1)
+            host.status = linked("connected")
+            compare(feedback().actions.length, 1)
             // Try Again waits for the dongle like the command.
-            host.status = {ok: true, usb: {adapter: "missing"}, bluetooth: {state: "disconnected"}}
+            host.status = noDongle
+            compare(feedback().actions.length, 1)
             verify(!feedback().actions[0].enabled)
             host.status = linked("disconnected")
             host.pairingError = ""
+            // A failed power-off keeps its Try Again under Disconnected.
+            host.powerError = "Couldn't turn off the headset."
+            compare(feedback().actions.length, 1)
+            compare(feedback().actions[0].text, "Try Again")
+            host.powerError = ""
             // A successful pairing says what to do next, with nothing to retry.
             host.pairingResult = "Paired."
             compare(feedback().type, Kirigami.MessageType.Positive)

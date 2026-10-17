@@ -103,6 +103,10 @@ PlasmaExtras.Representation {
     // placeholder also offers as its next step, as the Bluetooth applet
     // offers Pair Device… under No devices paired.
     readonly property QtObject pairAction: Output.primaryActions(actions, PlasmaCore.Action.HighPriority)[0] || null
+    // Only Disconnected has a next step the widget can take; the other
+    // states name what the user does.
+    readonly property bool placeholderOffersPairing: showPlaceholder && placeholder.state === "disconnected"
+        && pairAction !== null
 
     // --- settings, from the last reading taken with a confirmed link -------
     readonly property bool settingsBusy: settings !== null && settings.busy === true
@@ -288,7 +292,11 @@ PlasmaExtras.Representation {
                 if (!visible && parent && parent.visible && view.noticeShown)
                     view.dismissedNotice = view.notice.text;
             }
-            actions: view.notice.retry.length > 0 ? [retryAction] : []
+            // A failed pairing under the Disconnected placeholder needs no
+            // Try Again: the placeholder's Pair Headset… just above it opens
+            // the same confirmation.
+            actions: view.notice.retry.length > 0
+                && !(view.notice.retry === "pair" && view.placeholderOffersPairing) ? [retryAction] : []
             Kirigami.Action {
                 id: retryAction
                 objectName: "retry"
@@ -517,10 +525,7 @@ PlasmaExtras.Representation {
                         text: view.placeholder.title
                         explanation: view.placeholder.explanation
                         busy: view.placeholder.busy
-                        // Only Disconnected has a next step the widget can
-                        // take; the other states name what the user does.
-                        helpfulAction: view.placeholder.state === "disconnected" && view.pairAction !== null
-                            ? placeholderPairAction : null
+                        helpfulAction: view.placeholderOffersPairing ? placeholderPairAction : null
                         Component.onCompleted: view.placeholderButton = actionButton
                         Keys.onUpPressed: event => view.stepFocus(actionButton, -1, event)
                     }

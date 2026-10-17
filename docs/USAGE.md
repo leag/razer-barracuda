@@ -152,7 +152,9 @@ followed by connection and cleanup. Once started, let the operation finish;
 closing the popup does not cancel it. The widget prevents a second launch from
 the same instance while busy. Success asks you to power-cycle the headset; a
 failure says what to check and offers **Try Again**, and the CLI's output goes
-to the journal. Closing the popup dismisses a pending confirmation and previous
+to the journal. Under **Disconnected**, the message's **Pair Headset…** just
+above the failure is the way to try again, so the failure has no button of its
+own. Closing the popup dismisses a pending confirmation and previous
 result messages, while an active pairing operation continues. Pairing is
 specific to Barracuda X (2022), not a generic Bluetooth pairing interface.
 
