@@ -2,14 +2,15 @@ import QtQuick
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PC3
+import org.kde.plasma.extras as PlasmaExtras
 import "../code/output.js" as Output
 
 // The full view: a heading that stays put, then the headset summary in a
-// scrolling body. In a panel popup or on the desktop the widget draws the
-// heading the system tray draws for it there: the widget's name, More actions
-// (the applet's actions, which lead out to KDE's audio settings) and a
-// configure button for the widget's own configuration window (the equalizer
-// and power saving).
+// scrolling body. The system tray draws its own heading for the widget; in a
+// panel popup or on the desktop the widget draws one like it: the widget's
+// name, More actions (a menu of the applet's actions, which lead out to KDE's
+// audio settings) and a configure button for the widget's own configuration
+// window (the equalizer and power saving).
 ColumnLayout {
     id: panel
     property var status: null
@@ -60,72 +61,75 @@ ColumnLayout {
     Layout.maximumHeight: showHeader ? panel.Layout.preferredHeight : Infinity
     spacing: Kirigami.Units.smallSpacing
 
-    RowLayout {
+    // The theme's heading background and separator, as the system tray draws
+    // under its own heading.
+    PlasmaExtras.PlasmoidHeading {
         id: heading
         objectName: "summaryHeader"
         visible: panel.showHeader
-        Layout.fillWidth: true
-        spacing: Kirigami.Units.smallSpacing
-        Kirigami.Heading {
-            objectName: "popupTitle"
-            Layout.fillWidth: true
-            leftPadding: Kirigami.Units.largeSpacing
-            level: 1
-            text: panel.title.length > 0 ? panel.title : panel.label("Barracuda Headset", "Auricular Barracuda")
-            textFormat: Text.PlainText
-            maximumLineCount: 1
-            elide: Text.ElideRight
-        }
-        PC3.ToolButton {
-            id: moreActionsButton
-            objectName: "moreActionsButton"
-            visible: panel.menuActions.length > 0
-            icon.name: "application-menu"
-            display: PC3.AbstractButton.IconOnly
-            text: panel.label("More actions", "Más acciones")
-            checkable: true
-            Accessible.role: Accessible.ButtonMenu
-            Accessible.name: text
-            PC3.ToolTip.text: text
-            PC3.ToolTip.visible: hovered && !moreActionsMenu.visible
-            onToggled: {
-                if (checked)
-                    moreActionsMenu.popup(moreActionsButton, 0, moreActionsButton.height);
-                else
-                    moreActionsMenu.close();
+        contentItem: RowLayout {
+            spacing: Kirigami.Units.smallSpacing
+            Kirigami.Heading {
+                objectName: "popupTitle"
+                Layout.fillWidth: true
+                leftPadding: Kirigami.Units.largeSpacing
+                level: 1
+                text: panel.title.length > 0 ? panel.title : panel.label("Barracuda Headset", "Auricular Barracuda")
+                textFormat: Text.PlainText
+                maximumLineCount: 1
+                elide: Text.ElideRight
             }
-            PC3.Menu {
-                id: moreActionsMenu
-                objectName: "moreActionsMenu"
-                // A press on the button itself closes the menu through the
-                // button, not twice.
-                closePolicy: PC3.Popup.CloseOnEscape | PC3.Popup.CloseOnPressOutsideParent
-                onOpened: moreActionsButton.checked = true
-                onClosed: moreActionsButton.checked = false
-                Instantiator {
-                    model: panel.menuActions
-                    delegate: PC3.MenuItem {
-                        required property var modelData
-                        text: Output.actionText(modelData.text)
-                        icon.name: modelData.icon.name
-                        enabled: modelData.enabled
-                        onTriggered: modelData.trigger()
+            PC3.ToolButton {
+                id: moreActionsButton
+                objectName: "moreActionsButton"
+                visible: panel.menuActions.length > 0
+                icon.name: "application-menu"
+                display: PC3.AbstractButton.IconOnly
+                text: panel.label("More actions", "Más acciones")
+                checkable: true
+                Accessible.role: Accessible.ButtonMenu
+                Accessible.name: text
+                PC3.ToolTip.text: text
+                PC3.ToolTip.visible: hovered && !moreActionsMenu.visible
+                onToggled: {
+                    if (checked)
+                        moreActionsMenu.popup(moreActionsButton, 0, moreActionsButton.height);
+                    else
+                        moreActionsMenu.close();
+                }
+                PC3.Menu {
+                    id: moreActionsMenu
+                    objectName: "moreActionsMenu"
+                    // A press on the button itself closes the menu through the
+                    // button, not twice.
+                    closePolicy: PC3.Popup.CloseOnEscape | PC3.Popup.CloseOnPressOutsideParent
+                    onOpened: moreActionsButton.checked = true
+                    onClosed: moreActionsButton.checked = false
+                    Instantiator {
+                        model: panel.menuActions
+                        delegate: PC3.MenuItem {
+                            required property var modelData
+                            text: Output.actionText(modelData.text)
+                            icon.name: modelData.icon.name
+                            enabled: modelData.enabled
+                            onTriggered: modelData.trigger()
+                        }
+                        onObjectAdded: (index, object) => moreActionsMenu.insertItem(index, object)
+                        onObjectRemoved: (index, object) => moreActionsMenu.removeItem(object)
                     }
-                    onObjectAdded: (index, object) => moreActionsMenu.insertItem(index, object)
-                    onObjectRemoved: (index, object) => moreActionsMenu.removeItem(object)
                 }
             }
-        }
-        PC3.ToolButton {
-            objectName: "configureButton"
-            icon.name: "configure"
-            display: PC3.AbstractButton.IconOnly
-            text: panel.configureText.length > 0 ? Output.actionText(panel.configureText)
-                : panel.label("Configure Barracuda Headset…", "Configurar Auricular Barracuda…")
-            Accessible.name: text
-            PC3.ToolTip.text: text
-            PC3.ToolTip.visible: hovered
-            onClicked: panel.headsetSettingsRequested()
+            PC3.ToolButton {
+                objectName: "configureButton"
+                icon.name: "configure"
+                display: PC3.AbstractButton.IconOnly
+                text: panel.configureText.length > 0 ? Output.actionText(panel.configureText)
+                    : panel.label("Configure Barracuda Headset…", "Configurar Auricular Barracuda…")
+                Accessible.name: text
+                PC3.ToolTip.text: text
+                PC3.ToolTip.visible: hovered
+                onClicked: panel.headsetSettingsRequested()
+            }
         }
     }
 

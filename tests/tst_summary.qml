@@ -218,6 +218,13 @@ Item {
             const heading = findChild(panel, "summaryHeader")
             const overview = findChild(panel, "connectionOverview")
             verify(heading.visible)
+            // Plasma's heading, with the theme's background and separator,
+            // holds the title, More actions and the gear.
+            compare(heading.background.imagePath, "widgets/plasmoidheading")
+            compare(String(heading.background.prefix), "header")
+            for (const name of ["popupTitle", "moreActionsButton", "configureButton"])
+                verify(findChild(heading, name) !== null)
+            verify(heading.width >= overview.width)
             // The heading stays outside the scrolling body and counts in the
             // popup's size, even while the popup is hidden.
             verify(heading.mapToItem(panel, 0, 0).y < overview.mapToItem(panel, 0, 0).y)
