@@ -484,7 +484,10 @@ PlasmaExtras.Representation {
 
             delegate: PlasmaExtras.ExpandableListItem {
                 id: device
-                required property int index
+                // ExpandableListItem already has an index property, which its
+                // hover and tap handlers write to the view's currentIndex.
+                // Redeclaring it would leave that one at 0 on every row.
+                required index
                 required property var modelData
                 readonly property bool active: modelData.active === true
                 readonly property bool switching: view.pendingFeature === "devices"

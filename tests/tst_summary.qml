@@ -937,6 +937,32 @@ Item {
             compare(note.text, "Unknown")
             compare(findChild(row, "modeUnknownLabel").text, "Bluetooth gaming mode")
         }
+        function test_hover_marks_each_device_row() {
+            settingSpy.clear()
+            host.status = linked("connected")
+            const idle = [{address: "0a0b0c0d0e01", name: "atreides", active: false},
+                          {address: "0a0b0c0d0e02", name: "marduk", active: false},
+                          {address: "0a0b0c0d0e03", name: "caladan", active: false}]
+            read({dnd: false, gaming: false, devices: idle})
+            tryCompare(rows(trayView), "length", 3)
+            const list = findChild(trayView, "deviceList")
+            const devices = rows(trayView)
+            // Each row the pointer is over becomes current, not always the first.
+            for (let i = 0; i < devices.length; ++i) {
+                const point = devices[i].mapToItem(trayView, devices[i].width / 3, devices[i].height / 2)
+                mouseMove(trayView, point.x, point.y)
+                mouseMove(trayView, point.x + 4, point.y)
+                tryCompare(list, "currentIndex", i)
+                compare(devices[i].index, i)
+            }
+            // The second row's Connect asks for that device (the spy watches the panel view).
+            tryCompare(rows(), "length", 3)
+            rows()[1].defaultActionButtonAction.trigger()
+            compare(Array.from(settingSpy.signalArguments[0]), ["devices", "0a0b0c0d0e02"])
+            mouseMove(trayView, 1, 1)
+            read({dnd: false, gaming: false, devices: []})
+            host.status = null
+        }
         function test_bluetooth_devices() {
             host.status = linked("connected")
             read({dnd: false, gaming: false, devices: [phone, laptop]})
