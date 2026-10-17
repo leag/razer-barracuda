@@ -25,6 +25,8 @@ Plasma5Support.DataSource {
     // The feature of the last set request ("dnd", "gaming", "devices", …), or
     // empty for a status read, so its feedback can appear beside its control.
     property string requestFeature: ""
+    // Requests in the last chain; 1 for a single request.
+    property int chainLength: 1
     property string localeName: Qt.locale().name
     signal loaded(var result)
     function label(en, es) { return Output.text(en, es, localeName); }
@@ -55,7 +57,9 @@ Plasma5Support.DataSource {
     // Failures after which the headset certainly kept its previous state: the
     // last reading stays, so controls keep showing confirmed values. Any other
     // failure of a change (a timeout, an unconfirmed change) may have changed
-    // the headset, so nothing stays known.
+    // the headset, so nothing stays known. Neither does a failed chain of
+    // several changes: its reply is the failing step's, and the steps before
+    // it changed the headset.
     readonly property var unchangedCodes: ["rejected", "busy", "gaming-active", "unknown-device", "gaming-not-applied",
                                            "missing-adapter", "unknown-link", "permission-denied", "driver-required"]
     function request(value) {
@@ -65,6 +69,7 @@ Plasma5Support.DataSource {
         error = "";
         errorCode = "";
         requestFeature = value.op === "set" ? String(value.feature) : "";
+        chainLength = 1;
         requestedKey = targetKey;
         connectSource(Output.headsetCommand(value, target));
     }
@@ -78,6 +83,7 @@ Plasma5Support.DataSource {
         error = "";
         errorCode = "";
         requestFeature = String(values[values.length - 1].feature);
+        chainLength = values.length;
         requestedKey = targetKey;
         connectSource(Output.headsetChainCommand(values, target));
     }
@@ -101,7 +107,7 @@ Plasma5Support.DataSource {
         }
         if (!result.ok) {
             errorCode = String(result.error || "");
-            if (requestFeature === "" || !unchangedCodes.includes(errorCode))
+            if (requestFeature === "" || chainLength > 1 || !unchangedCodes.includes(errorCode))
                 response = null;
             error = errorLabel(errorCode);
             return;

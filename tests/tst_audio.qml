@@ -538,6 +538,7 @@ Item {
         }
         function test_native_error_clears_confirmed_state() {
             // A failed read leaves nothing known.
+            nativeBackend.chainLength = 1;
             nativeBackend.requestFeature = "";
             nativeBackend.response = {state: {preset: 7}};
             nativeBackend.newData("fake", {stdout: JSON.stringify({ok: false, error: "rejected"})});
@@ -658,6 +659,48 @@ Item {
             compare(nativeBackend.error, "");
             compare(nativeBackend.message, undefined);
             nativeBackend.response = null;
+        }
+        function test_failed_chain_leaves_nothing_known() {
+            const reading = {ok: true, transport: "usb", state: {preset: 8, bands: flat.slice(), standby: 15}, errors: {}};
+            const values = [{op: "set", feature: "preset", value: 255},
+                            {op: "set", feature: "bands", value: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]}];
+            // The reply is the failing step's; a step before it may already
+            // have changed the headset, even when the failure itself left the
+            // headset as it was.
+            for (const code of ["rejected", "busy"]) {
+                nativeBackend.response = reading;
+                nativeBackend.requestChain(values);
+                compare(nativeBackend.chainLength, 2);
+                nativeBackend.newData(nativeBackend.connectedSources[0],
+                                      {stdout: JSON.stringify({ok: false, error: code}) + "\n"});
+                verify(!nativeBackend.busy);
+                compare(nativeBackend.response, null, code);
+                compare(nativeBackend.errorCode, code);
+                compare(nativeBackend.error, nativeBackend.errorLabel(code));
+            }
+            // A chain of one change is a single request: a change the headset
+            // certainly did not apply keeps the reading.
+            nativeBackend.response = reading;
+            nativeBackend.requestChain(values.slice(0, 1));
+            compare(nativeBackend.chainLength, 1);
+            nativeBackend.newData(nativeBackend.connectedSources[0],
+                                  {stdout: JSON.stringify({ok: false, error: "rejected"}) + "\n"});
+            compare(nativeBackend.response, reading);
+            // A single request counts as one again after a chain.
+            nativeBackend.requestChain(values);
+            nativeBackend.newData(nativeBackend.connectedSources[0],
+                                  {stdout: JSON.stringify({ok: true, sent: "bands", transport: "usb",
+                                                           state: {preset: 255, bands: values[1].value}, errors: {}})});
+            nativeBackend.request({op: "set", feature: "dnd", value: true});
+            compare(nativeBackend.chainLength, 1);
+            const kept = nativeBackend.response;
+            nativeBackend.newData(nativeBackend.connectedSources[0],
+                                  {stdout: JSON.stringify({ok: false, error: "rejected"})});
+            compare(nativeBackend.response, kept);
+            nativeBackend.response = null;
+            nativeBackend.error = "";
+            nativeBackend.errorCode = "";
+            nativeBackend.requestFeature = "";
         }
         function test_transport_change_drops_old_reply() {
             nativeBackend.target = {transport: "usb"};
