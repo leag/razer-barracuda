@@ -21,7 +21,6 @@ PlasmoidItem {
     readonly property bool connected: connection.state === "connected"
     readonly property string statusText: Output.connectionText(connection, Qt.locale().name)
     readonly property var target: Output.headsetTarget(sink, linkStatus)
-    readonly property bool slashed: Output.slashed(connection)
     readonly property string emblem: Output.emblem(connection, battery)
     // Inside the system tray, which draws the heading and the applet actions.
     readonly property bool inTray: (Plasmoid.containmentDisplayHints
@@ -38,7 +37,6 @@ PlasmoidItem {
     }
     property bool powerBusy: false
     property string powerError: ""
-    property string powerResult: ""
     property bool pairingBusy: false
     property string pairingError: ""
     property string pairingResult: ""
@@ -65,7 +63,7 @@ PlasmoidItem {
             pairingError = "";
             pairingResult = "";
             powerError = "";
-            powerResult = "";
+            askedCommand = "";
         }
     }
     function label(english, spanish) {
@@ -74,23 +72,22 @@ PlasmoidItem {
     function openSettings() {
         KCMUtils.KCMLauncher.openSystemSettings("kcm_pulseaudio")
     }
-    function openHeadsetSettings() {
-        Plasmoid.internalAction("configure").trigger();
-    }
+    // Pairing and power-off go through the USB dongle, one command at a time.
+    // Only a confirmed missing dongle or a running command disables them.
+    readonly property bool commandsEnabled: !pairingBusy && !powerBusy && !Output.adapterMissing(linkStatus)
+    // Called only after the user confirmed in the popup.
     function openPairing() {
-        if (pairingBusy || powerBusy || Output.adapterMissing(linkStatus))
+        if (!commandsEnabled)
             return;
         pairingError = "";
         pairingResult = "";
         pairingBusy = true;
         pairingLauncher.connectSource(Output.pairingCommand(Qt.locale().name));
     }
-
     function turnOffHeadset() {
-        if (pairingBusy || powerBusy || Output.adapterMissing(linkStatus))
+        if (!commandsEnabled)
             return;
         powerError = "";
-        powerResult = "";
         powerBusy = true;
         powerLauncher.connectSource(Output.powerOffCommand(Qt.locale().name));
     }
@@ -102,18 +99,20 @@ PlasmoidItem {
             disconnectSource(sourceName);
             root.powerBusy = false;
             linkMonitor.refresh();
+            // Success shows in the next status reading, not in a message; the
+            // popup gets a plain sentence and the cause goes to the journal.
             const outcome = Output.powerOutcome(data, Qt.locale().name);
-            if (outcome.ok)
-                root.powerResult = outcome.text;
-            else
+            if (!outcome.ok) {
+                console.warn(outcome.details);
                 root.powerError = outcome.text;
+            }
         }
     }
 
-    // Do Not Disturb, Bluetooth gaming mode and the Quick Connect devices,
-    // from one status read per showing. The popup changes them only on an
-    // explicit switch or Switch button; a transport change while it is shown
-    // reads them again.
+    // Do Not Disturb, Bluetooth gaming mode and the Bluetooth devices, from
+    // one status read per showing. The popup changes them only on an explicit
+    // switch or Connect; a transport change while it is shown reads them
+    // again.
     HeadsetController {
         id: settingsController
         target: root.target
@@ -124,6 +123,7 @@ PlasmoidItem {
             settingsController.request({op: "status"});
     }
     // "dnd" and "gaming" take a boolean; "devices" takes a known address.
+    // The controls stay at the confirmed value; the reply's reading moves them.
     function setSetting(feature, value) {
         if (connected && !settingsController.busy && !pairingBusy && !powerBusy)
             settingsController.request({op: "set", feature: feature, value: value});
@@ -158,11 +158,14 @@ PlasmoidItem {
             disconnectSource(sourceName);
             root.pairingBusy = false;
             linkMonitor.refresh();
+            // The popup gets a plain sentence; the cause goes to the journal.
             const outcome = Output.pairingOutcome(data, Qt.locale().name);
-            if (outcome.ok)
+            if (outcome.ok) {
                 root.pairingResult = outcome.text;
-            else
+            } else {
+                console.warn(outcome.details);
                 root.pairingError = outcome.text;
+            }
         }
     }
 
@@ -170,18 +173,72 @@ PlasmoidItem {
     // icon only names the widget. Plasma gives the configuration window its own
     // generic icon regardless of this value.
     Plasmoid.icon: "audio-headset"
-    Plasmoid.status: ({
-        active: PlasmaCore.Types.ActiveStatus,
-        passive: PlasmaCore.Types.PassiveStatus,
-        attention: PlasmaCore.Types.NeedsAttentionStatus
-    })[Output.trayStatus(connection, battery)]
-    // The widget's only action leads out to KDE's own audio settings. On
-    // Plasma 6.8 and later the system tray draws it in its More actions menu;
-    // earlier versions draw a single action as a button in the tray heading.
-    // The widget's own heading, in a panel or on the desktop, always builds the
-    // menu from this list, and Plasma copies it into the right-click menu.
-    // Every headset command lives in the popup.
+    // Always shown in the tray, so pairing stays reachable; a low battery asks
+    // for attention.
+    Plasmoid.status: Output.trayStatus(connection, battery) === "attention"
+        ? PlasmaCore.Types.NeedsAttentionStatus : PlasmaCore.Types.ActiveStatus
+    // The tray icon spins while a command runs on the headset.
+    Plasmoid.busy: pairingBusy || powerBusy
+        || (settingsController.busy && settingsController.requestFeature !== "")
+
+    // A command from the heading, the tray or the right-click menu is
+    // confirmed in the popup, so the popup opens first and the question
+    // appears once its view exists.
+    property string askedCommand: ""
+    function askInPopup(command) {
+        askedCommand = command;
+        if (!root.viewShown)
+            root.expanded = true;
+        Qt.callLater(showAskedCommand);
+    }
+    function showAskedCommand() {
+        const view = root.fullRepresentationItem;
+        if (askedCommand === "" || !view || !root.viewShown)
+            return;
+        const command = askedCommand;
+        askedCommand = "";
+        if (command === "pair")
+            view.confirmPairing();
+        else
+            view.confirmPowerOff();
+    }
+    onFullRepresentationItemChanged: Qt.callLater(showAskedCommand)
+
+    // The popup's commands, one home each, placed by priority as every system
+    // applet does. The tray draws the high-priority action as the '+' in its
+    // heading and the normal-priority ones in its More actions menu; the
+    // widget's own heading in a panel or on the desktop draws the same row
+    // with the same rules, and Plasma copies every action into the
+    // right-click menu.
     Plasmoid.contextualActions: [
+        PlasmaCore.Action {
+            id: pairAction
+            text: root.label("Pair Headset…", "Emparejar auricular…")
+            icon.name: "list-add-symbolic"
+            priority: PlasmaCore.Action.HighPriority
+            // Kept visible and greyed without the dongle. The handler checks
+            // again, so a menu drawn before the state changed starts nothing.
+            enabled: root.commandsEnabled
+            onTriggered: {
+                if (root.commandsEnabled)
+                    root.askInPopup("pair");
+            }
+        },
+        PlasmaCore.Action {
+            id: powerOffAction
+            text: root.label("Turn Off Headset…", "Apagar auricular…")
+            icon.name: "system-shutdown-symbolic"
+            priority: PlasmaCore.Action.NormalPriority
+            enabled: root.commandsEnabled
+            onTriggered: {
+                if (root.commandsEnabled)
+                    root.askInPopup("power-off");
+            }
+        },
+        PlasmaCore.Action {
+            isSeparator: true
+            priority: PlasmaCore.Action.NormalPriority
+        },
         PlasmaCore.Action {
             id: audioDevicesAction
             // KDE's own name for this action in its volume applet.
@@ -189,24 +246,13 @@ PlasmoidItem {
             icon.name: "audio-card-symbolic"
             priority: PlasmaCore.Action.NormalPriority
             onTriggered: root.openSettings()
-            // A single action is drawn as a bare button unless it asks to stay a
-            // menu. The property is new in Plasma 6.8; older versions skip it.
-            Component.onCompleted: {
-                if ("alwaysShowAsMenu" in audioDevicesAction)
-                    audioDevicesAction.alwaysShowAsMenu = true;
-            }
         }
     ]
-    // The More actions entries, as the system tray selects them.
-    readonly property var menuActions: Output.moreActions(Plasmoid.contextualActions,
-        Plasmoid.internalAction("configure"), PlasmaCore.Action.NormalPriority)
 
     // The widget names itself as Plasma does: the tray heading, the configure
     // action and the configuration window use the same metadata name.
     toolTipMainText: Plasmoid.title
-    toolTipSubText: statusText
-        + (battery ? "\n" + label("Battery: ", "Batería: ")
-            + Output.batteryText(battery, Qt.locale().name) : "")
+    toolTipSubText: Output.toolTip(connection, battery, Qt.locale().name)
     // Only the desktop forces the full view. Panels choose the compact icon by
     // size, and the system tray opens its popup only for applets without a
     // preferred representation.
@@ -235,10 +281,12 @@ PlasmoidItem {
                 width: root.inTray ? Math.min(parent.width, parent.height)
                     : Math.min(parent.width, parent.height, Kirigami.Units.iconSizes.smallMedium)
                 height: width
+                iconSize: width
                 symbolic: true
-                connected: root.connected
-                slashed: root.slashed
-                emblem: root.emblem
+                // Dimmed without a confirmed link; the emblem marks an
+                // unconfirmed or unreadable state and a low battery.
+                dimmed: !root.connected
+                emblems: root.emblem ? [root.emblem] : []
                 emblemSize: Math.min(Kirigami.Units.iconSizes.small, width / 2)
             }
         }
@@ -246,27 +294,23 @@ PlasmoidItem {
         Accessible.description: root.statusText
         onClicked: root.expanded = !root.expanded
     }
-    fullRepresentation: HeadsetPanel {
-        status: root.linkStatus
+    fullRepresentation: HeadsetView {
+        linkStatus: root.linkStatus
         activeView: root.viewShown
-        // The system tray draws the same heading itself.
-        showHeader: !root.inTray
+        inTray: root.inTray
         title: Plasmoid.title
-        configureText: Plasmoid.internalAction("configure") ? Plasmoid.internalAction("configure").text : ""
-        menuActions: root.menuActions
+        actions: Plasmoid.contextualActions
+        configureAction: Plasmoid.internalAction("configure")
         pairingBusy: root.pairingBusy
         pairingError: root.pairingError
         pairingResult: root.pairingResult
         powerBusy: root.powerBusy
         powerError: root.powerError
-        powerResult: root.powerResult
         battery: root.battery
         settings: settingsController
-        onHeadsetSettingsRequested: root.openHeadsetSettings()
-        onPairingRequested: root.openPairing()
-        onPowerOffRequested: root.turnOffHeadset()
-        onSettingChangeRequested: (feature, enabled) => root.setSetting(feature, enabled)
+        onPairingConfirmed: root.openPairing()
+        onPowerOffConfirmed: root.turnOffHeadset()
+        onSettingChangeRequested: (feature, value) => root.setSetting(feature, value)
         onSettingsRefreshRequested: root.readSettings()
-        onSourceSwitchRequested: address => root.setSetting("devices", address)
     }
 }

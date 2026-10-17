@@ -33,7 +33,7 @@ pkgname = hid-razer-barracuda-dkms
 
 pkgname = plasma6-applets-barracuda
 	pkgdesc = Plasma 6 widget showing the Barracuda X headset connection status
-	depends = plasma-workspace
+	depends = plasma-workspace>=6.7
 	depends = plasma-pa
 	depends = plasma5support
 	depends = breeze-icons

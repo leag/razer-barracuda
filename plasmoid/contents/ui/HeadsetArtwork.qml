@@ -1,98 +1,82 @@
 import QtQuick
-import QtQuick.Effects
 import org.kde.kirigami as Kirigami
 import "../code/output.js" as Output
 
-// KDE's headset artwork with the connection overlay: dimmed without a confirmed
-// link, a red slash when disconnected or without an adapter, and an optional
-// corner emblem for the remaining states. Panel and system tray icons use the
-// theme's symbolic glyph, recolored like the neighboring icons; the popup uses
-// the detailed artwork.
+// Product artwork with its state treatment. The popup uses Breeze's detailed
+// artwork: full opacity with a confirmed or possible link, half opacity when
+// the object is known to be absent. No colour is added: state is carried by
+// opacity, emblem and the words next to it. Panel and tray icons use the
+// theme's symbolic glyph instead.
+//
+// Two kinds of marks, each with one placement:
+//   "corner"  a state emblem (full colour: question, warning) over the
+//             bottom-right corner, as KDE draws every icon emblem;
+//   "beside"  transport glyphs (symbolic USB, Bluetooth) in a column right of
+//             the drawing, bottom-aligned with it, never over it: line glyphs
+//             drawn on detailed artwork turn into clutter.
 Item {
-    id: headset
+    id: artwork
     property bool symbolic: false
-    property bool connected: false
-    property bool slashed: false
-    property string emblem: ""
+    // A Breeze device icon name; detailed artwork is loaded for headsets and
+    // the USB dongle, the symbolic glyph otherwise.
+    property string iconName: "audio-headset"
+    property bool dimmed: false
+    property var emblems: []
     property real emblemSize: Kirigami.Units.iconSizes.small
-    // Breeze's camera-off proportions at 22 px: a 1 px stroke over about 70%
-    // of the diagonal, with the glyph cut away on both sides of it.
-    readonly property real stroke: Math.max(1, Math.min(width, height) / 22)
-    readonly property real strokeLength: Math.hypot(width, height) * 0.7
-    // The software scene graph has no shader effects; it keeps the plain glyph.
-    readonly property bool cutGap: slashed && GraphicsInfo.api !== GraphicsInfo.Software
+    property string emblemPlacement: "corner"
+    // The square the artwork is drawn in.
+    property real iconSize: Kirigami.Units.iconSizes.huge
+    // Where Breeze's 64 px audio-headset drawing lies inside its square
+    // (columns 7..58, rows 6..57), scaled to iconSize.
+    readonly property real drawingLeft: Math.round(iconSize * 7 / 64)
+    readonly property real drawingRight: Math.round(iconSize * 59 / 64)
+    readonly property real drawingBottom: Math.round(iconSize * 58 / 64)
+    readonly property bool beside: emblemPlacement === "beside" && emblems.length > 0
 
-    Item {
-        id: glyph
-        objectName: "headsetGlyph"
-        anchors.fill: parent
-        // While slashed, the glyph is drawn with the gap cut out of it.
-        layer.enabled: headset.cutGap
-        layer.effect: MultiEffect {
-            maskEnabled: true
-            maskInverted: true
-            maskSource: gapMask
-            maskThresholdMin: 0.5
-            maskSpreadAtMin: 1
-        }
-        Image {
-            id: picture
-            objectName: "headsetPicture"
-            anchors.fill: parent
-            // Not loaded at all for the symbolic glyph.
-            source: headset.symbolic ? "" : Output.artwork("audio-headset")
-            sourceSize.width: 64
-            sourceSize.height: 64
-            fillMode: Image.PreserveAspectFit
-            visible: !headset.symbolic && status === Image.Ready
-            opacity: headset.connected ? 1 : 0.5
-        }
-        Kirigami.Icon {
-            objectName: "headsetSymbol"
-            anchors.fill: parent
-            source: headset.symbolic ? "audio-headset-symbolic" : "audio-headset"
-            visible: headset.symbolic || picture.status !== Image.Ready
-            opacity: picture.opacity
-        }
-    }
-    Item {
-        id: gap
-        anchors.fill: parent
-        visible: headset.cutGap
-        Rectangle {
-            anchors.centerIn: parent
-            width: headset.strokeLength + headset.stroke * 2
-            height: headset.stroke * 3
-            rotation: 45
-            antialiasing: true
-            color: "black"
-        }
-    }
-    ShaderEffectSource {
-        id: gapMask
-        anchors.fill: parent
-        sourceItem: gap
-        // Only the mask texture is used; the gap itself is never drawn.
-        hideSource: true
-        visible: false
-    }
-    Rectangle {
-        objectName: "disconnectedSlash"
-        anchors.centerIn: parent
-        width: headset.strokeLength
-        height: headset.stroke
-        rotation: 45
-        antialiasing: true
-        color: Kirigami.Theme.negativeTextColor
-        visible: headset.slashed
-    }
+    implicitWidth: beside ? drawingRight + Math.round(Kirigami.Units.smallSpacing / 4) + emblemSize : iconSize
+    implicitHeight: iconSize
+
     Kirigami.Icon {
-        objectName: "connectionEmblem"
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        width: headset.emblemSize
-        height: width
-        source: headset.emblem
-        visible: headset.emblem !== ""
+        objectName: "artworkIcon"
+        width: artwork.iconSize
+        height: artwork.iconSize
+        source: artwork.symbolic ? artwork.iconName + "-symbolic" : Output.artwork(artwork.iconName)
+        // The theme's own icon if the detailed file is missing.
+        fallback: artwork.iconName
+        opacity: artwork.dimmed ? 0.5 : 1
+        Accessible.ignored: true
+        Behavior on opacity {
+            NumberAnimation { duration: Kirigami.Units.longDuration }
+        }
+    }
+    // State emblem over the corner.
+    Kirigami.Icon {
+        objectName: "artworkEmblem"
+        visible: artwork.emblemPlacement === "corner" && artwork.emblems.length > 0
+        x: artwork.iconSize - width
+        y: artwork.iconSize - height
+        width: artwork.emblemSize
+        height: artwork.emblemSize
+        source: visible ? artwork.emblems[0] : ""
+        Accessible.ignored: true
+    }
+    // Transport glyphs beside the drawing, the first one at the bottom.
+    Column {
+        objectName: "artworkTransport"
+        visible: artwork.beside
+        x: artwork.drawingRight + Math.round(Kirigami.Units.smallSpacing / 4)
+        y: artwork.drawingBottom - height
+        spacing: Kirigami.Units.smallSpacing / 2
+        Repeater {
+            model: artwork.beside ? Array.from(artwork.emblems).reverse() : []
+            Kirigami.Icon {
+                required property string modelData
+                objectName: "artworkGlyph"
+                width: artwork.emblemSize
+                height: artwork.emblemSize
+                source: modelData
+                Accessible.ignored: true
+            }
+        }
     }
 }

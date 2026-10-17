@@ -36,7 +36,7 @@ package_barracuda-pair() {
 
 package_plasma6-applets-barracuda() {
   pkgdesc="Plasma 6 widget showing the Barracuda X headset connection status"
-  depends=(plasma-workspace plasma-pa plasma5support breeze-icons)
+  depends=('plasma-workspace>=6.7' plasma-pa plasma5support breeze-icons)
   optdepends=('barracuda-pair: connection status, pairing and headset controls from the widget')
   cd "razer-barracuda-$pkgver"
   local target="$pkgdir/usr/share/plasma/plasmoids/org.razer.barracuda.output"

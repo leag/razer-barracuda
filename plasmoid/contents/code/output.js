@@ -77,7 +77,8 @@ function transportText(transport, locale) {
     }
 }
 
-// The popup omits the transport, which its icon shows; tooltips keep it.
+// The state, with the transport for a screen reader; the tooltip names the
+// transport as a separate fact.
 function connectionText(value, locale, withTransport = true) {
     switch (value.state) {
     case "connected":
@@ -96,74 +97,46 @@ function connectionText(value, locale, withTransport = true) {
     }
 }
 
-function connectionHint(status, value, locale) {
-    switch (value.state) {
-    case "disconnected":
-        if (adapterMissing(status))
-            return text("Turn the headset on. To pair it with the USB dongle, connect the dongle first.",
-                        "Enciende el auricular. Para emparejarlo con el dongle USB, conecta primero el dongle.", locale);
-        return text("Turn the headset on. If it does not connect, use Pair USB Dongle.",
-                    "Enciende el auricular. Si no se conecta, usa Emparejar dongle USB.", locale);
-    case "unknown":
-        if (status.usb.adapter === "multiple")
-            return text("More than one Barracuda USB dongle is connected. Connect only one.",
-                        "Hay más de un dongle USB Barracuda conectado. Conecta solo uno.", locale);
-        if (status.usb.driver === false)
-            return text("Install or update the Barracuda driver to read the link state.",
-                        "Instala o actualiza el driver del Barracuda para leer el estado de la conexión.", locale);
-        return text("The dongle has not confirmed the link yet. This does not mean the headset is disconnected.",
-                    "El dongle aún no confirma la conexión. Esto no significa que el auricular esté desconectado.", locale);
-    case "no-adapter":
-        return text("Connect the USB dongle, or connect the headset over Bluetooth.",
-                    "Conecta el dongle USB o conecta el auricular por Bluetooth.", locale);
-    case "unavailable":
-        return text("Connection status requires an updated barracuda-headset on PATH.",
-                    "El estado de la conexión requiere barracuda-headset actualizado en PATH.", locale);
-    default:
-        return "";
-    }
-}
-
 function voltageText(millivolts, locale) {
     const volts = (millivolts / 1000).toFixed(2);
     return (/^es([_-]|$)/i.test(locale) ? volts.replace(".", ",") : volts) + " V";
 }
 
-// Label/value/icon rows for the details list; empty until a status has been read.
-function connectionDetails(status, locale) {
+// Key/value rows of the headset card's details, empty until a status has been
+// read: the dongle, its 2.4 GHz link, Bluetooth, and with a confirmed dongle
+// link the charging cable and voltage; then the charge state when the card's
+// line leaves it out.
+function detailRows(status, battery, locale) {
     if (!status || !status.ok)
         return [];
     const usb = status.usb;
     const rows = [[text("USB dongle", "Dongle USB", locale),
         usb.adapter === "present" ? text("Detected", "Detectado", locale)
             : usb.adapter === "multiple" ? text("More than one", "Más de uno", locale)
-            : text("Not detected", "No detectado", locale),
-        "drive-removable-media-usb-pendrive-symbolic"]];
+            : text("Not detected", "No detectado", locale)]];
     if (usb.adapter === "present")
         rows.push([text("2.4 GHz link", "Enlace 2,4 GHz", locale),
             !usb.driver ? text("Driver required", "Requiere driver", locale)
                 : usb.link === "connected" ? text("Connected", "Conectado", locale)
                 : usb.link === "disconnected" ? text("Disconnected", "Desconectado", locale)
-                : text("Not confirmed", "No confirmado", locale),
-            "network-wireless-symbolic"]);
+                : text("Not confirmed", "No confirmado", locale)]);
     const bt = status.bluetooth;
     if (bt)
         rows.push(["Bluetooth", bt.state === "connected" ? text("Connected", "Conectado", locale)
             : bt.state === "disconnected" ? text("Not connected", "No conectado", locale)
-            : text("Unknown", "Desconocido", locale),
-            "network-bluetooth-symbolic"]);
-    const battery = usb.adapter === "present" && usb.link === "connected" ? usb.battery : null;
-    if (battery) {
+            : text("Unknown", "Desconocido", locale)]);
+    // Retained values are not shown as current without a confirmed link.
+    const reading = usb.adapter === "present" && usb.link === "connected" ? usb.battery : null;
+    if (reading) {
         rows.push([text("Charging cable", "Cable de carga", locale),
-            battery.cable === true ? text("Connected", "Conectado", locale)
-                : battery.cable === false ? text("Not connected", "No conectado", locale)
-                : text("Unknown", "Desconocido", locale),
-            // The charging glyph only while the cable is known to be connected.
-            battery.cable === true ? "battery-full-charging-symbolic" : "battery-full-symbolic"]);
-        if (typeof battery.voltage_mv === "number" && battery.voltage_mv > 0)
-            rows.push([text("Battery voltage", "Voltaje de batería", locale),
-                       voltageText(battery.voltage_mv, locale), "battery-full-symbolic"]);
+            reading.cable === true ? text("Connected", "Conectado", locale)
+                : reading.cable === false ? text("Not connected", "No conectado", locale)
+                : text("Unknown", "Desconocido", locale)]);
+        if (typeof reading.voltage_mv === "number" && reading.voltage_mv > 0)
+            rows.push([text("Battery voltage", "Voltaje de batería", locale), voltageText(reading.voltage_mv, locale)]);
     }
+    if (battery && battery.state === "Discharging")
+        rows.push([text("Charge", "Carga", locale), text("On battery", "Con batería", locale)]);
     return rows;
 }
 
@@ -186,19 +159,6 @@ function headsetTarget(sink, status) {
     if (linked.state === "connected" && linked.transport === "bluetooth")
         return {transport: "bluetooth", address: status.bluetooth.address || ""};
     return bluetooth(sink) ? {transport: "bluetooth", address: bluetoothAddress(sink)} : {transport: "usb"};
-}
-
-// Icon of the confirmed transport; the USB dongle wins when both are linked.
-function transportIcon(value) {
-    if (value.state !== "connected")
-        return "";
-    return value.transport === "bluetooth" ? "network-bluetooth-symbolic"
-        : "drive-removable-media-usb-pendrive-symbolic";
-}
-
-// Disconnected and missing-adapter states strike the artwork through.
-function slashed(value) {
-    return value.state === "disconnected" || value.state === "no-adapter";
 }
 
 // Emblem of the panel and tray glyph: an unconfirmed or unreadable state, or
@@ -225,24 +185,32 @@ function adapterMissing(status) {
 }
 
 // Result of a finished barracuda-pair run, from the executable engine's data.
+// The popup gets a plain sentence naming what the user can check; the
+// technical cause (exit code, helper output) is in "details", for the
+// journal, never for the popup.
 function pairingOutcome(data, locale) {
     if (data["exit code"] === 0)
-        return {ok: true, text: text("Paired. Turn the headset off and on to start the link.",
-                                     "Emparejado. Apaga y enciende el auricular para iniciar la conexión.", locale)};
-    const details = (String(data.stdout || "").trim() + "\n" + String(data.stderr || "").trim()).trim();
-    return {ok: false, text: text(
-        "Pairing failed. Check the USB dongle and HID permissions, and that barracuda-pair is installed on your PATH.",
-        "No se pudo emparejar. Comprueba el dongle USB, los permisos HID y que barracuda-pair esté instalado en tu PATH.",
-        locale) + "\n" + details};
+        return {ok: true, details: "", text: text("Paired. Turn the headset off and on to start the link.",
+                                                  "Emparejado. Apaga y enciende el auricular para iniciar la conexión.", locale)};
+    return {ok: false, details: commandDetails("barracuda-pair", data), text: text(
+        "Couldn't pair. Check the USB dongle and that the headset is in pairing mode.",
+        "No se pudo emparejar. Revisa el dongle USB y que el auricular esté en modo de emparejamiento.", locale)};
 }
 
-// Result of a finished barracuda-power run.
+// Result of a finished barracuda-power run. Success says nothing: the next
+// status reading shows the headset off.
 function powerOutcome(data, locale) {
     if (data["exit code"] === 0)
-        return {ok: true, text: text("Power-off request sent. Use the headset button to turn it on again.",
-                                     "Solicitud de apagado enviada. Usa el botón del auricular para encenderlo de nuevo.", locale)};
-    return {ok: false, text: text("Could not send the power-off request.", "No se pudo enviar la solicitud de apagado.", locale)
-        + "\n" + String(data.stderr || data.stdout || "").trim()};
+        return {ok: true, details: "", text: ""};
+    return {ok: false, details: commandDetails("barracuda-power", data), text: text(
+        "Couldn't turn off the headset. Check the USB dongle.",
+        "No se pudo apagar el auricular. Revisa el dongle USB.", locale)};
+}
+
+// One journal line for a failed helper run.
+function commandDetails(name, data) {
+    const output = (String(data.stdout || "").trim() + " " + String(data.stderr || "").trim()).trim();
+    return name + " exited with " + data["exit code"] + (output ? ": " + output : "");
 }
 
 // The More actions entries, chosen as the system tray chooses them: visible,
@@ -328,33 +296,10 @@ function battery(data, sources, preferBluetooth) {
     return null;
 }
 
-function batteryText(value, locale) {
-    if (!value)
-        return text("Battery unavailable", "Batería no disponible", locale);
-    return value.percent + "% · " + batteryState(value, locale);
-}
-
-function batteryState(value, locale) {
-    if (!value)
-        return text("Battery unavailable", "Batería no disponible", locale);
-    switch (value.state) {
-    case "Charging":
-        return text("Charging", "Cargando", locale);
-    case "FullyCharged":
-        return text("Fully charged", "Carga completa", locale);
-    case "Discharging":
-        return text("On battery", "Con batería", locale);
-    default:
-        return text("Charge state unknown", "Estado de carga desconocido", locale);
-    }
-}
-
 function text(english, spanish, locale) {
     return /^es([_-]|$)/i.test(locale) ? spanish : english;
 }
 
-// Select KDE Breeze's detailed variants, not its small monochrome variants.
-// Files remain owned by breeze-icons; no theme artwork is copied into this package.
 // Bluetooth addresses arrive as 12 hex digits; show them as AA:BB:CC:DD:EE:FF.
 function macAddress(address) {
     const hex = String(address || "").replace(/[^0-9a-fA-F]/g, "");
@@ -363,6 +308,8 @@ function macAddress(address) {
     return hex.toUpperCase().match(/../g).join(":");
 }
 
+// Select KDE Breeze's detailed variants, not its small monochrome variants.
+// Files remain owned by breeze-icons; no theme artwork is copied into this package.
 function artwork(iconName) {
     if (/^audio-(headphones|headset)(-|$)/.test(iconName))
         return "file:///usr/share/icons/breeze/devices/64/audio-headset.svg";
@@ -498,14 +445,6 @@ function placeholder(status, value, battery, pairing, locale) {
         return {state: "checking", artwork: headset, dimmed: true, emblem: "", busy: true,
                 title: text("Checking…", "Comprobando…", locale), explanation: ""};
     }
-}
-
-// Key/value rows of the card's details: the connection rows, then the charge
-// state when the card's line leaves it out.
-function detailRows(status, battery, locale) {
-    return connectionDetails(status, locale).map(row => [row[0], row[1]])
-        .concat(battery && battery.state === "Discharging"
-            ? [[text("Charge", "Carga", locale), text("On battery", "Con batería", locale)]] : []);
 }
 
 // The tooltip's sub text: one line of facts joined with " · ", as the

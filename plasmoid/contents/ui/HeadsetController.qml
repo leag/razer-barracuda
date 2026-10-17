@@ -14,7 +14,6 @@ Plasma5Support.DataSource {
         response = null;
         error = "";
         errorCode = "";
-        message = "";
         if (activeView && !busy)
             Qt.callLater(() => request({op: "status"}));
     }
@@ -23,7 +22,6 @@ Plasma5Support.DataSource {
     property string error: ""
     // The helper's code for the last failure, so a view can word what failed.
     property string errorCode: ""
-    property string message: ""
     // The feature of the last set request ("dnd", "gaming", "devices", …), or
     // empty for a status read, so its feedback can appear beside its control.
     property string requestFeature: ""
@@ -66,7 +64,6 @@ Plasma5Support.DataSource {
         busy = true;
         error = "";
         errorCode = "";
-        message = "";
         requestFeature = value.op === "set" ? String(value.feature) : "";
         requestedKey = targetKey;
         connectSource(Output.headsetCommand(value, target));
@@ -80,7 +77,6 @@ Plasma5Support.DataSource {
         busy = true;
         error = "";
         errorCode = "";
-        message = "";
         requestFeature = String(values[values.length - 1].feature);
         requestedKey = targetKey;
         connectSource(Output.headsetChainCommand(values, target));
@@ -110,12 +106,8 @@ Plasma5Support.DataSource {
             error = errorLabel(errorCode);
             return;
         }
+        // A change shows in the reading it returns, not in a message.
         response = result;
         loaded(result);
-        if (result.sent)
-            message = result.sent === "devices"
-                ? label("Connection switch requested. Refresh to check the active device.", "Cambio de conexión solicitado. Actualiza para comprobar el dispositivo activo.")
-                : result.state[result.sent] !== null
-                    ? label("Change confirmed by the headset.", "Cambio confirmado por el auricular.") : "";
     }
 }

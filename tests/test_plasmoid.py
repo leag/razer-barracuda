@@ -48,6 +48,20 @@ class PlasmoidTests(unittest.TestCase):
         from barracuda_pair import __version__
         self.assertEqual(metadata['KPlugin']['Version'], __version__)
 
+    def test_plasma_minimum_matches_the_package(self):
+        # PlasmaExtras.ContextualHelpButton, used by the popup, is new in
+        # Plasma 6.7; the package asks for the same version.
+        metadata = json.loads((ROOT / 'plasmoid/metadata.json').read_text())
+        self.assertEqual(metadata['X-Plasma-API-Minimum-Version'], '6.7')
+        pkgbuild = (ROOT / 'packaging/arch/PKGBUILD').read_text()
+        package = pkgbuild.split('package_plasma6-applets-barracuda() {', 1)[1].split('\n}', 1)[0]
+        self.assertIn("depends=('plasma-workspace>=6.7' ", package)
+        srcinfo = (ROOT / 'packaging/arch/.SRCINFO').read_text()
+        applet = srcinfo.split('pkgname = plasma6-applets-barracuda', 1)[1]
+        self.assertIn('\tdepends = plasma-workspace>=6.7\n', applet)
+        source = '\n'.join(path.read_text() for path in (ROOT / 'plasmoid/contents/ui').glob('*.qml'))
+        self.assertIn('PlasmaExtras.ContextualHelpButton', source)
+
     def test_tray_can_expand_the_applet(self):
         # The system tray opens its popup only for applets without a preferred
         # representation; forcing the compact one leaves left clicks inert.
@@ -60,50 +74,88 @@ class PlasmoidTests(unittest.TestCase):
         self.assertEqual(' '.join(binding.split()),
                          'Plasmoid.formFactor === PlasmaCore.Types.Planar ? fullRepresentation : null')
 
-    def test_single_action_leads_to_kde_audio_settings(self):
-        # Every headset command lives in the popup; the only widget action is
-        # the way out to KDE's audio settings (the heading and right-click).
+    def test_commands_live_in_the_heading(self):
+        # Pairing is the heading's '+' (high priority); More actions holds
+        # Turn Off, a separator and KDE's audio settings. Plasma copies them
+        # into the right-click menu; each command asks in the popup first.
         source = (ROOT / 'plasmoid/contents/ui/main.qml').read_text()
         actions = re.search(r'\n    Plasmoid\.contextualActions: \[(.*?)\n    \]', source, re.S).group(1)
-        self.assertEqual(actions.count('PlasmaCore.Action {'), 1)
-        self.assertIn('root.label("Configure Audio Devices…", "Configurar dispositivos de sonido…")', actions)
-        self.assertIn('priority: PlasmaCore.Action.NormalPriority', actions)
-        self.assertIn('onTriggered: root.openSettings()', actions)
-        # alwaysShowAsMenu is assigned only where libplasma has it (6.8+),
-        # never declared, so older Plasma versions still load the widget.
-        self.assertNotIn('alwaysShowAsMenu:', actions)
-        self.assertIn('if ("alwaysShowAsMenu" in audioDevicesAction)', actions)
+        entries = re.split(r'\n        PlasmaCore\.Action \{', actions)[1:]
+        self.assertEqual(len(entries), 4)
+        pair, power, separator, audio = entries
+        self.assertIn('text: root.label("Pair Headset…", "Emparejar auricular…")', pair)
+        self.assertIn('icon.name: "list-add-symbolic"', pair)
+        self.assertIn('priority: PlasmaCore.Action.HighPriority', pair)
+        self.assertIn('text: root.label("Turn Off Headset…", "Apagar auricular…")', power)
+        self.assertIn('icon.name: "system-shutdown-symbolic"', power)
+        for command, name in ((pair, '"pair"'), (power, '"power-off"')):
+            # Greyed only by the shared rule, and checked again when triggered.
+            self.assertIn('enabled: root.commandsEnabled', command)
+            self.assertIn('if (root.commandsEnabled)\n                    root.askInPopup(' + name + ');', command)
+            self.assertNotIn('openPairing', command)
+            self.assertNotIn('turnOffHeadset', command)
+        self.assertIn('priority: PlasmaCore.Action.NormalPriority', power)
+        self.assertIn('isSeparator: true', separator)
+        self.assertIn('priority: PlasmaCore.Action.NormalPriority', separator)
+        self.assertIn('root.label("Configure Audio Devices…", "Configurar dispositivos de sonido…")', audio)
+        self.assertIn('priority: PlasmaCore.Action.NormalPriority', audio)
+        self.assertIn('onTriggered: root.openSettings()', audio)
         self.assertIn('KCMLauncher.openSystemSettings("kcm_pulseaudio")', source)
-        for removed in ('requestConfirmation', 'pendingRequest', 'dndAction', 'gamingAction'):
+        # Three entries always make the tray draw a menu, on every version.
+        self.assertNotIn('alwaysShowAsMenu', source)
+        # Only a confirmed missing dongle or a running command disables them.
+        self.assertIn('readonly property bool commandsEnabled: !pairingBusy && !powerBusy '
+                      '&& !Output.adapterMissing(linkStatus)', source)
+        for function in ('openPairing', 'turnOffHeadset'):
+            body = source.split(f'function {function}() {{', 1)[1].split('\n    }', 1)[0]
+            self.assertIn('if (!commandsEnabled)\n            return;', body)
+        # The question is asked in the popup once its view exists.
+        ask = source.split('function showAskedCommand() {', 1)[1].split('\n    }', 1)[0]
+        self.assertIn('view.confirmPairing();', ask)
+        self.assertIn('view.confirmPowerOff();', ask)
+        self.assertIn('onFullRepresentationItemChanged: Qt.callLater(showAskedCommand)', source)
+        for removed in ('dndAction', 'gamingAction', 'menuActions', 'HeadsetPanel', 'powerResult'):
             self.assertNotIn(removed, source)
         # The name comes from metadata, as in Plasma's own heading.
         self.assertIn('toolTipMainText: Plasmoid.title', source)
+        self.assertIn('toolTipSubText: Output.toolTip(connection, battery, Qt.locale().name)', source)
         self.assertNotIn('"Razer Barracuda X"', source)
+        # The tray icon never hides; a low battery asks for attention, and
+        # it spins while a command runs on the headset.
+        self.assertNotIn('PassiveStatus', source)
+        self.assertIn('NeedsAttentionStatus : PlasmaCore.Types.ActiveStatus', source)
+        self.assertIn('Plasmoid.busy: pairingBusy || powerBusy', source)
+        # Failures go to the journal in full and to the popup in plain words.
+        self.assertEqual(source.count('console.warn(outcome.details);'), 2)
         # Settings are read with a confirmed link whenever the full view is
         # shown, including the desktop, which never expands.
         self.assertIn('readonly property bool viewShown: root.expanded || '
                       'Plasmoid.formFactor === PlasmaCore.Types.Planar', source)
         self.assertIn('readonly property bool settingsWanted: viewShown && connected', source)
         self.assertIn('activeView: root.settingsWanted', source)
-        # Closing the popup clears the previous pairing and power-off results.
+        # Closing the popup clears the previous results and a pending question.
         shown = source.split('onViewShownChanged: {', 1)[1].split('\n    }', 1)[0]
-        for field in ('pairingError', 'pairingResult', 'powerError', 'powerResult'):
+        for field in ('pairingError', 'pairingResult', 'powerError', 'askedCommand'):
             self.assertIn(f'{field} = "";', shown)
 
     def test_popup_requests_reach_the_settings_controller(self):
         source = (ROOT / 'plasmoid/contents/ui/main.qml').read_text()
-        panel = source.split('fullRepresentation: HeadsetPanel {', 1)[1]
-        self.assertIn('settings: settingsController', panel)
-        self.assertIn('onSettingChangeRequested: (feature, enabled) => root.setSetting(feature, enabled)', panel)
-        self.assertIn('onSourceSwitchRequested: address => root.setSetting("devices", address)', panel)
-        self.assertIn('onSettingsRefreshRequested: root.readSettings()', panel)
-        self.assertIn('menuActions: root.menuActions', panel)
-        self.assertIn('title: Plasmoid.title', panel)
-        self.assertIn('showHeader: !root.inTray', panel)
+        view = source.split('fullRepresentation: HeadsetView {', 1)[1]
+        for line in ('settings: settingsController', 'actions: Plasmoid.contextualActions',
+                     'configureAction: Plasmoid.internalAction("configure")', 'title: Plasmoid.title',
+                     'inTray: root.inTray', 'activeView: root.viewShown',
+                     'onPairingConfirmed: root.openPairing()', 'onPowerOffConfirmed: root.turnOffHeadset()',
+                     'onSettingChangeRequested: (feature, value) => root.setSetting(feature, value)',
+                     'onSettingsRefreshRequested: root.readSettings()'):
+            self.assertIn(line, view)
         # Settings are sent only with a confirmed link and while nothing runs.
         set_setting = source.split('function setSetting(feature, value) {', 1)[1].split('\n    }', 1)[0]
         self.assertIn('connected && !settingsController.busy && !pairingBusy && !powerBusy', set_setting)
         self.assertIn('settingsController.request({op: "set", feature: feature, value: value})', set_setting)
+        # The old popup and configuration pages are gone.
+        for removed in ('ConnectionSummary.qml', 'HeadsetPanel.qml', 'SettingRow.qml',
+                        'ConfigEqualizer.qml', 'ConfigPowerSaving.qml'):
+            self.assertFalse((ROOT / 'plasmoid/contents/ui' / removed).exists(), removed)
 
     @unittest.skipUnless(Path(RUNNER).is_file() and shutil.which('sh'), 'Qt 6 QML test runner required')
     def test_configuration_chain_survives_the_closed_window(self):
@@ -243,7 +295,6 @@ Item {
     property string statusText: "Test"
     property string title: "Barracuda Headset"
     property bool connected: false
-    property bool slashed: false
     property string emblem: ""
     property bool expanded: false
     function openSettings() {}
@@ -289,38 +340,31 @@ Item {
             button.width = 22
             button.height = 22
             const artwork = button.contentItem.children[0]
-            const glyph = findChild(artwork, "headsetGlyph")
-            const picture = findChild(artwork, "headsetPicture")
-            const symbol = findChild(artwork, "headsetSymbol")
-            const slash = findChild(artwork, "disconnectedSlash")
-            const badge = findChild(artwork, "connectionEmblem")
+            const symbol = findChild(artwork, "artworkIcon")
+            const badge = findChild(artwork, "artworkEmblem")
             // Panel and tray icons use the theme's symbolic glyph, not the
-            // detailed artwork.
+            // detailed artwork, drawn at the icon's own size.
             verify(artwork.symbolic)
             compare(symbol.source, "audio-headset-symbolic")
-            verify(symbol.visible)
-            verify(!picture.visible)
-            compare(String(picture.source), "")
-            for (const state of [{connected: true, slashed: false, emblem: ""},
-                                 {connected: false, slashed: true, emblem: ""},
-                                 {connected: false, slashed: false, emblem: "emblem-question"},
-                                 {connected: true, slashed: false, emblem: "emblem-warning"}]) {
+            compare(artwork.iconSize, artwork.width)
+            compare(symbol.width, artwork.width)
+            compare(findChild(artwork, "artworkTransport").visible, false)
+            for (const state of [{connected: true, emblem: ""},
+                                 {connected: false, emblem: ""},
+                                 {connected: false, emblem: "emblem-question"},
+                                 {connected: true, emblem: "emblem-warning"}]) {
                 root.connected = state.connected
-                root.slashed = state.slashed
                 root.emblem = state.emblem
-                compare(symbol.opacity, state.connected ? 1 : 0.5)
-                compare(slash.visible, state.slashed)
-                // The software scene graph used by these tests cannot cut the
-                // gap, so the glyph must stay visible and unlayered.
-                verify(glyph.visible)
-                verify(!glyph.layer.enabled)
+                // Dimmed without a confirmed link; no colour is added.
+                tryCompare(symbol, "opacity", state.connected ? 1 : 0.5)
                 compare(badge.visible, state.emblem !== "")
-                verify(badge.width <= symbol.width / 2)
-                // Breeze's proportions: inside the artwork, at least 1 px wide.
-                const reach = (slash.width * Math.SQRT1_2 + slash.height * Math.SQRT1_2) / 2
-                verify(reach <= artwork.width / 2)
-                verify(slash.height >= 1)
-                verify(slash.height <= Math.max(1, artwork.width / 22) + 0.001)
+                if (state.emblem !== "") {
+                    compare(badge.source, state.emblem)
+                    // Over the bottom-right corner, at most half the glyph.
+                    verify(badge.width <= symbol.width / 2)
+                    compare(badge.x + badge.width, symbol.width)
+                    compare(badge.y + badge.height, symbol.height)
+                }
             }
             compare(button.Accessible.description, "Test")
             // The widget's own title, as in Plasma's heading and tooltip.
@@ -337,7 +381,7 @@ Item {
     @unittest.skipUnless(Path(RUNNER).is_file()
                          and Path('/usr/lib/qt6/qml/org/kde/plasma/components/ToolButton.qml').is_file(),
                          'Qt 6 and Plasma components required')
-    def test_generic_summary(self):
+    def test_popup_view(self):
         self.assertQmlSuitePasses(ROOT / 'tests/tst_summary.qml')
 
     @unittest.skipUnless(Path(RUNNER).is_file()

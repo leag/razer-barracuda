@@ -597,9 +597,10 @@ Item {
                 {ok: true, sent: "bands", transport: "usb", state: {preset: 255, bands: values[1].value}, errors: {}}) + "\n"});
             verify(!nativeBackend.busy);
             compare(nativeBackend.response.state.preset, 255);
-            compare(nativeBackend.message, "Change confirmed by the headset.");
+            // A change shows in the reading it returns, not in a message.
+            compare(nativeBackend.error, "");
+            compare(nativeBackend.message, undefined);
             nativeBackend.response = null;
-            nativeBackend.message = "";
         }
         function test_transport_change_drops_old_reply() {
             nativeBackend.target = {transport: "usb"};

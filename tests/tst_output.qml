@@ -87,77 +87,47 @@ TestCase {
         // An unconfirmed dongle link does not hide a confirmed Bluetooth one.
         compare(Output.connection(linked("unknown", bt)).state, "connected");
     }
-    function test_connection_text_and_hints() {
+    function test_connection_text() {
         compare(Output.connectionText(Output.connection(linked("connected")), "en_US"), "Connected · USB dongle");
         compare(Output.connectionText(Output.connection(linked("connected")), "es_CL"), "Conectado · Dongle USB");
-        // The popup omits the transport, which its icon shows.
         compare(Output.connectionText(Output.connection(linked("connected")), "en_US", false), "Connected");
         compare(Output.connectionText(Output.connection(linked("disconnected")), "en_US", false), "Disconnected");
         compare(Output.connectionText({state: "connected", transport: "both"}, "es_CL"),
                 "Conectado · Dongle USB y Bluetooth");
+        compare(Output.connectionText({state: "connected", transport: "bluetooth"}, "en_US"), "Connected · Bluetooth");
         compare(Output.connectionText({state: "disconnected"}, "es_CL"), "Desconectado");
         compare(Output.connectionText({state: "unknown"}, "en_US"), "Link not confirmed");
+        compare(Output.connectionText({state: "unknown"}, "es_CL"), "Conexión no confirmada");
         compare(Output.connectionText({state: "no-adapter"}, "es_CL"), "Dongle USB no detectado");
         compare(Output.connectionText({state: "no-adapter"}, "en_US"), "USB dongle not detected");
         compare(Output.connectionText({state: "unavailable"}, "en_US"), "Status unavailable");
+        compare(Output.connectionText({state: "unavailable"}, "es_CL"), "Estado no disponible");
         compare(Output.connectionText({state: "checking"}, "es_CL"), "Comprobando…");
-        compare(Output.connectionHint(linked("connected"), {state: "connected"}, "en_US"), "");
-        verify(Output.connectionHint(linked("unknown"), {state: "unknown"}, "en_US").includes("does not mean"));
-        verify(Output.connectionHint(linked("unknown"), {state: "unknown"}, "es_CL").includes("no significa"));
-        verify(Output.connectionHint({ok: true, usb: {adapter: "present", driver: false, link: "unknown"}},
-                                     {state: "unknown"}, "en_US").includes("driver"));
-        compare(Output.connectionHint({ok: true, usb: {adapter: "multiple"}}, {state: "unknown"}, "es_CL"),
-                "Hay más de un dongle USB Barracuda conectado. Conecta solo uno.");
-        compare(Output.connectionHint({ok: true, usb: {adapter: "multiple"}}, {state: "unknown"}, "en_US"),
-                "More than one Barracuda USB dongle is connected. Connect only one.");
-        verify(Output.connectionHint({ok: false}, {state: "unavailable"}, "en_US").includes("barracuda-headset"));
-        verify(Output.connectionHint(linked("disconnected"), {state: "disconnected"}, "es_CL").includes("Enciende"));
-        // The hint names the popup's own Pair button, not a menu.
-        compare(Output.connectionHint(linked("disconnected"), {state: "disconnected"}, "en_US"),
-                "Turn the headset on. If it does not connect, use Pair USB Dongle.");
-        compare(Output.connectionHint(linked("disconnected"), {state: "disconnected"}, "es_CL"),
-                "Enciende el auricular. Si no se conecta, usa Emparejar dongle USB.");
-        // Pair is disabled without the dongle, so the hint asks for it instead.
-        const noDongle = {ok: true, usb: {adapter: "missing"}, bluetooth: {state: "disconnected"}};
-        compare(Output.connection(noDongle).state, "disconnected");
-        verify(Output.connectionHint(noDongle, Output.connection(noDongle), "en_US").includes("connect the dongle first"));
-        verify(Output.connectionHint(noDongle, Output.connection(noDongle), "es_CL").includes("conecta primero el dongle"));
+        compare(Output.connectionText({state: "checking"}, "en_US"), "Checking…");
     }
-    // Label and value of each details row; icons are checked separately.
-    function pairs(rows) { return rows.map(row => row.slice(0, 2)); }
-    function test_connection_details() {
-        compare(Output.connectionDetails(null, "en_US"), []);
-        compare(Output.connectionDetails({ok: false}, "en_US"), []);
-        compare(pairs(Output.connectionDetails({ok: true, usb: {adapter: "missing"}, bluetooth: null}, "en_US")),
+    function test_connection_detail_rows() {
+        compare(Output.detailRows({ok: true, usb: {adapter: "missing"}, bluetooth: null}, null, "en_US"),
                 [["USB dongle", "Not detected"]]);
-        compare(pairs(Output.connectionDetails(linked("disconnected", {state: "disconnected", address: "x"}), "es_CL")),
+        compare(Output.detailRows({ok: true, usb: {adapter: "multiple"}, bluetooth: null}, null, "es_CL"),
+                [["Dongle USB", "Más de uno"]]);
+        compare(Output.detailRows(linked("disconnected", {state: "disconnected", address: "x"}), null, "es_CL"),
                 [["Dongle USB", "Detectado"], ["Enlace 2,4 GHz", "Desconectado"], ["Bluetooth", "No conectado"]]);
-        compare(pairs(Output.connectionDetails({ok: true, usb: {adapter: "present", driver: false, link: "unknown"},
-                                          bluetooth: {state: "unknown"}}, "en_US")),
+        compare(Output.detailRows({ok: true, usb: {adapter: "present", driver: false, link: "unknown"},
+                                   bluetooth: {state: "unknown"}}, null, "en_US"),
                 [["USB dongle", "Detected"], ["2.4 GHz link", "Driver required"], ["Bluetooth", "Unknown"]]);
+        compare(Output.detailRows(linked("unknown"), null, "es_CL")[1], ["Enlace 2,4 GHz", "No confirmado"]);
         const battery = {percent: 65, status: "Charging", cable: true, voltage_mv: 4123};
-        compare(pairs(Output.connectionDetails(linked("connected", null, battery), "en_US")),
-                [["USB dongle", "Detected"], ["2.4 GHz link", "Connected"],
-                 ["Charging cable", "Connected"], ["Battery voltage", "4.12 V"]]);
-        compare(pairs(Output.connectionDetails(linked("connected", null, battery), "es_CL"))[3],
-                ["Voltaje de batería", "4,12 V"]);
+        compare(Output.detailRows(linked("connected", null, battery), null, "es_CL").slice(2),
+                [["Cable de carga", "Conectado"], ["Voltaje de batería", "4,12 V"]]);
         battery.cable = null;
         battery.voltage_mv = null;
-        compare(pairs(Output.connectionDetails(linked("connected", null, battery), "en_US")).slice(2),
+        compare(Output.detailRows(linked("connected", null, battery), null, "en_US").slice(2),
                 [["Charging cable", "Unknown"]]);
-        // The cable row shows the charging glyph only while the cable is connected.
-        compare(Output.connectionDetails(linked("connected", null, battery), "en_US")[2][2], "battery-full-symbolic");
         battery.cable = false;
-        compare(Output.connectionDetails(linked("connected", null, battery), "en_US")[2][2], "battery-full-symbolic");
-        battery.cable = true;
-        compare(Output.connectionDetails(linked("connected", null, battery), "en_US")[2][2],
-                "battery-full-charging-symbolic");
+        compare(Output.detailRows(linked("connected", null, battery), null, "en_US").slice(2),
+                [["Charging cable", "Not connected"]]);
         // Retained values are not shown as current while the link is not confirmed.
-        compare(pairs(Output.connectionDetails(linked("unknown", null, battery), "en_US")).length, 2);
-        compare(Output.connectionDetails(linked("connected", {state: "connected"}, {percent: 5, cable: true, voltage_mv: 4000}), "en_US")
-                    .map(row => row[2]),
-                ["drive-removable-media-usb-pendrive-symbolic", "network-wireless-symbolic", "network-bluetooth-symbolic",
-                 "battery-full-charging-symbolic", "battery-full-symbolic"]);
+        compare(Output.detailRows(linked("unknown", null, battery), null, "en_US").length, 2);
     }
     function test_driver_battery_fallback() {
         compare(Output.driverBattery(null), null);
@@ -173,26 +143,16 @@ TestCase {
     function test_panel_emblem() {
         compare(Output.emblem({state: "connected"}, null), "");
         compare(Output.emblem({state: "checking"}, null), "");
-        // Disconnected and missing-adapter states use the slash, not an emblem.
+        // Disconnected and missing-adapter states are dimmed, without an emblem.
         compare(Output.emblem({state: "disconnected"}, null), "");
         compare(Output.emblem({state: "no-adapter"}, null), "");
-        verify(Output.slashed({state: "disconnected"}));
-        verify(Output.slashed({state: "no-adapter"}));
-        for (const state of ["connected", "unknown", "unavailable", "checking"])
-            verify(!Output.slashed({state: state}));
         compare(Output.emblem({state: "unknown"}, null), "emblem-question");
         compare(Output.emblem({state: "unavailable"}, null), "emblem-question");
         compare(Output.emblem({state: "connected"}, {percent: 10, state: "Discharging"}), "emblem-warning");
         compare(Output.emblem({state: "connected"}, {percent: 10, state: "Charging"}), "");
         compare(Output.emblem({state: "connected"}, {percent: 11, state: "Discharging"}), "");
-    }
-    function test_transport_icon() {
-        compare(Output.transportIcon({state: "connected", transport: "usb"}), "drive-removable-media-usb-pendrive-symbolic");
-        // With both links the dongle wins.
-        compare(Output.transportIcon({state: "connected", transport: "both"}), "drive-removable-media-usb-pendrive-symbolic");
-        compare(Output.transportIcon({state: "connected", transport: "bluetooth"}), "network-bluetooth-symbolic");
-        for (const state of ["disconnected", "unknown", "no-adapter", "unavailable", "checking"])
-            compare(Output.transportIcon({state: state, transport: "usb"}), "");
+        // A stale low reading without a link is not a warning.
+        compare(Output.emblem({state: "disconnected"}, {percent: 5, state: "Discharging"}), "");
     }
     function test_tray_status() {
         // The icon stays visible in every state, so pairing stays reachable.
@@ -225,23 +185,30 @@ TestCase {
     }
     function test_pairing_and_power_outcomes() {
         compare(Output.pairingOutcome({"exit code": 0, stdout: "ok"}, "en_US"),
-                {ok: true, text: "Paired. Turn the headset off and on to start the link."});
+                {ok: true, details: "", text: "Paired. Turn the headset off and on to start the link."});
         compare(Output.pairingOutcome({"exit code": 0}, "es_CL"),
-                {ok: true, text: "Emparejado. Apaga y enciende el auricular para iniciar la conexión."});
-        const failed = Output.pairingOutcome({"exit code": 1, stdout: "searching\n", stderr: "timeout\n"}, "en_US");
-        verify(!failed.ok);
-        compare(failed.text, "Pairing failed. Check the USB dongle and HID permissions, and that barracuda-pair "
-                + "is installed on your PATH.\nsearching\ntimeout");
-        verify(Output.pairingOutcome({"exit code": 2, stderr: "x"}, "es_CL").text
-               .startsWith("No se pudo emparejar. Comprueba el dongle USB, los permisos HID"));
-        compare(Output.powerOutcome({"exit code": 0}, "en_US"),
-                {ok: true, text: "Power-off request sent. Use the headset button to turn it on again."});
-        compare(Output.powerOutcome({"exit code": 0}, "es_CL"),
-                {ok: true, text: "Solicitud de apagado enviada. Usa el botón del auricular para encenderlo de nuevo."});
+                {ok: true, details: "", text: "Emparejado. Apaga y enciende el auricular para iniciar la conexión."});
+        // A plain sentence for the popup; the cause for the journal.
+        compare(Output.pairingOutcome({"exit code": 1, stdout: "searching\n", stderr: "timeout\n"}, "en_US"),
+                {ok: false, details: "barracuda-pair exited with 1: searching timeout",
+                 text: "Couldn't pair. Check the USB dongle and that the headset is in pairing mode."});
+        compare(Output.pairingOutcome({"exit code": 2, stderr: "x"}, "es_CL"),
+                {ok: false, details: "barracuda-pair exited with 2: x",
+                 text: "No se pudo emparejar. Revisa el dongle USB y que el auricular esté en modo de emparejamiento."});
+        // Success says nothing: the next reading shows the headset off.
+        compare(Output.powerOutcome({"exit code": 0}, "en_US"), {ok: true, details: "", text: ""});
         compare(Output.powerOutcome({"exit code": 1, stderr: "not linked\n"}, "en_US"),
-                {ok: false, text: "Could not send the power-off request.\nnot linked"});
+                {ok: false, details: "barracuda-power exited with 1: not linked",
+                 text: "Couldn't turn off the headset. Check the USB dongle."});
         compare(Output.powerOutcome({"exit code": 1, stdout: "busy"}, "es_CL"),
-                {ok: false, text: "No se pudo enviar la solicitud de apagado.\nbusy"});
+                {ok: false, details: "barracuda-power exited with 1: busy",
+                 text: "No se pudo apagar el auricular. Revisa el dongle USB."});
+        compare(Output.commandDetails("barracuda-power", {"exit code": 127}), "barracuda-power exited with 127");
+        // No helper name, PATH or HID detail reaches the popup.
+        for (const locale of ["en_US", "es_CL"])
+            for (const outcome of [Output.pairingOutcome({"exit code": 1, stderr: "PATH"}, locale),
+                                   Output.powerOutcome({"exit code": 1, stderr: "PATH"}, locale)])
+                verify(!/barracuda-|PATH|HID/.test(outcome.text));
     }
     function test_action_text_drops_accelerators() {
         compare(Output.actionText("&Configure Barracuda Headset…"), "Configure Barracuda Headset…");
@@ -267,11 +234,6 @@ TestCase {
         compare(Output.battery(data, ["Battery1"]), null);
         data.Battery1.State = "Discharging";
         compare(Output.battery(data, ["Battery1"]).percent, 0);
-        compare(Output.batteryText(null, "es_CL"), "Batería no disponible");
-        compare(Output.batteryText(null, "en_US"), "Battery unavailable");
-        compare(Output.batteryText({percent: 65, state: "Charging"}, "es_CL"), "65% · Cargando");
-        compare(Output.batteryText({percent: 99, state: "Unknown"}, "en_US"), "99% · Charge state unknown");
-        compare(Output.batteryText({percent: 100, state: "FullyCharged"}, "en_US"), "100% · Fully charged");
     }
     function test_bluetooth_command_target() {
         const sink = {name: "bluez_output.01_02_03_04_05_06.1", properties: {"device.api": "bluez5"}};
@@ -311,8 +273,7 @@ TestCase {
         verify(!Output.bluetooth({name: "alsa_output.example"}));
         compare(Output.battery(data, sources, false).percent, 65);
         compare(Output.battery(data, ["Battery1"]).percent, 60);
-        compare(Output.batteryText(Output.battery(data, ["Battery1"]), "es_CL"),
-                "60% · Estado de carga desconocido");
+        compare(Output.battery(data, ["Battery1"]).state, "NoCharge");
         data.Battery1["Plugged in"] = false;
         compare(Output.battery(data, ["Battery1"], true), null);
         data.Battery1["Plugged in"] = true;
