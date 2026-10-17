@@ -12,14 +12,16 @@ function headsetCommand(request, target) {
 
 // Set requests from the configuration window, run in order: each starts only
 // after the previous one succeeded, and the last reply is printed. Plasma
-// destroys a configuration page, and ends its process, as soon as OK closes
+// destroys a configuration page, and kills its shell, as soon as OK closes
 // the window or another category replaces it. The chain therefore runs in a
-// background subshell that writes to a private file and finishes on its own;
-// the waiting shell reports the reply when it is still there to read it.
+// background subshell that finishes on its own and writes to a private file;
+// the waiting shell reports the reply when it is still there to read it. The
+// file is unlinked before the chain starts and read through a descriptor
+// opened beforehand, so nothing is left behind when the shell is killed.
 function headsetChainCommand(requests, target) {
     const chain = requests.map(request => headsetCommand(request, target)).join(" && ");
-    return "f=$(mktemp -p \"${XDG_RUNTIME_DIR:-/tmp}\") || exit 1; (" + chain + ") > \"$f\" 2>/dev/null & "
-        + "wait $!; s=$?; tail -n 1 \"$f\"; rm -f \"$f\"; exit $s";
+    return "f=$(mktemp -p \"${XDG_RUNTIME_DIR:-/tmp}\") || exit 1; exec 3>\"$f\" 4<\"$f\"; rm -f \"$f\"; ("
+        + chain + ") >&3 3>&- 4<&- 2>/dev/null & exec 3>&-; wait $!; s=$?; tail -n 1 <&4; exit $s";
 }
 
 // Finite, read-only query of the driver's published link and BlueZ; no HID access.

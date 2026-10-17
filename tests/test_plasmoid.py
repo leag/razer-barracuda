@@ -109,8 +109,9 @@ class PlasmoidTests(unittest.TestCase):
     def test_configuration_chain_survives_the_closed_window(self):
         # Plasma ends a configuration page's process when OK closes the
         # window. Run the command output.js builds, with fake helpers, and
-        # check that it stops at the first failure, reports the last reply and
-        # finishes even when the waiting shell is killed at once.
+        # check that it stops at the first failure, reports the last reply,
+        # finishes even when the waiting shell is killed at once and never
+        # leaves its private file behind.
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             probe = base / 'tst_chain.qml'
@@ -123,6 +124,9 @@ class PlasmoidTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             command = next(line.split('CHAIN ', 1)[1] for line in (result.stdout + result.stderr).splitlines()
                            if 'CHAIN ' in line)
+            # The file is unlinked before the chain starts.
+            self.assertLess(command.index('rm -f "$f"'), command.index('(barracuda-headset'))
+            leftovers = lambda: sorted(path.name for path in base.glob('tmp.*'))
             fakes = base / 'bin'
             fakes.mkdir()
             log = base / 'calls.log'
@@ -144,12 +148,14 @@ class PlasmoidTests(unittest.TestCase):
             self.assertEqual(len(calls), 2)
             self.assertIn('"feature":"preset"', calls[0])
             self.assertIn('"feature":"bands"', calls[1])
+            self.assertEqual(leftovers(), [])
             log.unlink()
             failed = subprocess.run(['sh', '-c', command], env={**env, 'FAKE_FAIL': '1'},
                                     capture_output=True, text=True, timeout=30)
             self.assertNotEqual(failed.returncode, 0)
             self.assertEqual(json.loads(failed.stdout), {'ok': False, 'error': 'rejected'})
             self.assertEqual(len(log.read_text().splitlines()), 1)
+            self.assertEqual(leftovers(), [])
             log.unlink()
             # The window closes while the first step runs: the waiting shell is
             # killed, and the chain still completes.
@@ -159,10 +165,12 @@ class PlasmoidTests(unittest.TestCase):
             waiting.kill()
             waiting.wait(timeout=10)
             self.assertFalse(log.exists())
+            self.assertEqual(leftovers(), [])
             deadline = time.monotonic() + 10
             while time.monotonic() < deadline and not (log.exists() and len(log.read_text().splitlines()) == 2):
                 time.sleep(0.05)
             self.assertEqual(len(log.read_text().splitlines()), 2)
+            self.assertEqual(leftovers(), [])
 
     @unittest.skipUnless(Path(RUNNER).is_file(), 'Qt 6 QML test runner not installed')
     def test_configuration_categories_in_both_languages(self):
