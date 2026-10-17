@@ -15,7 +15,9 @@ import "../code/output.js" as Output
 // headset (HeroCard), the single feedback slot, the Modes section and the
 // Bluetooth Devices section heading; the list rows are the devices the
 // headset knows. Without a confirmed link, and while pairing, one
-// placeholder replaces the body, with the feedback slot under it.
+// placeholder replaces the body, with the feedback slot under it; the
+// Disconnected placeholder offers the heading's pairing action as its
+// next step.
 //
 // Visual vocabulary, one form per kind of thing:
 //   headset command with consequences  PlasmaCore.Action with "…" in the
@@ -96,6 +98,10 @@ PlasmaExtras.Representation {
     readonly property bool commandsEnabled: !pairingBusy && !powerBusy && !adapterMissing
     readonly property bool showPlaceholder: pairingBusy || !connected
     readonly property var placeholder: Output.placeholder(linkStatus, connection, battery, pairingBusy, localeName)
+    // The heading's '+': the one pairing action, which the Disconnected
+    // placeholder also offers as its next step, as the Bluetooth applet
+    // offers Pair Device… under No devices paired.
+    readonly property QtObject pairAction: Output.primaryActions(actions, PlasmaCore.Action.HighPriority)[0] || null
 
     // --- settings, from the last reading taken with a confirmed link -------
     readonly property bool settingsBusy: settings !== null && settings.busy === true
@@ -183,14 +189,15 @@ PlasmaExtras.Representation {
 
     // --- keyboard: Down from the heading enters the body; Up from its first
     // control returns to the heading, as in the Bluetooth applet.
-    // The list header's focusable items, published by the header itself.
+    // The body's focusable items, published by the list header and the
+    // placeholder themselves.
     property Item heroItem: null
     property Item dndControl: null
     property Item gamingControl: null
+    property Item placeholderButton: null
     // The card takes focus only when it can expand.
-    readonly property var bodyControls: showPlaceholder ? []
-        : [heroItem, dndControl, gamingControl].filter(item => item !== null && item.visible && item.enabled
-                                                         && item.expandable !== false)
+    readonly property var bodyControls: (showPlaceholder ? [placeholderButton] : [heroItem, dndControl, gamingControl])
+        .filter(item => item !== null && item.visible && item.enabled && item.expandable !== false)
     function focusBody(index, reason) {
         const controls = bodyControls;
         if (index >= 0 && index < controls.length) {
@@ -254,6 +261,16 @@ PlasmaExtras.Representation {
         verbIcon: "system-shutdown-symbolic"
         cancelText: view.label("Cancel", "Cancelar")
         onAccepted: view.powerOffConfirmed()
+    }
+
+    // The placeholder's button for the pairing action: same text, icon,
+    // enabled state and handler, so it opens the same confirmation.
+    QQC2.Action {
+        id: placeholderPairAction
+        text: view.pairAction ? Output.actionText(view.pairAction.text) : ""
+        icon.name: view.pairAction ? view.pairAction.icon.name : ""
+        enabled: view.pairAction !== null && view.pairAction.enabled
+        onTriggered: view.pairAction.trigger()
     }
 
     Component {
@@ -499,6 +516,12 @@ PlasmaExtras.Representation {
                         text: view.placeholder.title
                         explanation: view.placeholder.explanation
                         busy: view.placeholder.busy
+                        // Only Disconnected has a next step the widget can
+                        // take; the other states name what the user does.
+                        helpfulAction: view.placeholder.state === "disconnected" && view.pairAction !== null
+                            ? placeholderPairAction : null
+                        Component.onCompleted: view.placeholderButton = actionButton
+                        Keys.onUpPressed: event => view.stepFocus(actionButton, -1, event)
                     }
                     Loader {
                         Layout.fillWidth: true

@@ -496,6 +496,8 @@ Item {
                     if (expected.emblem !== "")
                         compare(emblem.source, expected.emblem)
                     compare(findChild(message, "placeholderBusy").visible, expected.busy)
+                    // Only Disconnected offers a next step.
+                    compare(findChild(message, "placeholderAction").visible, expected.state === "disconnected")
                 }
             }
             host.localeName = "en_US"
@@ -551,12 +553,98 @@ Item {
             compare(findChild(placeholder(), "placeholderExplanation").text,
                     "Keep the headset in pairing mode. This can take up to a minute.")
             verify(findChild(placeholder(), "placeholderBusy").visible)
+            verify(!findChild(placeholder(), "placeholderAction").visible)
             verify(!findChild(view, "hero").visible)
             host.localeName = "es_CL"
             compare(findChild(placeholder(), "placeholderTitle").text, "Emparejando…")
             host.localeName = "en_US"
             host.pairingBusy = false
             verify(!view.showPlaceholder)
+        }
+        function test_disconnected_placeholder_offers_pairing() {
+            // As the Bluetooth applet offers Pair Device… under No devices
+            // paired: the heading's own pairing action, as a button.
+            host.status = linked("disconnected")
+            const plus = findChild(view.header, "primaryAction")
+            let button = findChild(placeholder(), "placeholderAction")
+            verify(button.visible)
+            verify(button.enabled)
+            compare(button.text, "Pair Headset…")
+            compare(button.icon.name, "list-add-symbolic")
+            compare(view.pairAction, pairAction)
+            // An enabled next step makes the message actionable.
+            compare(findChild(placeholder(), "placeholderTitle").opacity, 1)
+            compare(findChild(placeholder(), "placeholderExplanation").opacity, 1)
+            // A grid unit under the words, centred.
+            tryVerify(() => button.mapToItem(placeholder(), 0, 0).y
+                      >= findChild(placeholder(), "placeholderExplanation").mapToItem(placeholder(), 0, 0).y
+                         + findChild(placeholder(), "placeholderExplanation").height + Kirigami.Units.gridUnit - 0.5)
+            tryVerify(() => Math.abs(button.mapToItem(placeholder(), button.width / 2, 0).x
+                                     - placeholder().width / 2) < 1)
+            host.localeName = "es_CL"
+            compare(button.text, "Emparejar auricular…")
+            compare(findChild(placeholder(), "placeholderTitle").text, "Desconectado")
+            host.localeName = "en_US"
+            // It opens the same confirmation as the '+', which pairs once.
+            mouseClick(button)
+            let prompt = openedPrompt()
+            compare(prompt.title, "Pair Headset?")
+            compare(pairingSpy.count, 0)
+            mouseClick(prompt.customFooterButton(prompt.customFooterActions[0]))
+            tryCompare(view, "openPrompt", null)
+            compare(pairingSpy.count, 1)
+            // The same enabled rule as the '+', in every Disconnected state.
+            for (const [state, busy] of [[linked("disconnected"), ""], [bluetoothOnly("disconnected"), ""],
+                                         [{ok: true, usb: {adapter: "missing"}, bluetooth: {state: "disconnected"}}, ""],
+                                         [linked("disconnected"), "powerBusy"]]) {
+                host.status = state
+                if (busy)
+                    host[busy] = true
+                compare(findChild(placeholder(), "placeholderTitle").text, "Disconnected")
+                button = findChild(placeholder(), "placeholderAction")
+                verify(button.visible)
+                compare(button.enabled, plus.enabled)
+                compare(button.enabled, state.usb.adapter !== "missing" && !busy)
+                if (busy)
+                    host[busy] = false
+            }
+            // Without the dongle it stays visible, greyed, and the words say
+            // what to do; the message is informational.
+            host.status = bluetoothOnly("disconnected")
+            button = findChild(placeholder(), "placeholderAction")
+            verify(button.visible)
+            verify(!button.enabled)
+            compare(findChild(placeholder(), "placeholderExplanation").text,
+                    "Turn on the headset or plug in the USB dongle.")
+            compare(findChild(placeholder(), "placeholderTitle").opacity, 0.75)
+            mouseClick(button)
+            wait(50)
+            compare(view.openPrompt, null)
+            compare(pairingSpy.count, 1)
+            // While pairing, the placeholder waits instead.
+            host.status = linked("disconnected")
+            host.pairingBusy = true
+            verify(!findChild(placeholder(), "placeholderAction").visible)
+            host.pairingBusy = false
+            // The tray's popup offers it too.
+            verify(findChild(placeholder(trayView), "placeholderAction").visible)
+            // Down from the heading reaches it; Up returns to the heading.
+            host.status = linked("disconnected")
+            button = findChild(placeholder(), "placeholderAction")
+            plus.forceActiveFocus(Qt.TabFocusReason)
+            keyClick(Qt.Key_Down)
+            tryVerify(() => button.activeFocus)
+            keyClick(Qt.Key_Down)
+            wait(50)
+            verify(button.activeFocus)
+            keyClick(Qt.Key_Up)
+            tryVerify(() => plus.activeFocus)
+            // Without a usable next step, Down from the heading stays there.
+            host.status = linked("unknown")
+            plus.forceActiveFocus(Qt.TabFocusReason)
+            keyClick(Qt.Key_Down)
+            wait(50)
+            verify(plus.activeFocus)
         }
         function test_pairing_prompt() {
             host.status = linked("disconnected")
