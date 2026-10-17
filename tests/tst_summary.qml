@@ -1157,18 +1157,33 @@ Item {
             fakeSettings.errorCode = "gaming-active"
             fakeSettings.error = "label:gaming-active"
             compare(feedback().text, "Couldn't switch devices. label:gaming-active")
-            // A change that may have happened leaves nothing known: the read
-            // is offered again.
+            // A change that may have happened leaves nothing known: the
+            // switch it named is gone, so the warning is the failed read's,
+            // and Try Again reads the headset.
             fakeSettings.response = null
             fakeSettings.requestFeature = "gaming"
-            fakeSettings.errorCode = "timeout"
-            fakeSettings.error = "label:timeout"
-            verify(view.readFailed)
-            message = feedback()
-            compare(message.text, "Couldn't change Bluetooth gaming mode. label:timeout")
-            compare(message.actions.length, 1)
+            for (const code of ["timeout", "unconfirmed"]) {
+                fakeSettings.errorCode = code
+                fakeSettings.error = "label:" + code
+                verify(view.readFailed)
+                verify(!findChild(view, "gaming").visible)
+                message = feedback()
+                compare(message.type, Kirigami.MessageType.Warning)
+                compare(message.text, "Couldn't read the headset.")
+                compare(message.actions.length, 1)
+                host.localeName = "es_CL"
+                compare(feedback().text, "No se pudo leer el auricular.")
+                compare(feedback().actions[0].text, "Reintentar")
+                host.localeName = "en_US"
+                feedback().actions[0].trigger()
+                compare(refreshSpy.count, code === "timeout" ? 2 : 3)
+            }
+            // The reason follows when the user can act on it.
+            fakeSettings.errorCode = "route-failed"
+            fakeSettings.error = "label:route-failed"
+            compare(feedback().text, "Couldn't read the headset. label:route-failed")
             host.localeName = "es_CL"
-            compare(feedback().text, "No se pudo cambiar el modo gaming Bluetooth. label:timeout")
+            compare(feedback().text, "No se pudo leer el auricular. label:route-failed")
             host.localeName = "en_US"
             fakeSettings.error = ""
             fakeSettings.errorCode = ""
@@ -1181,7 +1196,7 @@ Item {
             compare(message.text, "Couldn't read Bluetooth gaming mode.")
             compare(findChild(findChild(view, "gaming"), "modeNote").text, "Unknown")
             message.actions[0].trigger()
-            compare(refreshSpy.count, 2)
+            compare(refreshSpy.count, 4)
             host.localeName = "es_CL"
             compare(feedback().text, "No se pudo leer el modo gaming Bluetooth.")
             host.localeName = "en_US"

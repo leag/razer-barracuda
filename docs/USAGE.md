@@ -204,11 +204,11 @@ read through the USB dongle, its switch is disabled and the row says **Only over
 Bluetooth**. With both links confirmed, the settings follow the default output,
 so this can happen while Bluetooth is connected too.
 
-A failed change is named in the message slot with the headset's reason. When
-the headset certainly did not apply it, for example a rejected change, the
-switch stays at the confirmed value to try again; when the change may have
-happened, for example without an answer, nothing stays known and **Try Again**
-reads the headset. A setting the reading could not return is named, with
+When the headset certainly did not apply a change, for example a rejected
+one, the message slot names the change with the headset's reason and the switch
+stays at the confirmed value to try again. When the change may have happened,
+for example without an answer, nothing stays known: the sections are hidden,
+the message says the headset could not be read, and **Try Again** reads it. A setting the reading could not return is named, with
 **Try Again**; when nothing could be read, the sections are hidden and the
 message says so. There is no success notice.
 

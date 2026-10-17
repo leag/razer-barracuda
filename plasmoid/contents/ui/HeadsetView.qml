@@ -151,9 +151,12 @@ PlasmaExtras.Representation {
             return {type: Kirigami.MessageType.Error, text: powerError, retry: "power"};
         if (settingsError.length > 0) {
             // A change the headset did not apply leaves its control in place
-            // to try again; anything that left the state unknown offers a read.
+            // to try again. Anything that left the state unknown, including a
+            // change that may have happened, is a failed read: the sections
+            // go and Try Again reads the headset.
             return {type: Kirigami.MessageType.Warning,
-                    text: Output.settingsFailure(settings.requestFeature, settings.errorCode, settingsError, localeName),
+                    text: Output.settingsFailure(settingsState === null ? "" : settings.requestFeature,
+                                                 settings.errorCode, settingsError, localeName),
                     retry: settingsState === null ? "read" : ""};
         }
         const failed = ["dnd", "gaming", "devices"].filter(feature => readErrors[feature]);
