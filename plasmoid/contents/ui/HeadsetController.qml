@@ -38,7 +38,8 @@ Plasma5Support.DataSource {
             "driver-required": label("Install or update the Barracuda driver.", "Instala o actualiza el driver del Barracuda."),
             "missing-adapter": label("Plug in the USB dongle.", "Conecta el dongle USB."),
             "unknown-link": label("The headset link is not confirmed.", "La conexión del auricular no está confirmada."),
-            "permission-denied": label("Install or update the barracuda-pair package to allow headset access.", "Instala o actualiza el paquete barracuda-pair para permitir el acceso al auricular."),
+            // The driver's udev rule gives the audio group headset access.
+            "permission-denied": label("Install or update the Barracuda driver and add your user to the audio group.", "Instala o actualiza el driver del Barracuda y añade tu usuario al grupo audio."),
             "bluetooth-runtime-unavailable": label("Install or update the barracuda-pair package to use Bluetooth.", "Instala o actualiza el paquete barracuda-pair para usar Bluetooth."),
             "bluetooth-unsupported": label("This headset can't be controlled over Bluetooth.", "Este auricular no se puede controlar por Bluetooth."),
             "bluetooth-unavailable": label("The headset didn't answer over Bluetooth.", "El auricular no respondió por Bluetooth."),
