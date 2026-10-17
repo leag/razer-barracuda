@@ -173,7 +173,7 @@ class PlasmoidTests(unittest.TestCase):
             self.assertEqual(leftovers(), [])
 
     @unittest.skipUnless(Path(RUNNER).is_file(), 'Qt 6 QML test runner not installed')
-    def test_configuration_categories_in_both_languages(self):
+    def test_configuration_category_in_both_languages(self):
         with tempfile.TemporaryDirectory() as directory:
             probe = Path(directory) / 'tst_categories.qml'
             probe.write_text('import QtQuick\nimport QtTest\nTestCase { name: "Categories"; '
@@ -181,8 +181,7 @@ class PlasmoidTests(unittest.TestCase):
                              'const names = []; for (let i = 0; i < model.count; ++i) names.push(model.get(i).name); '
                              'console.log("NAMES " + JSON.stringify(names)) } }\n'
                              % (ROOT / 'plasmoid/contents/config/config.qml').as_uri())
-            for language, names in (('en_US.UTF-8', ['Equalizer', 'Power Saving']),
-                                    ('es_CL.UTF-8', ['Ecualizador', 'Ahorro de energía'])):
+            for language, names in (('en_US.UTF-8', ['Headset']), ('es_CL.UTF-8', ['Auricular'])):
                 result, _ = run_qml(probe, LC_ALL=language, LANG=language, LANGUAGE=language.split('.')[0])
                 output = result.stdout + result.stderr
                 self.assertEqual(result.returncode, 0, output)

@@ -8,24 +8,27 @@ Item {
     id: host
     width: 600
     height: 700
+    // Stands in for HeadsetController; nothing is sent to a headset.
     QtObject {
         id: fakeHeadset
         property bool busy: false
         property var response: null
         property string error: ""
-        property string message: ""
+        property string errorCode: ""
+        property string targetKey: "usb"
         property var requests: []
         property var chains: []
         signal loaded(var result)
         function request(value) { requests = requests.concat([value]); }
         function requestChain(values) { chains = chains.concat([values]); busy = true; }
-        function errorLabel(code) { return code; }
+        function errorLabel(code) { return "label:" + code; }
     }
     HeadsetSettings {
-        id: nativeSettings
+        id: page
         anchors.fill: parent
         visible: false
         controller: fakeHeadset
+        localeName: "en_US"
     }
     // An unknown engine name runs nothing; an empty one would keep the
     // component's executable engine.
@@ -33,11 +36,20 @@ Item {
     TestCase {
         name: "HeadsetSettings"
         when: windowShown
+        readonly property var flat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         // A reply as HeadsetController delivers it: busy ends, then the reply.
         function reply(result) {
             fakeHeadset.busy = false;
             fakeHeadset.response = result;
             fakeHeadset.loaded(result);
+        }
+        // A failed reply: busy ends, then the error.
+        function fail(code, keepResponse) {
+            fakeHeadset.busy = false;
+            if (!keepResponse)
+                fakeHeadset.response = null;
+            fakeHeadset.errorCode = code;
+            fakeHeadset.error = "label:" + code;
         }
         function findAll(item, test) {
             let found = test(item) ? [item] : [];
@@ -45,270 +57,427 @@ Item {
                 found = found.concat(findAll(child, test));
             return found;
         }
-        function test_native_readback_and_sections() {
-            nativeSettings.visible = true;
-            nativeSettings.section = "equalizer";
-            const result = {ok: true, state: {preset: 7, bands: [0,0,0,0,0,0,0,0,0,0],
-                                             gaming: false, dnd: null, standby: 15, devices: []},
-                            errors: {dnd: "timeout"}};
-            reply(result);
-            wait(20);
-            const selector = findChild(nativeSettings, "nativeProfileSelector");
-            compare(selector.currentIndex, 1);
-            compare(selector.currentText, "Game");
-            compare(nativeSettings.confirmedPresetIcon, "input-gamepad");
-            verify(!selector.wheelEnabled);
-            // The equalizer section shows only EQ controls; the popup's
-            // settings have no copy here.
-            verify(findChild(nativeSettings, "equalizerSection").visible);
-            verify(!findChild(nativeSettings, "powerSaving").visible);
-            for (const name of ["quickConnect", "quickConnectDevices", "quickConnectBlocked", "nativeDnd", "nativeGaming"])
-                compare(findChild(nativeSettings, name), null);
-            compare(nativeSettings.settingsError, "");
-            nativeSettings.section = "powerSaving";
-            verify(findChild(nativeSettings, "powerSaving").visible);
-            verify(!findChild(nativeSettings, "equalizerSection").visible);
-            const standby = findChild(nativeSettings, "nativeStandby");
-            verify(!standby.wheelEnabled);
+        function sliders() {
+            return findAll(findChild(page, "customBands"), item => item.orientation === Qt.Vertical && item.from === -5);
+        }
+        function init() {
+            fakeHeadset.busy = false;
+            fakeHeadset.response = null;
+            fakeHeadset.error = "";
+            fakeHeadset.errorCode = "";
+            fakeHeadset.requests = [];
+            fakeHeadset.chains = [];
+            page.localeName = "en_US";
+            page.pendingPreset = -1;
+            page.pendingStandby = -1;
+            page.bands = flat.slice();
+            page.bandsDirty = false;
+            page.saving = false;
+            page.saveFailed = false;
+            page.visible = true;
+        }
+        function cleanup() {
+            page.visible = false;
+            fakeHeadset.busy = false;
+            fakeHeadset.response = null;
+            fakeHeadset.error = "";
+            fakeHeadset.errorCode = "";
+            page.saving = false;
+        }
+        function test_placeholders_before_a_reading() {
+            const reading = findChild(page, "settingsReading");
+            const unread = findChild(page, "settingsUnavailable");
+            const form = findChild(page, "profileSelector");
+            const message = findChild(page, "settingsMessage");
+            // The first reading runs: a loading placeholder, nothing else.
+            fakeHeadset.busy = true;
+            verify(!page.loaded);
+            verify(reading.visible);
+            verify(!unread.visible);
+            verify(!form.visible);
+            verify(!message.visible);
+            compare(reading.text, "Reading the headset…");
+            page.localeName = "es_CL";
+            compare(reading.text, "Leyendo el auricular…");
+            page.localeName = "en_US";
+            // Nothing was read: a placeholder with Try Again.
+            fakeHeadset.busy = false;
+            verify(!reading.visible);
+            verify(unread.visible);
+            compare(unread.text, "Settings not read");
+            compare(unread.explanation, "Turn on the headset to read its settings.");
+            compare(unread.icon.name, "audio-headset");
+            const again = unread.helpfulAction;
+            compare(again.objectName, "readAgain");
+            compare(again.text, "Try Again");
+            compare(again.icon.name, "view-refresh-symbolic");
+            verify(again.enabled);
+            again.trigger();
+            compare(fakeHeadset.requests, [{op: "status"}]);
+            page.localeName = "es_CL";
+            compare(unread.text, "Ajustes sin leer");
+            compare(unread.explanation, "Enciende el auricular para leer sus ajustes.");
+            compare(again.text, "Reintentar");
+            page.localeName = "en_US";
+            // A failed reading says why, in the controller's words.
+            fail("timeout");
+            compare(unread.explanation, "label:timeout");
+            fakeHeadset.busy = true;
+            verify(!again.enabled);
+            verify(reading.visible);
+            fakeHeadset.busy = false;
+            // A reply without either setting is not a reading either.
+            reply({ok: true, state: {preset: null, standby: null}, errors: {preset: "timeout", standby: "timeout"}});
+            fakeHeadset.error = "";
+            verify(!page.loaded);
+            verify(unread.visible);
+            compare(unread.explanation, "Couldn't read the sound profile or idle shutdown. label:timeout");
+        }
+        function test_readback_on_one_page() {
+            reply({ok: true, state: {preset: 7, bands: flat.slice(), gaming: false, dnd: null, standby: 15, devices: []},
+                   errors: {dnd: "timeout"}});
+            verify(page.loaded);
+            verify(!findChild(page, "settingsReading").visible);
+            verify(!findChild(page, "settingsUnavailable").visible);
+            const profile = findChild(page, "profileSelector");
+            const standby = findChild(page, "standbySelector");
+            // Both settings are on the page.
+            verify(profile.visible);
+            verify(standby.visible);
+            compare(profile.currentIndex, 1);
+            compare(profile.currentText, "Game");
             compare(standby.currentIndex, 2);
             compare(standby.currentText, "15 min");
-            compare(standby.Accessible.name, "Turn off when idle");
-            nativeSettings.localeName = "es_CL";
-            compare(standby.Accessible.name, "Apagar por inactividad");
-            nativeSettings.localeName = "en_US";
-            nativeSettings.section = "equalizer";
+            verify(!profile.wheelEnabled);
+            verify(!standby.wheelEnabled);
+            verify(profile.enabled);
+            verify(standby.enabled);
+            // The popup's settings, and their read errors, are not here.
+            for (const name of ["dnd", "gaming", "quickConnect", "deviceRow", "nativeDnd", "nativeGaming"])
+                compare(findChild(page, name), null);
+            verify(!findChild(page, "settingsMessage").visible);
+            // Custom bands only with the Custom profile.
+            verify(!findChild(page, "customBands").visible);
+            verify(!findChild(page, "resetBands").visible);
+            // Labels, profile names and accessible names in both languages.
+            const expected = {
+                en_US: {profile: "Sound profile:", standby: "Turn off when idle:", bands: "Bands:",
+                        names: ["Default", "Game", "Music", "Movie", "Custom"], never: "Never",
+                        profileName: "Sound profile", standbyName: "Turn off when idle"},
+                es_CL: {profile: "Perfil de sonido:", standby: "Apagar por inactividad:", bands: "Bandas:",
+                        names: ["Predeterminado", "Juegos", "Música", "Cine", "Personalizado"], never: "Nunca",
+                        profileName: "Perfil de sonido", standbyName: "Apagar por inactividad"}
+            };
+            for (const locale of ["en_US", "es_CL"]) {
+                page.localeName = locale;
+                const text = expected[locale];
+                compare(profile.parent.Kirigami.FormData.label, text.profile);
+                compare(standby.parent.Kirigami.FormData.label, text.standby);
+                compare(findChild(page, "customBands").Kirigami.FormData.label, text.bands);
+                compare(Array.from(profile.model), text.names);
+                compare(standby.model[0], text.never);
+                compare(Array.from(standby.model).slice(1), ["5 min", "15 min", "30 min", "45 min", "60 min"]);
+                compare(profile.Accessible.name, text.profileName);
+                compare(standby.Accessible.name, text.standbyName);
+                tryCompare(profile, "currentText", text.names[1]);
+            }
+            page.localeName = "en_US";
+            // A stored profile the page does not know reads Unknown and
+            // cannot be changed here.
+            reply({ok: true, state: {preset: 3, standby: 15}, errors: {}});
+            verify(!profile.enabled);
+            compare(profile.currentIndex, -1);
+            compare(profile.displayText, "Unknown");
+            verify(!profile.enabled);
+            page.localeName = "es_CL";
+            compare(profile.displayText, "Desconocido");
+            page.localeName = "en_US";
+            // Nothing can be chosen while a request runs.
+            reply({ok: true, state: {preset: 7, standby: 15}, errors: {}});
             fakeHeadset.busy = true;
-            verify(!selector.enabled);
+            verify(!findChild(page, "profileSelector").parent.parent.enabled);
             fakeHeadset.busy = false;
-            nativeSettings.localeName = "es_CL";
-            tryCompare(selector, "currentText", "Juegos");
+            // A lost reading brings the placeholder back.
             fakeHeadset.response = null;
-            compare(selector.currentIndex, 1);
-            verify(!selector.enabled);
-            nativeSettings.localeName = "en_US";
-            nativeSettings.visible = false;
+            verify(!page.loaded);
+            verify(findChild(page, "settingsUnavailable").visible);
         }
         function test_profile_waits_for_apply() {
-            nativeSettings.visible = true;
-            nativeSettings.section = "equalizer";
-            fakeHeadset.requests = [];
-            fakeHeadset.chains = [];
-            const selector = findChild(nativeSettings, "nativeProfileSelector");
-            const custom = findChild(nativeSettings, "nativeCustomBands");
-            reply({ok: true, state: {preset: 8, bands: [0,0,0,0,0,0,0,0,0,0]}});
-            compare(selector.currentIndex, 2);
+            const profile = findChild(page, "profileSelector");
+            const custom = findChild(page, "customBands");
+            reply({ok: true, state: {preset: 8, bands: flat.slice(), standby: 15}, errors: {}});
+            compare(profile.currentIndex, 2);
             verify(!custom.visible);
-            verify(!nativeSettings.unsavedChanges);
+            verify(!page.unsavedChanges);
             // Choosing a profile sends nothing; Plasma's Apply is enabled.
-            selector.activated(1);
+            profile.activated(1);
             compare(fakeHeadset.requests.length, 0);
             compare(fakeHeadset.chains.length, 0);
-            compare(selector.currentIndex, 1);
-            compare(selector.currentText, "Game");
-            compare(nativeSettings.selectedPresetIcon, "input-gamepad");
-            verify(nativeSettings.unsavedChanges);
+            compare(profile.currentIndex, 1);
+            compare(profile.currentText, "Game");
+            verify(page.unsavedChanges);
             // Choosing the stored profile again leaves nothing to apply.
-            selector.activated(2);
-            verify(!nativeSettings.unsavedChanges);
-            compare(selector.currentIndex, 2);
+            profile.activated(2);
+            verify(!page.unsavedChanges);
+            compare(profile.currentIndex, 2);
             // With nothing unsaved, Apply sends nothing.
-            nativeSettings.save();
+            page.save();
             compare(fakeHeadset.chains.length, 0);
             // Apply or OK sends the chosen profile.
-            selector.activated(3);
-            nativeSettings.save();
-            compare(fakeHeadset.chains.length, 1);
-            compare(fakeHeadset.chains[0], [{op: "set", feature: "preset", value: 9}]);
-            verify(nativeSettings.saving);
-            verify(!nativeSettings.unsavedChanges);
-            fakeHeadset.busy = true;
-            const sending = findChild(nativeSettings, "nativeSettingsSaving");
-            verify(sending.visible);
-            compare(sending.text, "Sending changes to the headset…");
-            verify(!findChild(nativeSettings, "nativeSettingsReading").visible);
-            nativeSettings.localeName = "es_CL";
-            compare(sending.text, "Enviando cambios al auricular…");
-            nativeSettings.localeName = "en_US";
-            reply({ok: true, sent: "preset", state: {preset: 9, bands: [0,0,0,0,0,0,0,0,0,0]}});
-            tryVerify(() => !nativeSettings.saving);
-            compare(nativeSettings.pendingPreset, -1);
-            compare(selector.currentIndex, 3);
-            verify(!nativeSettings.unsavedChanges);
-            fakeHeadset.response = null;
-            nativeSettings.visible = false;
+            profile.activated(3);
+            page.save();
+            compare(fakeHeadset.chains, [[{op: "set", feature: "preset", value: 9}]]);
+            verify(page.saving);
+            verify(!page.unsavedChanges);
+            // The message slot says the changes are being sent.
+            const message = findChild(page, "settingsMessage");
+            verify(message.visible);
+            compare(message.type, Kirigami.MessageType.Information);
+            compare(message.text, "Sending changes to the headset…");
+            compare(message.actions.length, 0);
+            page.localeName = "es_CL";
+            compare(message.text, "Enviando cambios al auricular…");
+            page.localeName = "en_US";
+            reply({ok: true, sent: "preset", state: {preset: 9, bands: flat.slice(), standby: 15}, errors: {}});
+            tryVerify(() => !page.saving);
+            compare(page.pendingPreset, -1);
+            compare(profile.currentIndex, 3);
+            verify(!page.unsavedChanges);
+            verify(!message.visible);
         }
         function test_custom_profile_and_bands_go_in_one_chain() {
-            nativeSettings.visible = true;
-            nativeSettings.section = "equalizer";
-            fakeHeadset.requests = [];
-            fakeHeadset.chains = [];
             const curve = [2, 1, 0, -1, 0, 1, 2, 3, 1, 0];
-            const selector = findChild(nativeSettings, "nativeProfileSelector");
-            const custom = findChild(nativeSettings, "nativeCustomBands");
-            reply({ok: true, state: {preset: 8, bands: curve.slice()}});
+            const profile = findChild(page, "profileSelector");
+            const custom = findChild(page, "customBands");
+            const reset = findChild(page, "resetBands");
+            const message = findChild(page, "settingsMessage");
+            reply({ok: true, state: {preset: 8, bands: curve.slice(), standby: 15}, errors: {}});
             verify(!custom.visible);
             // Choosing Custom shows the stored curve for editing.
-            selector.activated(4);
+            profile.activated(4);
             verify(custom.visible);
-            compare(nativeSettings.bands, curve);
+            verify(reset.visible);
+            compare(page.bands, curve);
+            compare(sliders().map(slider => slider.value), curve);
             // Unchanged bands: only the profile is sent.
-            compare(nativeSettings.changes(), [{op: "set", feature: "preset", value: 255}]);
-            const sliders = findAll(custom, item => item.orientation === Qt.Vertical && item.from === -5);
-            compare(sliders.length, 10);
+            compare(page.changes(), [{op: "set", feature: "preset", value: 255}]);
+            compare(sliders().length, 10);
             // As a drag does, without replacing the slider's binding.
             for (let step = 0; step < 5; ++step)
-                sliders[0].decrease();
-            sliders[0].moved();
-            verify(nativeSettings.bandsDirty);
-            verify(nativeSettings.unsavedBands);
+                sliders()[0].decrease();
+            sliders()[0].moved();
+            verify(page.bandsDirty);
+            verify(page.unsavedBands);
             const edited = [-3, 1, 0, -1, 0, 1, 2, 3, 1, 0];
             // Edited bands follow the profile in one chain.
-            nativeSettings.save();
-            compare(fakeHeadset.chains.length, 1);
-            compare(fakeHeadset.chains[0], [{op: "set", feature: "preset", value: 255},
-                                            {op: "set", feature: "bands", value: edited}]);
-            // The chain stops at the first failure and the choices are kept;
-            // the error at the top offers Refresh, after which Apply can send
-            // them again.
-            fakeHeadset.busy = true;
-            fakeHeadset.busy = false;
-            fakeHeadset.response = null;
-            fakeHeadset.error = "The change could not be confirmed. Refresh before trying again.";
-            tryVerify(() => !nativeSettings.saving);
-            compare(selector.currentIndex, 4);
-            compare(nativeSettings.bands, edited);
-            const error = findChild(nativeSettings, "nativeSettingsError");
-            verify(error.visible);
-            compare(error.actions[0].objectName, "refreshNativeSettings");
-            verify(error.actions[0].enabled);
-            error.actions[0].trigger();
-            compare(fakeHeadset.requests[fakeHeadset.requests.length - 1], {op: "status"});
-            fakeHeadset.error = "";
-            reply({ok: true, state: {preset: 8, bands: curve.slice()}});
-            verify(nativeSettings.unsavedChanges);
-            compare(nativeSettings.bands, edited);
-            // Refresh would not discard the choices, but it waits for Apply.
-            verify(!error.actions[0].enabled);
-            nativeSettings.save();
+            page.save();
+            compare(fakeHeadset.chains, [[{op: "set", feature: "preset", value: 255},
+                                          {op: "set", feature: "bands", value: edited}]]);
+            // The chain stops at a change the headset rejected: the choices
+            // stay for another Apply, and the message says the changes were
+            // not applied. Try Again is not offered while they wait.
+            fail("rejected", true);
+            tryVerify(() => !page.saving);
+            verify(page.saveFailed);
+            compare(profile.currentIndex, 4);
+            compare(page.bands, edited);
+            verify(page.unsavedChanges);
+            verify(message.visible);
+            compare(message.type, Kirigami.MessageType.Warning);
+            compare(message.text, "Couldn't apply the changes. label:rejected");
+            compare(message.actions.length, 0);
+            page.localeName = "es_CL";
+            compare(message.text, "No se pudieron aplicar los cambios. label:rejected");
+            page.localeName = "en_US";
+            // Apply again: the message clears as the chain starts.
+            page.save();
             compare(fakeHeadset.chains.length, 2);
-            reply({ok: true, sent: "bands", state: {preset: 255, bands: edited.slice()}});
-            tryVerify(() => !nativeSettings.saving);
-            verify(!nativeSettings.unsavedChanges);
-            compare(nativeSettings.pendingPreset, -1);
-            compare(selector.currentIndex, 4);
-            compare(nativeSettings.bands, edited);
+            fakeHeadset.error = "";
+            verify(!page.saveFailed);
+            reply({ok: true, sent: "bands", state: {preset: 255, bands: edited.slice(), standby: 15}, errors: {}});
+            tryVerify(() => !page.saving);
+            verify(!page.unsavedChanges);
+            compare(page.pendingPreset, -1);
+            compare(profile.currentIndex, 4);
+            compare(page.bands, edited);
+            verify(!message.visible);
             // Reset Bands is a change like any other.
-            const reset = findChild(nativeSettings, "resetNativeBands");
             compare(reset.text, "Reset Bands");
+            compare(reset.icon.name, "edit-reset");
+            verify(reset.enabled);
             reset.clicked();
-            verify(nativeSettings.unsavedBands);
-            compare(nativeSettings.changes(), [{op: "set", feature: "bands", value: [0,0,0,0,0,0,0,0,0,0]}]);
-            nativeSettings.localeName = "es_CL";
+            verify(page.unsavedBands);
+            compare(page.changes(), [{op: "set", feature: "bands", value: flat}]);
+            verify(!reset.enabled);
+            page.localeName = "es_CL";
             compare(reset.text, "Restablecer bandas");
-            nativeSettings.localeName = "en_US";
+            page.localeName = "en_US";
             // Bands are sent by the window's Apply, not a page button.
-            compare(findChild(nativeSettings, "applyNativeBands"), null);
-            compare(findChild(nativeSettings, "bandsUnit").text, "Hz");
-            nativeSettings.bandsDirty = false;
-            fakeHeadset.response = null;
-            nativeSettings.visible = false;
+            compare(findChild(page, "applyNativeBands"), null);
+            compare(findChild(page, "bandsUnit").text, "Hz");
+            compare(sliders()[0].Accessible.name, "31 Hz");
+            compare(sliders()[9].Accessible.name, "16k Hz");
+        }
+        function test_failed_apply_that_left_nothing_known() {
+            const profile = findChild(page, "profileSelector");
+            reply({ok: true, state: {preset: 8, bands: flat.slice(), standby: 15}, errors: {}});
+            profile.activated(1);
+            page.save();
+            // A change that may have reached the headset drops the reading:
+            // the placeholder says the changes were not applied and offers
+            // the read again, which keeps the choice for another Apply.
+            fail("timeout");
+            tryVerify(() => !page.saving);
+            const unread = findChild(page, "settingsUnavailable");
+            verify(unread.visible);
+            compare(unread.explanation, "Couldn't apply the changes. label:timeout");
+            verify(unread.helpfulAction.enabled);
+            unread.helpfulAction.trigger();
+            compare(fakeHeadset.requests, [{op: "status"}]);
+            fakeHeadset.busy = true;
+            fakeHeadset.error = "";
+            reply({ok: true, state: {preset: 8, bands: flat.slice(), standby: 15}, errors: {}});
+            verify(!page.saveFailed);
+            compare(profile.currentIndex, 1);
+            verify(page.unsavedChanges);
         }
         function test_idle_shutdown_waits_for_apply() {
-            nativeSettings.visible = true;
-            nativeSettings.section = "powerSaving";
-            fakeHeadset.requests = [];
-            fakeHeadset.chains = [];
-            const standby = findChild(nativeSettings, "nativeStandby");
-            reply({ok: true, state: {preset: 7, bands: [0,0,0,0,0,0,0,0,0,0], standby: 15}});
+            const standby = findChild(page, "standbySelector");
+            reply({ok: true, state: {preset: 7, bands: flat.slice(), standby: 15}, errors: {}});
             compare(standby.currentIndex, 2);
-            verify(!nativeSettings.unsavedChanges);
+            verify(!page.unsavedChanges);
             standby.activated(3);
             compare(fakeHeadset.requests.length, 0);
             compare(standby.currentIndex, 3);
-            verify(nativeSettings.unsavedChanges);
+            verify(page.unsavedChanges);
             standby.activated(2);
-            verify(!nativeSettings.unsavedChanges);
+            verify(!page.unsavedChanges);
             standby.activated(0);
             compare(standby.currentText, "Never");
-            compare(nativeSettings.changes(), [{op: "set", feature: "standby", value: 0}]);
-            nativeSettings.save();
+            compare(page.changes(), [{op: "set", feature: "standby", value: 0}]);
+            page.save();
             compare(fakeHeadset.chains, [[{op: "set", feature: "standby", value: 0}]]);
-            reply({ok: true, sent: "standby", state: {preset: 7, standby: 0}});
-            tryVerify(() => !nativeSettings.saving);
-            compare(nativeSettings.pendingStandby, -1);
+            reply({ok: true, sent: "standby", state: {preset: 7, standby: 0}, errors: {}});
+            tryVerify(() => !page.saving);
+            compare(page.pendingStandby, -1);
             compare(standby.currentIndex, 0);
-            verify(!nativeSettings.unsavedChanges);
-            nativeSettings.localeName = "es_CL";
+            verify(!page.unsavedChanges);
+            page.localeName = "es_CL";
             tryCompare(standby, "currentText", "Nunca");
-            nativeSettings.localeName = "en_US";
-            // Each category sends only its own changes.
-            nativeSettings.pendingPreset = 9;
-            compare(nativeSettings.changes(), []);
-            verify(!nativeSettings.unsavedChanges);
-            nativeSettings.pendingPreset = -1;
-            fakeHeadset.response = null;
-            nativeSettings.section = "equalizer";
-            nativeSettings.visible = false;
         }
-        function test_repeated_errors_share_one_notice() {
-            nativeSettings.localeName = "en_US";
-            fakeHeadset.response = {state: {preset: null}, errors: {
-                preset: "unknown-link", bands: "unknown-link", gaming: "unknown-link",
-                dnd: "unknown-link", standby: "unknown-link", devices: "unknown-link"}};
-            compare(nativeSettings.settingsError, "unknown-link");
-            const notice = findChild(nativeSettings, "nativeSettingsError");
-            compare(notice.text, "unknown-link");
-            // Refresh is offered inside the notice, not as a separate row.
-            compare(notice.actions.length, 1);
-            compare(notice.actions[0].objectName, "refreshNativeSettings");
-            notice.actions[0].trigger();
-            compare(fakeHeadset.requests[fakeHeadset.requests.length - 1].op, "status");
-            // Each section reports only its own errors.
-            fakeHeadset.response = {state: {preset: null}, errors: {preset: "unknown-link", standby: "timeout"}};
-            compare(nativeSettings.settingsError, "unknown-link");
-            nativeSettings.section = "powerSaving";
-            compare(nativeSettings.settingsError, "timeout");
-            nativeSettings.section = "equalizer";
-            // Quick Connect, Do Not Disturb and gaming errors belong to the popup.
-            fakeHeadset.response = {state: {preset: 7}, errors: {devices: "timeout", dnd: "timeout", gaming: "timeout"}};
-            compare(nativeSettings.settingsError, "");
-            fakeHeadset.response = {state: {preset: null}, errors: {preset: "unknown-link", bands: "timeout"}};
-            compare(nativeSettings.settingsError, "Equalizer: unknown-link Custom EQ: timeout");
-            nativeSettings.localeName = "es_CL";
-            verify(nativeSettings.settingsError.includes("Ecualizador:"));
-            fakeHeadset.response = null;
-            nativeSettings.localeName = "en_US";
+        function test_every_change_goes_in_one_chain() {
+            const profile = findChild(page, "profileSelector");
+            const standby = findChild(page, "standbySelector");
+            reply({ok: true, state: {preset: 8, bands: flat.slice(), standby: 15}, errors: {}});
+            profile.activated(4);
+            sliders()[9].increase();
+            sliders()[9].moved();
+            standby.activated(5);
+            // The profile, then its bands, then idle shutdown.
+            compare(page.changes(), [{op: "set", feature: "preset", value: 255},
+                                     {op: "set", feature: "bands", value: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1]},
+                                     {op: "set", feature: "standby", value: 60}]);
+            page.save();
+            compare(fakeHeadset.chains.length, 1);
+            compare(fakeHeadset.chains[0].length, 3);
+            // One request at a time: a second Apply while it runs sends nothing.
+            page.save();
+            compare(fakeHeadset.chains.length, 1);
+        }
+        function test_read_failures_name_the_setting() {
+            const standby = findChild(page, "standbySelector");
+            const message = findChild(page, "settingsMessage");
+            // Idle shutdown could not be read: Unknown and disabled, never a
+            // default that looks real, and the message offers the read again.
+            reply({ok: true, state: {preset: 8, bands: flat.slice(), standby: null}, errors: {standby: "timeout"}});
+            verify(page.loaded);
+            verify(!standby.enabled);
+            compare(standby.currentIndex, -1);
+            compare(standby.displayText, "Unknown");
+            verify(message.visible);
+            compare(message.type, Kirigami.MessageType.Warning);
+            compare(message.text, "Couldn't read idle shutdown. label:timeout");
+            compare(message.actions.length, 1);
+            compare(message.actions[0].objectName, "readAgain");
+            compare(message.actions[0].text, "Try Again");
+            message.actions[0].trigger();
+            compare(fakeHeadset.requests, [{op: "status"}]);
+            page.localeName = "es_CL";
+            compare(standby.displayText, "Desconocido");
+            compare(message.text, "No se pudo leer el apagado por inactividad. label:timeout");
+            compare(message.actions[0].text, "Reintentar");
+            page.localeName = "en_US";
+            // Each failed setting is named; the first one's reason follows.
+            reply({ok: true, state: {preset: null, bands: null, standby: 15},
+                   errors: {preset: "busy", bands: "timeout"}});
+            compare(message.text, "Couldn't read the sound profile or the custom bands. label:busy");
+            verify(!findChild(page, "profileSelector").enabled);
+            compare(findChild(page, "profileSelector").displayText, "Unknown");
+            page.localeName = "es_CL";
+            compare(message.text, "No se pudo leer el perfil de sonido ni las bandas personalizadas. label:busy");
+            page.localeName = "en_US";
+            reply({ok: true, state: {preset: 255, bands: null, standby: null},
+                   errors: {preset: "busy", bands: "timeout", standby: "timeout"}});
+            compare(message.text, "Couldn't read the sound profile, the custom bands or idle shutdown. label:busy");
+            page.localeName = "es_CL";
+            compare(message.text,
+                    "No se pudo leer el perfil de sonido, las bandas personalizadas ni el apagado por inactividad. label:busy");
+            page.localeName = "en_US";
+            // The popup's settings are read on the same reply, but their
+            // errors belong to the popup.
+            reply({ok: true, state: {preset: 7, standby: 15}, errors: {devices: "timeout", dnd: "timeout", gaming: "timeout"}});
+            verify(!message.visible);
+            compare(page.problem, "");
+            // Try Again waits while a reading runs.
+            reply({ok: true, state: {preset: 7, standby: null}, errors: {standby: "timeout"}});
+            fakeHeadset.busy = true;
+            verify(!message.actions[0].enabled);
         }
         function test_loaded_custom_bands_reach_the_sliders() {
-            nativeSettings.visible = true;
-            nativeSettings.bandsDirty = false;
             const curve = [2, 1, 0, -1, 0, 1, 2, 3, 1, 0];
-            const result = {ok: true, state: {preset: 255, bands: curve.slice()}};
+            const result = {ok: true, state: {preset: 255, bands: curve.slice(), standby: 15}, errors: {}};
             fakeHeadset.response = result;
             // The reply reaches the page as a var signal argument.
             fakeHeadset.loaded(result);
-            compare(nativeSettings.bands, curve);
-            verify(Array.isArray(nativeSettings.bands));
-            const custom = findChild(nativeSettings, "nativeCustomBands");
-            verify(custom.visible);
-            const sliders = [];
-            const collect = item => {
-                if (item.orientation === Qt.Vertical && item.from === -5)
-                    sliders.push(item);
-                for (const child of item.children)
-                    collect(child);
-            };
-            collect(custom);
-            compare(sliders.length, 10);
-            compare(sliders.map(slider => slider.value), curve);
+            compare(page.bands, curve);
+            verify(Array.isArray(page.bands));
+            verify(findChild(page, "customBands").visible);
+            compare(sliders().length, 10);
+            compare(sliders().map(slider => slider.value), curve);
             // A reply without ten values keeps the current curve.
-            const partial = {ok: true, state: {preset: 255, bands: [1, 2]}};
+            const partial = {ok: true, state: {preset: 255, bands: [1, 2], standby: 15}, errors: {}};
             fakeHeadset.response = partial;
             fakeHeadset.loaded(partial);
-            compare(nativeSettings.bands, curve);
-            fakeHeadset.response = null;
-            nativeSettings.bands = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-            nativeSettings.visible = false;
+            compare(page.bands, curve);
+        }
+        function test_contextual_help_translation() {
+            reply({ok: true, state: {preset: 7, bands: flat.slice(), gaming: false, dnd: false, standby: 15, devices: []},
+                   errors: {}});
+            // The page's only help button, next to the sound profile.
+            compare(findAll(page, item => item.toolTipText !== undefined && item.visible).length, 1);
+            for (const name of ["dndHelp", "standbyHelp", "quickConnectHelp", "refreshHelp", "bandsHelp"])
+                compare(findChild(page, name), null);
+            const help = findChild(page, "profileHelp");
+            verify(help.visible);
+            compare(help.toolTipText, "Profiles and the custom bands are stored on the headset. With Custom, each band "
+                    + "is relative and 0 is neutral. Apply sends the changes; Cancel discards them. The Game profile "
+                    + "is not Bluetooth gaming mode.");
+            page.localeName = "es_CL";
+            compare(help.toolTipText, "Los perfiles y las bandas personalizadas se guardan en el auricular. Con "
+                    + "Personalizado, cada banda es relativa y 0 es neutro. Aplicar envía los cambios; Cancelar los "
+                    + "descarta. El perfil Juegos no es el modo gaming Bluetooth.");
+        }
+        function test_transport_change_drops_pending_choices() {
+            reply({ok: true, state: {preset: 8, standby: 15}, errors: {}});
+            findChild(page, "standbySelector").activated(1);
+            verify(page.unsavedChanges);
+            // Another headset target: nothing chosen for the old one is kept,
+            // even once the new one has been read.
+            fakeHeadset.targetKey = "01:02:03:04:05:06";
+            compare(page.pendingStandby, -1);
+            reply({ok: true, state: {preset: 8, standby: 15}, errors: {}});
+            verify(!page.unsavedChanges);
+            fakeHeadset.targetKey = "usb";
         }
         function test_native_error_clears_confirmed_state() {
             // A failed read leaves nothing known.
@@ -445,105 +614,6 @@ Item {
             compare(nativeBackend.response.state.preset, 0);
             nativeBackend.target = {transport: "usb"};
             nativeBackend.requestedKey = nativeBackend.targetKey;
-        }
-        function test_contextual_help_translation() {
-            nativeSettings.visible = true;
-            const result = {ok: true, state: {preset: 7, bands: [0,0,0,0,0,0,0,0,0,0],
-                                             gaming: false, dnd: false, standby: 15, devices: []}};
-            reply(result);
-            // One help button in the equalizer section, none in the other.
-            for (const name of ["dndHelp", "standbyHelp", "quickConnectHelp", "refreshHelp"])
-                compare(findChild(nativeSettings, name), null);
-            const profile = findChild(nativeSettings, "profileHelp");
-            verify(profile.visible);
-            nativeSettings.localeName = "en_US";
-            compare(profile.toolTipText, "Profiles are stored on the headset. Choose a profile, or Custom to adjust the bands "
-                    + "(0 is neutral), then select Apply to send it; Cancel discards it. The Game profile is independent "
-                    + "of Bluetooth Gaming Mode in the popup.");
-            nativeSettings.localeName = "es_CL";
-            compare(profile.toolTipText, "Los perfiles se guardan en el auricular. Elige un perfil, o Personalizado para "
-                    + "ajustar las bandas (0 es neutro), y selecciona Aplicar para enviarlo; Cancelar lo descarta. El perfil "
-                    + "Juegos es independiente del modo gaming Bluetooth de la ventana emergente.");
-            nativeSettings.section = "powerSaving";
-            verify(!findChild(nativeSettings, "profileHelp").visible);
-            nativeSettings.section = "equalizer";
-            nativeSettings.localeName = "en_US";
-            fakeHeadset.response = null;
-            nativeSettings.visible = false;
-        }
-        function test_messages_at_the_top_offer_refresh() {
-            nativeSettings.visible = true;
-            nativeSettings.section = "equalizer";
-            nativeSettings.localeName = "en_US";
-            fakeHeadset.requests = [];
-            const top = name => findChild(nativeSettings, name).mapToItem(nativeSettings, 0, 0).y;
-            const reading = findChild(nativeSettings, "nativeSettingsReading");
-            const error = findChild(nativeSettings, "nativeSettingsError");
-            const stale = findChild(nativeSettings, "nativeSettingsStale");
-            const message = findChild(nativeSettings, "nativeSettingsMessage");
-            const ok = {ok: true, state: {preset: 7, bands: [0,0,0,0,0,0,0,0,0,0], standby: 15}};
-            reply(ok);
-            fakeHeadset.message = "";
-            fakeHeadset.error = "";
-            for (const item of [reading, error, stale, message])
-                verify(!item.visible);
-            // Reading, above the controls.
-            fakeHeadset.busy = true;
-            verify(reading.visible);
-            compare(reading.text, "Reading headset…");
-            tryVerify(() => top("nativeSettingsReading") < top("equalizerSection"));
-            nativeSettings.localeName = "es_CL";
-            compare(reading.text, "Leyendo auricular…");
-            nativeSettings.localeName = "en_US";
-            fakeHeadset.busy = false;
-            // An error, above the controls, with Refresh.
-            fakeHeadset.error = "The headset did not answer. Its state is unknown.";
-            verify(error.visible);
-            compare(error.type, Kirigami.MessageType.Warning);
-            tryVerify(() => top("nativeSettingsError") < top("equalizerSection"));
-            compare(error.actions.length, 1);
-            compare(error.actions[0].text, "Refresh");
-            error.actions[0].trigger();
-            compare(fakeHeadset.requests[fakeHeadset.requests.length - 1], {op: "status"});
-            fakeHeadset.error = "";
-            // No reading and nothing else to explain it: say so, with Refresh.
-            fakeHeadset.response = null;
-            nativeSettings.confirmedPreset = -1;
-            verify(stale.visible);
-            compare(stale.text, "Applied profile unknown. Refresh to read the headset.");
-            compare(stale.actions.length, 1);
-            compare(stale.actions[0].objectName, "refreshNativeSettings");
-            tryVerify(() => top("nativeSettingsStale") < top("equalizerSection"));
-            nativeSettings.confirmedPreset = 7;
-            compare(stale.text, "Last confirmed profile. Refresh to read the current setting.");
-            nativeSettings.localeName = "es_CL";
-            compare(stale.text, "Último perfil confirmado. Actualiza para leer el ajuste actual.");
-            compare(stale.actions[0].text, "Actualizar");
-            nativeSettings.confirmedPreset = -1;
-            compare(stale.text, "Perfil aplicado desconocido. Actualiza para leer el auricular.");
-            nativeSettings.section = "powerSaving";
-            compare(stale.text, "Apagado por inactividad desconocido. Actualiza para leer el auricular.");
-            nativeSettings.localeName = "en_US";
-            compare(stale.text, "Idle shutdown unknown. Refresh to read the headset.");
-            // Not while reading, nor next to an error.
-            fakeHeadset.busy = true;
-            verify(!stale.visible);
-            fakeHeadset.busy = false;
-            fakeHeadset.error = "Native controls require barracuda-headset on PATH.";
-            verify(!stale.visible);
-            fakeHeadset.error = "";
-            nativeSettings.section = "equalizer";
-            // A confirmed change needs no Refresh.
-            reply(Object.assign({sent: "preset"}, ok));
-            fakeHeadset.message = "Change confirmed by the headset.";
-            verify(message.visible);
-            compare(message.type, Kirigami.MessageType.Positive);
-            compare(message.actions.length, 0);
-            tryVerify(() => top("nativeSettingsMessage") < top("equalizerSection"));
-            fakeHeadset.message = "";
-            fakeHeadset.response = null;
-            nativeSettings.confirmedPreset = -1;
-            nativeSettings.visible = false;
         }
         function test_command_quotes_arguments() {
             const command = Output.headsetCommand({op: "status"}, {transport: "bluetooth", address: "' $(touch nope)"});

@@ -1,3 +1,0 @@
-HeadsetConfigPage {
-    section: "equalizer"
-}

@@ -242,42 +242,34 @@ Item {
         }
         function test_hidden_settings_page_sends_nothing() {
             // Plasma may create the page without showing it; no command runs.
-            for (const file of ["ConfigEqualizer.qml", "ConfigPowerSaving.qml"]) {
-                const component = Qt.createComponent("../plasmoid/contents/ui/" + file)
-                compare(component.status, Component.Ready, component.errorString())
-                const page = component.createObject(null)
-                verify(page !== null)
-                verify(!page.shown)
-                // Plasma's Apply calls saveConfig(); with nothing unsaved it sends nothing.
-                verify(!page.unsavedChanges)
-                page.saveConfig()
-                wait(20)
-                const controller = findChild(page, "headsetController")
-                verify(!controller.busy)
-                compare(controller.connectedSources.length, 0)
-                verify(findChild(page, "audioController") === null)
-                page.destroy()
-            }
+            const component = Qt.createComponent("../plasmoid/contents/ui/ConfigHeadset.qml")
+            compare(component.status, Component.Ready, component.errorString())
+            const page = component.createObject(null)
+            verify(page !== null)
+            verify(!page.shown)
+            // Plasma's Apply calls saveConfig(); with nothing unsaved it sends nothing.
+            verify(!page.unsavedChanges)
+            page.saveConfig()
+            wait(20)
+            const controller = findChild(page, "headsetController")
+            verify(!controller.busy)
+            compare(controller.connectedSources.length, 0)
+            page.destroy()
         }
-        function test_settings_categories_and_icons() {
+        function test_settings_category_and_icon() {
             const model = Qt.createComponent("../plasmoid/contents/config/config.qml").createObject(null)
             verify(model !== null)
-            // How the headset sounds and when it turns itself off; Quick
-            // Connect is in the popup.
-            compare(model.count, 2)
-            compare(model.get(0).source, "ConfigEqualizer.qml")
-            compare(model.get(0).icon, "view-media-equalizer")
-            compare(model.get(1).source, "ConfigPowerSaving.qml")
-            compare(model.get(1).icon, "preferences-system-power-management")
-            const english = Qt.locale().name.startsWith("es") === false
-            compare(model.get(0).name, english ? "Equalizer" : "Ecualizador")
-            compare(model.get(1).name, english ? "Power Saving" : "Ahorro de energía")
+            // One page for what the headset stores; its connection is in the popup.
+            compare(model.count, 1)
+            compare(model.get(0).source, "ConfigHeadset.qml")
+            compare(model.get(0).icon, "audio-headset")
+            compare(model.get(0).name, Qt.locale().name.startsWith("es") ? "Auricular" : "Headset")
             model.destroy()
-            compare(Qt.createComponent("../plasmoid/contents/ui/ConfigQuickConnect.qml").status, Component.Error)
+            for (const removed of ["ConfigEqualizer.qml", "ConfigPowerSaving.qml", "ConfigQuickConnect.qml"])
+                compare(Qt.createComponent("../plasmoid/contents/ui/" + removed).status, Component.Error)
         }
         function test_config_pages_compile() {
-            for (const page of ["../plasmoid/contents/ui/ConfigPowerSaving.qml",
-                                "../plasmoid/contents/ui/ConfigEqualizer.qml",
+            for (const page of ["../plasmoid/contents/ui/ConfigHeadset.qml",
                                 "../plasmoid/contents/config/config.qml"]) {
                 const component = Qt.createComponent(page)
                 compare(component.status, Component.Ready, component.errorString())
