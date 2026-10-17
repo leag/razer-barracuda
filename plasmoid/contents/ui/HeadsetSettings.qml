@@ -28,6 +28,9 @@ ColumnLayout {
     property int pendingStandby: -1
     // The changes sent by Apply or OK are running.
     property bool saving: false
+    // The features of the running Apply chain, in order. Its reply names
+    // only the last step, and every step before it succeeded too.
+    property var chainFeatures: []
     // The last Apply or OK failed; its message says so before the reason.
     property bool saveFailed: false
     readonly property string targetKey: controller.targetKey === undefined ? "" : controller.targetKey
@@ -71,6 +74,7 @@ ColumnLayout {
         if (busy || requests.length === 0)
             return;
         saving = true;
+        chainFeatures = requests.map(request => request.feature);
         controller.requestChain(requests);
     }
 
@@ -108,18 +112,24 @@ ColumnLayout {
             }
             // After the reply has been handled: a failed chain keeps its
             // choices, so Apply can send them again.
-            Qt.callLater(() => page.saving = false);
+            Qt.callLater(() => {
+                page.saving = false;
+                page.chainFeatures = [];
+            });
         }
         function onErrorChanged() {
             if (page.controller.error.length > 0 && page.saving)
                 page.saveFailed = true;
         }
         function onLoaded(result) {
-            if (result.sent === "preset" || result.sent === "bands")
+            // A successful chain applied every feature it sent, not only the
+            // last one its reply names.
+            const sent = page.chainFeatures.length > 0 ? page.chainFeatures : [result.sent];
+            if (sent.includes("preset") || sent.includes("bands"))
                 page.pendingPreset = -1;
-            if (result.sent === "standby")
+            if (sent.includes("standby"))
                 page.pendingStandby = -1;
-            if (page.bandsDirty && result.sent !== "bands")
+            if (page.bandsDirty && !sent.includes("bands"))
                 return;
             // A var signal argument is no longer a JavaScript array, so
             // Array.isArray() rejects it; copy any list of ten values.

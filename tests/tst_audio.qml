@@ -74,6 +74,7 @@ Item {
             page.bandsDirty = false;
             page.saving = false;
             page.saveFailed = false;
+            page.chainFeatures = [];
             page.visible = true;
         }
         function cleanup() {
@@ -383,6 +384,62 @@ Item {
             // One request at a time: a second Apply while it runs sends nothing.
             page.save();
             compare(fakeHeadset.chains.length, 1);
+        }
+        function test_chain_reply_names_only_its_last_step() {
+            const profile = findChild(page, "profileSelector");
+            const standby = findChild(page, "standbySelector");
+            // Bands, then idle shutdown: the chain prints the idle shutdown
+            // reply, and the bands it applied before are no longer unsaved.
+            reply({ok: true, state: {preset: 255, bands: flat.slice(), standby: 15}, errors: {}});
+            sliders()[9].increase();
+            sliders()[9].moved();
+            standby.activated(3);
+            const edited = [0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+            compare(page.changes(), [{op: "set", feature: "bands", value: edited},
+                                     {op: "set", feature: "standby", value: 30}]);
+            page.save();
+            reply({ok: true, sent: "standby", state: {preset: 255, bands: edited.slice(), standby: 30}, errors: {}});
+            tryVerify(() => !page.saving);
+            compare(page.chainFeatures, []);
+            verify(!page.bandsDirty);
+            verify(!page.unsavedBands);
+            verify(!page.unsavedChanges);
+            compare(page.changes(), []);
+            compare(page.pendingStandby, -1);
+            compare(page.bands, edited);
+            // A profile, then idle shutdown: the profile is no longer pending.
+            reply({ok: true, state: {preset: 8, bands: flat.slice(), standby: 15}, errors: {}});
+            profile.activated(1);
+            standby.activated(3);
+            page.save();
+            compare(fakeHeadset.chains[1], [{op: "set", feature: "preset", value: 7},
+                                            {op: "set", feature: "standby", value: 30}]);
+            reply({ok: true, sent: "standby", state: {preset: 7, bands: flat.slice(), standby: 30}, errors: {}});
+            tryVerify(() => !page.saving);
+            compare(page.pendingPreset, -1);
+            compare(page.pendingStandby, -1);
+            verify(!page.unsavedChanges);
+            // A later reading after an outside change shows it as stored,
+            // with nothing to apply.
+            reply({ok: true, state: {preset: 9, bands: flat.slice(), standby: 30}, errors: {}});
+            compare(page.selectedPreset, 9);
+            compare(profile.currentIndex, 3);
+            verify(!page.unsavedChanges);
+            compare(page.changes(), []);
+            // The profile, its bands and idle shutdown in one chain.
+            reply({ok: true, state: {preset: 8, bands: flat.slice(), standby: 15}, errors: {}});
+            profile.activated(4);
+            sliders()[0].increase();
+            sliders()[0].moved();
+            standby.activated(1);
+            page.save();
+            compare(fakeHeadset.chains[2].map(request => request.feature), ["preset", "bands", "standby"]);
+            reply({ok: true, sent: "standby", state: {preset: 255, bands: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0], standby: 5},
+                   errors: {}});
+            tryVerify(() => !page.saving);
+            compare(page.pendingPreset, -1);
+            verify(!page.bandsDirty);
+            verify(!page.unsavedChanges);
         }
         function test_read_failures_name_the_setting() {
             const standby = findChild(page, "standbySelector");
