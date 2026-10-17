@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Give the Modes rows monochrome icons and lay them out like the Bluetooth
+  device rows (icon column, title column, switch on the trailing edge, reason as
+  a second line). Bluetooth device rows use the monochrome Bluetooth icon.
 - Fix the **Equalizer** page showing every custom band at 0: the headset's
   stored curve now reaches the sliders, so pressing Apply no longer overwrites
   it with a flat curve.

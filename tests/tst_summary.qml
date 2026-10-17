@@ -823,19 +823,26 @@ Item {
             const row = findChild(view, "dnd")
             const control = row.control
             const note = findChild(row, "modeNote")
-            const unknown = findChild(row, "modeUnknownLabel")
+            const label = findChild(row, "modeLabel")
+            const icon = findChild(row, "modeIcon")
             const busy = findChild(row, "modeBusy")
-            compare(control.text, "Do not disturb")
+            compare(label.text, "Do not disturb")
+            compare(control.Accessible.name, "Do not disturb")
             verify(control.visible)
-            verify(!unknown.visible)
             verify(control.checked)
             verify(control.enabled)
             verify(!note.visible)
             verify(!busy.visible)
-            // The row is one list row tall, and the label sits on the device
-            // titles' column.
+            // Laid out like a device row: one list row tall, a monochrome icon
+            // centred in the device-icon box, the label on the device titles'
+            // column and the switch on the Connect buttons' trailing edge.
             compare(row.height, Kirigami.Units.iconSizes.medium + Kirigami.Units.smallSpacing * 2)
-            compare(control.leftPadding + control.indicator.width + control.spacing, view.titleColumn)
+            compare(icon.source, "notifications-disabled-symbolic")
+            verify(icon.isMask)
+            compare(icon.width, Kirigami.Units.iconSizes.smallMedium)
+            compare(icon.x + icon.width / 2, view.iconColumn + Kirigami.Units.iconSizes.medium / 2)
+            compare(label.mapToItem(row, 0, 0).x, view.titleColumn)
+            compare(control.leftPadding + control.indicator.width, row.width - view.trailingInset)
             // A click anywhere on the row asks for the new value; the switch
             // keeps the confirmed one until a reading says otherwise.
             mouseClick(row, row.width * 0.75, row.height / 2)
@@ -868,21 +875,23 @@ Item {
                 host[field] = false
             }
             host.localeName = "es_CL"
-            compare(control.text, "No molestar")
+            compare(label.text, "No molestar")
             host.localeName = "en_US"
             // An unknown value draws no switch: the label stays on its column
             // and the trailing slot says why.
             read({dnd: null, gaming: false, devices: []})
             verify(!control.visible)
-            verify(unknown.visible)
-            compare(unknown.text, "Do not disturb")
-            compare(unknown.x, view.titleColumn)
+            verify(label.visible)
+            compare(label.text, "Do not disturb")
+            compare(label.mapToItem(row, 0, 0).x, view.titleColumn)
+            verify(icon.visible)
             verify(note.visible)
             compare(note.text, "Unknown")
-            compare(unknown.Accessible.description, "Unknown")
+            compare(note.Accessible.name, "Do not disturb")
+            compare(note.Accessible.description, "Unknown")
             host.localeName = "es_CL"
             compare(note.text, "Desconocido")
-            compare(unknown.text, "No molestar")
+            compare(label.text, "No molestar")
             host.localeName = "en_US"
             // While the reading runs it says so.
             fakeSettings.response = null
@@ -901,29 +910,36 @@ Item {
             const row = findChild(view, "gaming")
             const control = row.control
             const note = findChild(row, "modeNote")
-            // Read through the USB dongle: shown, not settable, and its slot says why.
+            const label = findChild(row, "modeLabel")
+            const reason = findChild(row, "modeSubtitle")
+            compare(findChild(row, "modeIcon").source, "input-gamepad-symbolic")
+            // Read through the USB dongle: shown, not settable, and its second
+            // line says why, as a device row's subtitle.
             read({dnd: false, gaming: false, devices: []})
-            compare(control.text, "Bluetooth gaming mode")
+            compare(label.text, "Bluetooth gaming mode")
             verify(control.visible)
             verify(!control.checked)
             verify(!control.enabled)
-            compare(note.text, "Only over Bluetooth")
+            verify(reason.visible)
+            verify(!note.visible)
+            compare(reason.text, "Only over Bluetooth")
             compare(control.Accessible.description, "Only over Bluetooth")
             host.localeName = "es_CL"
-            compare(control.text, "Modo gaming Bluetooth")
-            compare(note.text, "Solo por Bluetooth")
+            compare(label.text, "Modo gaming Bluetooth")
+            compare(reason.text, "Solo por Bluetooth")
             host.localeName = "en_US"
             // Also with both links, while the settings are read through the dongle.
             host.status = linked("connected", {state: "connected", address: "A1:B2:C3:D4:E5:F6"})
             read({dnd: false, gaming: true, devices: []})
             verify(control.checked)
             verify(!control.enabled)
-            compare(note.text, "Only over Bluetooth")
+            compare(reason.text, "Only over Bluetooth")
             // Over Bluetooth the switch sets the new value.
             host.status = bluetoothOnly("connected")
             read({dnd: false, gaming: false, devices: []}, "bluetooth")
             verify(control.enabled)
             verify(!note.visible)
+            verify(!reason.visible)
             mouseClick(control)
             compare(Array.from(settingSpy.signalArguments[0]), ["gaming", true])
             verify(!control.checked)
@@ -935,7 +951,8 @@ Item {
             read({dnd: false, gaming: null, devices: []}, "bluetooth")
             verify(!control.visible)
             compare(note.text, "Unknown")
-            compare(findChild(row, "modeUnknownLabel").text, "Bluetooth gaming mode")
+            verify(!reason.visible)
+            compare(label.text, "Bluetooth gaming mode")
         }
         function test_hover_marks_each_device_row() {
             settingSpy.clear()
@@ -979,7 +996,7 @@ Item {
             compare(active.subtitle, "Connected")
             verify(active.isDefault)
             verify(!active.defaultActionButtonVisible)
-            compare(active.icon, "preferences-system-bluetooth")
+            compare(active.icon, "preferences-system-bluetooth-symbolic")
             // A nameless device shows its formatted address once.
             compare(other.title, "01:02:03:04:05:06")
             compare(other.subtitle, "")

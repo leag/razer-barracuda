@@ -23,19 +23,23 @@ import "../code/output.js" as Output
 //   headset command with consequences  PlasmaCore.Action with "…" in the
 //                                     heading ('+' Pair, More actions › Turn Off)
 //   confirmation                       Kirigami.PromptDialog (HeadsetPrompt)
-//   headset boolean                    a list row that is a Switch (ModeSwitch)
+//   headset boolean                    a list row that is a Switch (ModeSwitch),
+//                                     its indicator in the trailing slot
 //   one item's action in a list        ExpandableListItem default action
 //   more information                   'expand'/'collapse' at a row's trailing edge
 //   command in progress                BusyIndicator in that trailing slot, or in
 //                                     the placeholder for the whole view
 //   value being read / unknown         "Reading…" / "Unknown" in that trailing slot
+//   why a control cannot change         the row's second line, like a subtitle
+//   kind of row                        a monochrome symbolic icon in the icon column
 //   outcome or problem                 the one Kirigami.InlineMessage slot
 //   explanation                        one PlasmaExtras.ContextualHelpButton
 //
 // Columns, shared by every row (see the geometry block below): the section
-// text and switch indicators start at the list's edge; device icons and the
-// headset drawing start one icon inset further; switch labels, device titles
-// and section notes share the title column.
+// text starts at the list's edge; device icons, the Modes icons (centred in
+// the same box) and the headset drawing share the icon column; switch labels,
+// device titles and section notes share the title column; switch indicators,
+// Connect buttons and busy indicators end on the same trailing edge.
 PlasmaExtras.Representation {
     id: view
 
@@ -426,7 +430,8 @@ PlasmaExtras.Representation {
                     objectName: "dnd"
                     Layout.fillWidth: true
                     visible: view.sectionsShown
-                    indicatorX: modesHeader.leftPadding
+                    iconName: "notifications-disabled-symbolic"
+                    indicatorX: view.iconColumn
                     labelX: view.titleColumn
                     trailingInset: view.trailingInset
                     busySize: view.rowBusySize
@@ -446,7 +451,8 @@ PlasmaExtras.Representation {
                     // The list's own row spacing.
                     Layout.topMargin: list.spacing
                     visible: view.sectionsShown
-                    indicatorX: modesHeader.leftPadding
+                    iconName: "input-gamepad-symbolic"
+                    indicatorX: view.iconColumn
                     labelX: view.titleColumn
                     trailingInset: view.trailingInset
                     busySize: view.rowBusySize
@@ -494,9 +500,9 @@ PlasmaExtras.Representation {
                     && view.pendingAddress === modelData.address
                 objectName: "deviceRow"
                 width: list.rowWidth
-                // The helper reports no device class; this is the icon BluezQt
-                // gives a Bluetooth device of unknown type.
-                icon: "preferences-system-bluetooth"
+                // The helper reports no device class, so every row shows the
+                // same monochrome Bluetooth icon, like the Modes rows' icons.
+                icon: "preferences-system-bluetooth-symbolic"
                 title: modelData.name || Output.macAddress(modelData.address)
                 subtitle: active ? view.label("Connected", "Conectado")
                     : switching ? view.label("Connecting…", "Conectando…") : ""

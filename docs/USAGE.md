@@ -192,16 +192,17 @@ the link returns or its transport changes while the popup is shown.
 **Do not disturb** keeps calls from a phone connected by Bluetooth from
 interrupting the dongle audio; it does not affect desktop notifications.
 **Bluetooth gaming mode** lowers Bluetooth audio delay and is not the Game sound
-profile. Each is a full-width switch row with the value the headset reported; a
-click anywhere on the row asks for the change, and the switch keeps showing the
+profile. Each is a full-width row laid out like the device rows below it: a
+monochrome icon, the name, and the switch on the right with the value the
+headset reported. A click anywhere on the row asks for the change, and the switch keeps showing the
 reported value until the headset's reply confirms it. Without a reading the row
 draws no switch and says **Reading…** or **Unknown**, so an unknown value never
 looks Off, and nothing is shown as current without a confirmed link. While its
 own change runs, the row shows a busy indicator; every row is disabled while
 any request, pairing or power-off runs. Bluetooth gaming mode is read through
 either transport but can be changed only over Bluetooth: while the settings are
-read through the USB dongle, its switch is disabled and the row says **Only over
-Bluetooth**. With both links confirmed, the settings follow the default output,
+read through the USB dongle, its switch is disabled and the row's second line
+says **Only over Bluetooth**. With both links confirmed, the settings follow the default output,
 so this can happen while Bluetooth is connected too.
 
 When the headset certainly did not apply a change, for example a rejected
