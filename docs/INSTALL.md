@@ -7,7 +7,7 @@ The split package now produces:
 - `barracuda-pair`: Python 3.10+ CLI and hidraw access rule; no Qt dependency.
 - `hid-razer-barracuda-dkms`: driver, battery rules, ALSA profiles, WirePlumber
   headphones-icon rule and automatic jack-quirk installer.
-- `plasma6-applets-barracuda`: Plasma 6 widget; requires `plasma-pa` and `breeze-icons`.
+- `plasma6-applets-barracuda`: Plasma widget; requires Plasma 6.7 or later, `plasma-pa` and `breeze-icons`.
 
 This layout starts with v0.4.0. Release builds fetch the matching GitHub tag, not
 uncommitted checkout changes. See [releasing](RELEASING.md) before building
@@ -89,7 +89,7 @@ HID permissions remain separate.
 
 ## Plasma widget from a checkout
 
-Requires Plasma 6, `plasma-pa`, and Breeze icons installed under
+Requires Plasma 6.7 or later, `plasma-pa`, and Breeze icons installed under
 `/usr/share/icons/breeze/devices/64/` (Arch package `breeze-icons`):
 
 ```bash
@@ -117,8 +117,8 @@ The widget uses KDE's private volume QML API, tested with Plasma 6.7.4. It may n
 adjustment for future Plasma releases. The connection state requires
 `barracuda-headset` from the `barracuda-pair` package and the DKMS driver; without
 them the widget shows the state as unavailable and keeps **Configure Audio Devices…**.
-The **Pair USB Dongle…** button requires `barracuda-pair` and **Turn Off
-Headset…** requires `barracuda-power`, both on the desktop session's `PATH`.
+**Pair Headset…** requires `barracuda-pair` and **Turn Off Headset…** requires
+`barracuda-power`, both on the desktop session's `PATH`.
 The user CLI installer does not add its `~/.local/bin` directory to `PATH`; add
 it to your session environment if needed.
 

@@ -82,13 +82,14 @@ Bluetooth battery reporting already works independently: BlueZ/UPower exposes
 battery with percentage 60 and state `NoCharge`. The widget accepts this exact
 product name as well as the dongle's product name, preferring the transport of
 the current output when both readings exist. Charge state remains unknown for
-that Bluetooth sample; the compact row shows its percentage without claiming
+that Bluetooth sample; the headset card shows its percentage without claiming
 charging or full-charge status. Source removal drops the reading.
 
-The Bluetooth overview uses the detailed headset icon, a clean device name and
-a Bluetooth transport label. The popup's **Pair USB Dongle…** and **Turn Off
-Headset…** buttons remain available for a Bluetooth output; both always use the
-dongle transport, which their confirmations name. These presentation choices do not establish physical
+With a Bluetooth link the headset card uses the detailed headset artwork with a
+Bluetooth glyph beside it and a Bluetooth transport line. The heading's
+**Pair Headset…** (**+**) and **Turn Off Headset…** remain available for a
+Bluetooth output; both always use the dongle transport and are disabled while
+the dongle is missing. These presentation choices do not establish physical
 connectivity; battery data and default audio selection remain distinct.
 
 ## Bluetooth power-off probe

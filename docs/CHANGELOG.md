@@ -10,29 +10,38 @@
   the headset is disconnected or the USB dongle is missing. Pairing and
   power-off are disabled only while the driver reports that no USB dongle is
   connected.
-- Give every widget function one place. The popup holds the headset and its
-  connections, top to bottom: state and battery; always-visible
-  **Pair USB Dongle…** and **Turn Off Headset…** buttons, each confirmed right
-  below; **Do Not Disturb** and **Bluetooth Gaming Mode** switches with a line
-  explaining each (Reading… or Unknown instead of a switch without a reading);
-  **Quick Connect**, moved from the configuration window and fed by the same
-  status read; and folded Details. Feedback appears under the control that
-  caused it, with **Refresh** where it helps. In a panel or on the desktop the
-  widget draws a heading like the system tray's, on Plasma's heading
-  background: its name, **More actions** and a gear for the configuration
-  window. **Configure Audio Devices…** is now the only widget action, so the
-  right-click and tray menus no longer duplicate the popup's commands; the
-  system tray shows it under **More actions** on Plasma 6.8 and later and as a
-  single heading button on earlier versions. The popup footer is gone. The
-  desktop view now reads the headset settings too.
-- The configuration window keeps **Equalizer** and **Power Saving**; their
-  changes wait for Apply or OK, which send them as one chain that stops at the
-  first failure and finishes even when the window closes, and Cancel discards
-  them. Messages, with **Refresh** wherever they ask for it, move to the top of
-  each page. The idle shutdown selector no longer logs a binding loop.
+- Rebuild the popup in the structure of Plasma's own system applets, with one
+  visual form per kind of thing. The commands live in the heading, as in the
+  Bluetooth applet: **+** is **Pair Headset…**, and **More actions** holds
+  **Turn Off Headset…** and **Configure Audio Devices…**; the system tray
+  draws the same row, on every supported Plasma version, and the right-click
+  menu lists the same commands. Each command asks first in a dialog whose
+  default is **Cancel** and which closes by itself when the command stops
+  being possible. With a confirmed link the popup shows a headset card
+  (artwork with transport glyphs, state, percentage, battery bar, transport and
+  charge state, and expandable details), **Modes** with **Do not disturb** and
+  **Bluetooth gaming mode** switch rows (no switch for an unknown value; one
+  trailing slot for Reading…, Unknown, Only over Bluetooth or a busy
+  indicator) and **Bluetooth Devices** (Quick Connect) with **Connect** rows.
+  Every state without a confirmed link, and pairing, replaces the body with
+  one message with its own artwork; **Disconnected** offers **Pair Headset…**.
+  One closable message slot holds outcomes and problems in plain words, with
+  **Try Again** where it helps; helper output goes to the journal. No colour is
+  added. The tooltip is one line, and the tray icon spins while a command runs.
+  The desktop view reads the headset settings too.
+- Merge the configuration window into one **Headset** page: the sound profile
+  with its custom bands, and idle shutdown. Changes wait for Apply or OK, which
+  send them as one chain that stops at the first failure and finishes even
+  when the window closes, and Cancel discards them. A setting the headset did
+  not return reads **Unknown** instead of an older value, and the page has a
+  loading state and a **Settings not read** state with **Try Again**.
+- Word headset errors in plain language, without helper names, `PATH` or HID
+  details. A change the headset certainly did not apply keeps its last
+  confirmed value.
 - Name the widget by its title everywhere it names itself, write USB dongle
   rather than adapter (**USB dongle not detected**), and use title case for
   English commands. Spanish uses *auricular* and *dongle USB* throughout.
+- The widget now requires Plasma 6.7 or later.
 - Keep the QML tests from launching the real helpers: the suites run with
   recording fake helpers and fail if one is started.
 - Remove the legacy software-effects cleanup. The widget no longer runs

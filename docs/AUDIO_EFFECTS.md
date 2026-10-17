@@ -1,9 +1,10 @@
 # Native headset controls and Linux audio tuning
 
-The widget's configuration window has an **Equalizer** page for the native EQ
-and a **Power Saving** page for idle shutdown, whose changes are sent with the
-window's Apply or OK; there is no System tab. Do Not Disturb, Bluetooth gaming
-mode and Quick Connect Bluetooth source switching are in the popup. Software output EQ,
+The widget's configuration window has one **Headset** page for the native EQ
+(sound profile and custom bands) and idle shutdown, whose changes are sent with
+the window's Apply or OK; there is no System tab. Do Not Disturb, Bluetooth
+gaming mode and Quick Connect Bluetooth source switching (**Bluetooth Devices**)
+are in the popup. Software output EQ,
 microphone EQ and sidetone are removed. Native sidetone is not exposed because
 its audible effect and gain semantics remain unresolved.
 
@@ -26,10 +27,12 @@ There is no raw HID fallback, periodic settings polling or background service.
 | Quick Connect | Switch only to a Bluetooth address returned by the headset |
 
 Each ordinary SET is followed by GET to confirm the value. An unconfirmed change
-clears the UI state and is never retried automatically. Quick Connect reports
-only that a switch was requested; Refresh checks the active device afterwards.
-It is disabled while Gaming is on. Unknown states do not become defaults or
-link-loss evidence. Partially supported firmware exposes only successful reads.
+clears the UI state and is never retried automatically; a change the headset
+rejected keeps the last confirmed value. A Quick Connect request is not a
+completed switch: the active device moves only when a reading shows it, so the
+popup's next reading checks it. It is disabled while Gaming is on. Unknown
+states do not become defaults or link-loss evidence. Partially supported
+firmware exposes only successful reads.
 
 Default/Game EQ has physical USB validation. The other controls have Android
 and firmware evidence but have not all been physically exercised on this device.

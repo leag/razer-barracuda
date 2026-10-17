@@ -33,7 +33,7 @@ alone does not establish a headset connection.
 | --- | --- | --- |
 | `barracuda-pair` | Pairing CLI and headset helpers | Linux, Python 3.10+, device permissions; no third-party Python runtime dependencies |
 | `hid-razer-barracuda-dkms` | Native battery, link and jack reporting | DKMS and headers matching the installed kernel; includes the automatic `snd-usb-audio` quirk when needed |
-| `plasma6-applets-barracuda` | Barracuda Headset widget | Plasma 6, `plasma-pa` and `breeze-icons`; headset status requires the helpers and HID driver |
+| `plasma6-applets-barracuda` | Barracuda Headset widget | Plasma 6.7 or later, `plasma-pa` and `breeze-icons`; headset status requires the helpers and HID driver |
 
 The supported USB device is `1532:0552`. Support for other Barracuda models or
 USB IDs is not established. Bluetooth headset controls are documented
@@ -111,36 +111,37 @@ barracuda-pair --language es   # Use Spanish prompts.
 ```
 
 Pairing replaces the dongle's existing headset pairing and asks for confirmation.
-After success, **power the headset off and on**. You can also pair with the
-widget's **Pair USB Dongle…** button.
+After success, **power the headset off and on**. You can also pair from the
+widget: **Pair Headset…** is the **+** in its popup heading.
 
 ### Use the Plasma widget
 
 The widget lives in the system tray (or a panel, if you add it there). Its icon
-stays visible in every state, so the pairing controls are always one click away
-when the headset is not connected. Hover over the icon for connection and battery
-status. Click it to open the popup, which holds everything about the headset and
-its connections, top to bottom:
+stays visible in every state, so pairing is always one click away when the
+headset is not connected. Hover over the icon for a one-line summary of the
+connection and battery. Click it to open the popup:
 
-- How it is: the connection state, a hint when it is not connected and the
-  battery.
-- What you can do to it now: **Pair USB Dongle…** and **Turn Off Headset…**,
-  each confirmed right below its button.
-- How its connection behaves: **Do Not Disturb** and **Bluetooth Gaming Mode**
-  (low-latency Bluetooth audio) switches, read from the headset each time the
-  popup opens with a confirmed link. Gaming mode can be changed only over
-  Bluetooth.
-- Which Bluetooth device it serves: **Quick Connect** lists the sources the
-  headset knows, with a **Switch** button for each inactive one.
-- Folded **Details** for the dongle, links, cable and voltage.
+- The heading holds the commands, as in KDE's Bluetooth applet: **+**
+  (**Pair Headset…**), **More actions** (☰) with **Turn Off Headset…** and
+  **Configure Audio Devices…** (KDE's audio settings), and a gear for the
+  widget's configuration window. Pairing and turning off ask first in a dialog
+  whose safe default is **Cancel**.
+- With a confirmed link, a headset card shows the state, the battery
+  percentage with a bar, and the transport (USB dongle, Bluetooth or both);
+  click it for details such as the charging cable and voltage.
+- **Modes**: **Do not disturb** and **Bluetooth gaming mode** (low-latency
+  Bluetooth audio) switches, read from the headset each time the popup opens
+  with a confirmed link. Gaming mode can be changed only over Bluetooth.
+- **Bluetooth Devices**: the sources the headset knows (Razer Quick Connect),
+  with **Connect** for each inactive one.
+- Without a confirmed link, one message replaces all of this: Disconnected
+  (with a **Pair Headset…** button), Link not confirmed, USB dongle not
+  detected, Status unavailable or Checking.
 
-The gear in the popup heading opens the widget's configuration window for how
-the headset sounds (**Equalizer**) and when it turns itself off (**Power
-Saving**); its changes are sent with the window's **Apply** or **OK**. **More
-actions** (☰) holds **Configure Audio Devices…**, which opens KDE's audio
-settings. In the system tray before Plasma 6.8, Plasma shows that single action
-as a button in the heading instead; in a panel or on the desktop the widget's
-heading always has the menu. The right-click menu shows the same two entries.
+The gear opens the configuration window's **Headset** page: how the headset
+sounds (sound profile and custom bands) and when it turns itself off. Its
+changes are sent with the window's **Apply** or **OK**. The right-click menu
+holds the same commands as the heading.
 
 Status reads do not send commands to the headset. Native controls require the
 appropriate helpers, permissions and supported transport. Software EQ and
@@ -150,7 +151,8 @@ for dependencies, behavior and validation limits.
 
 ### Turn off the headset
 
-Use the widget's **Turn Off Headset…** button, or run:
+Choose **Turn Off Headset…** in the widget's **More actions** menu (☰) or its
+right-click menu and confirm, or run:
 
 ```bash
 barracuda-power --off
