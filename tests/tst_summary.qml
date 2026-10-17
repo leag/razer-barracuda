@@ -483,7 +483,7 @@ Item {
                     verify(!findChild(view, "modesHeader").visible)
                     verify(!findChild(view, "devicesHeader").visible)
                     compare(rows().length, 0)
-                    const expected = Output.placeholder(state, Output.connection(state), null, false, locale)
+                    const expected = Output.placeholder(state, Output.connection(state), null, false, false, locale)
                     const message = placeholder()
                     compare(findChild(message, "placeholderTitle").text, expected.title)
                     compare(findChild(message, "placeholderExplanation").text, expected.explanation)
@@ -561,6 +561,42 @@ Item {
             host.pairingBusy = false
             verify(!view.showPlaceholder)
         }
+        function test_power_off_without_a_link_waits_in_the_placeholder() {
+            // The commands stay available without a confirmed link; while a
+            // power-off runs there, the placeholder says so instead of the
+            // state, and the greyed commands have a visible reason.
+            for (const state of [null, {ok: false}, linked("unknown"), linked("disconnected")]) {
+                host.status = state
+                host.powerBusy = true
+                verify(view.showPlaceholder)
+                compare(findChild(placeholder(), "placeholderTitle").text, "Turning off…")
+                verify(!findChild(placeholder(), "placeholderExplanation").visible)
+                verify(findChild(placeholder(), "placeholderBusy").visible)
+                verify(!findChild(placeholder(), "placeholderAction").visible)
+                verify(!findChild(view.header, "primaryAction").enabled)
+                compare(findChild(placeholder(trayView), "placeholderTitle").text, "Turning off…")
+                host.localeName = "es_CL"
+                compare(findChild(placeholder(), "placeholderTitle").text, "Apagando…")
+                host.localeName = "en_US"
+                host.powerBusy = false
+                compare(findChild(placeholder(), "placeholderTitle").text,
+                        Output.placeholder(state, Output.connection(state), null, false, false, "en_US").title)
+            }
+            // A failed power-off shows its error under the placeholder again.
+            host.status = linked("unknown")
+            host.powerBusy = true
+            host.powerBusy = false
+            host.powerError = "Couldn't turn off the headset."
+            compare(findChild(placeholder(), "placeholderTitle").text, "Link not confirmed")
+            compare(feedback().text, "Couldn't turn off the headset.")
+            // With a confirmed link the headset card says it, not a placeholder.
+            host.powerError = ""
+            host.status = linked("connected")
+            host.powerBusy = true
+            verify(!view.showPlaceholder)
+            compare(findChild(findChild(view, "hero"), "heroHeadline").text, "Turning off…")
+            host.powerBusy = false
+        }
         function test_disconnected_placeholder_offers_pairing() {
             // As the Bluetooth applet offers Pair Device… under No devices
             // paired: the heading's own pairing action, as a button.
@@ -594,19 +630,15 @@ Item {
             tryCompare(view, "openPrompt", null)
             compare(pairingSpy.count, 1)
             // The same enabled rule as the '+', in every Disconnected state.
-            for (const [state, busy] of [[linked("disconnected"), ""], [bluetoothOnly("disconnected"), ""],
-                                         [{ok: true, usb: {adapter: "missing"}, bluetooth: {state: "disconnected"}}, ""],
-                                         [linked("disconnected"), "powerBusy"]]) {
+            // A running command replaces the placeholder with its own wait.
+            for (const state of [linked("disconnected"), bluetoothOnly("disconnected"),
+                                 {ok: true, usb: {adapter: "missing"}, bluetooth: {state: "disconnected"}}]) {
                 host.status = state
-                if (busy)
-                    host[busy] = true
                 compare(findChild(placeholder(), "placeholderTitle").text, "Disconnected")
                 button = findChild(placeholder(), "placeholderAction")
                 verify(button.visible)
                 compare(button.enabled, plus.enabled)
-                compare(button.enabled, state.usb.adapter !== "missing" && !busy)
-                if (busy)
-                    host[busy] = false
+                compare(button.enabled, state.usb.adapter !== "missing")
             }
             // Without the dongle it stays visible, greyed, and the words say
             // what to do; the message is informational.

@@ -15,9 +15,9 @@ import "../code/output.js" as Output
 // headset (HeroCard), the single feedback slot, the Modes section and the
 // Bluetooth Devices section heading; the list rows are the devices the
 // headset knows. Without a confirmed link, and while pairing, one
-// placeholder replaces the body, with the feedback slot under it; the
-// Disconnected placeholder offers the heading's pairing action as its
-// next step.
+// placeholder replaces the body, with the feedback slot under it; it also
+// waits for a power-off started without a confirmed link. The Disconnected
+// placeholder offers the heading's pairing action as its next step.
 //
 // Visual vocabulary, one form per kind of thing:
 //   headset command with consequences  PlasmaCore.Action with "…" in the
@@ -97,7 +97,8 @@ PlasmaExtras.Representation {
     // running command; unknown, unavailable and checking states never do.
     readonly property bool commandsEnabled: !pairingBusy && !powerBusy && !adapterMissing
     readonly property bool showPlaceholder: pairingBusy || !connected
-    readonly property var placeholder: Output.placeholder(linkStatus, connection, battery, pairingBusy, localeName)
+    readonly property var placeholder: Output.placeholder(linkStatus, connection, battery, pairingBusy, powerBusy,
+                                                          localeName)
     // The heading's '+': the one pairing action, which the Disconnected
     // placeholder also offers as its next step, as the Bluetooth applet
     // offers Pair Device… under No devices paired.

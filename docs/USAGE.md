@@ -105,7 +105,8 @@ state, so the states stay distinct:
 - **USB dongle not detected**: plug in the dongle, or use the headset over
   Bluetooth.
 - **Status unavailable**: install or update the `barracuda-pair` package.
-- **Checking…** while the first status is read, and **Pairing…** while pairing
+- **Checking…** while the first status is read, **Pairing…** while pairing
+  runs, and **Turning off…** while a power-off started without a confirmed link
   runs.
 
 The state comes from `barracuda-headset --request '{"op":"link"}'`, a finite,
@@ -255,7 +256,8 @@ nor widget intercepts it. Only single-press play/pause has been validated.
 
 Choose **Turn Off Headset…** in the popup's **More actions** menu (☰) or the
 right-click menu, then **Turn Off** in the dialog. The headset card reads
-**Turning off…** while the request runs; success shows in the next status
+**Turning off…** while the request runs, or, without a confirmed link, the
+message that replaces the popup's body does; success shows in the next status
 reading, and a failure says to check the USB dongle and offers **Try Again**.
 The action always goes through the USB dongle and addresses the Barracuda
 headset, independently of the desktop's default output.

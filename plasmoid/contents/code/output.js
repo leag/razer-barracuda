@@ -395,14 +395,18 @@ function transportEmblems(value) {
 // The whole-view message for every state without a confirmed link, and for
 // pairing, which replaces the link. Each state has its own words and its own
 // artwork treatment: which artwork, dimmed or not, which state emblem, and
-// whether the view waits.
-function placeholder(status, value, battery, pairing, locale) {
+// whether the view waits. A power-off running without a confirmed link waits
+// here too; with one, the headset card says it.
+function placeholder(status, value, battery, pairing, turningOff, locale) {
     const headset = "audio-headset";
     if (pairing)
         return {state: "pairing", artwork: headset, dimmed: false, emblem: "", busy: true,
                 title: text("Pairing…", "Emparejando…", locale),
                 explanation: text("Keep the headset in pairing mode. This can take up to a minute.",
                                   "Mantén el auricular en modo de emparejamiento. Puede tardar hasta un minuto.", locale)};
+    if (turningOff && value.state !== "connected")
+        return {state: "turning-off", artwork: headset, dimmed: false, emblem: "", busy: true,
+                title: text("Turning off…", "Apagando…", locale), explanation: ""};
     switch (value.state) {
     case "connected":
         return {state: "connected", artwork: headset, dimmed: false, emblem: "", busy: false, title: "", explanation: ""};

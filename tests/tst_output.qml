@@ -386,7 +386,7 @@ TestCase {
     function test_placeholders_keep_states_distinct() {
         const expect = (status, battery, pairing, english, spanish, look) => {
             for (const [locale, words] of [["en_US", english], ["es_CL", spanish]]) {
-                const value = Output.placeholder(status, Output.connection(status), battery, pairing, locale);
+                const value = Output.placeholder(status, Output.connection(status), battery, pairing, false, locale);
                 compare(value.title, words[0]);
                 compare(value.explanation, words[1]);
                 compare(value.state, look[0]);
@@ -435,8 +435,24 @@ TestCase {
                    ["Pairing…", "Keep the headset in pairing mode. This can take up to a minute."],
                    ["Emparejando…", "Mantén el auricular en modo de emparejamiento. Puede tardar hasta un minuto."],
                    ["pairing", "audio-headset", false, "", true]);
-        compare(Output.placeholder(linked("connected"), Output.connection(linked("connected")), null, false, "en_US").state,
-                "connected");
+        compare(Output.placeholder(linked("connected"), Output.connection(linked("connected")), null, false, false,
+                                   "en_US").state, "connected");
+        // A power-off running without a confirmed link waits in the
+        // placeholder, in every such state; with one, the card says it.
+        for (const status of [null, {ok: false}, linked("unknown"), linked("disconnected"),
+                              {ok: true, usb: {adapter: "multiple"}, bluetooth: null}]) {
+            for (const [locale, title] of [["en_US", "Turning off…"], ["es_CL", "Apagando…"]]) {
+                const value = Output.placeholder(status, Output.connection(status), {percent: 80, state: "Discharging"},
+                                                 false, true, locale);
+                compare(value, {state: "turning-off", artwork: "audio-headset", dimmed: false, emblem: "", busy: true,
+                                title: title, explanation: ""});
+            }
+        }
+        compare(Output.placeholder(linked("connected"), Output.connection(linked("connected")), null, false, true,
+                                   "en_US").state, "connected");
+        // Pairing and power-off never run together; pairing would win.
+        compare(Output.placeholder(linked("unknown"), Output.connection(linked("unknown")), null, true, true,
+                                   "en_US").state, "pairing");
     }
     function test_detail_rows() {
         compare(Output.detailRows(null, null, "en_US"), []);
