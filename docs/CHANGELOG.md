@@ -18,11 +18,13 @@
   **Quick Connect**, moved from the configuration window and fed by the same
   status read; and folded Details. Feedback appears under the control that
   caused it, with **Refresh** where it helps. In a panel or on the desktop the
-  widget draws the heading the system tray draws: its name, **More actions**
-  and a gear for the configuration window. **Configure Audio Devices…** is now
-  the only widget action, so the right-click and tray menus no longer duplicate
-  the popup's commands; the popup footer is gone. The desktop view now reads the
-  headset settings too.
+  widget draws a heading like the system tray's, on Plasma's heading
+  background: its name, **More actions** and a gear for the configuration
+  window. **Configure Audio Devices…** is now the only widget action, so the
+  right-click and tray menus no longer duplicate the popup's commands; the
+  system tray shows it under **More actions** on Plasma 6.8 and later and as a
+  single heading button on earlier versions. The popup footer is gone. The
+  desktop view now reads the headset settings too.
 - The configuration window keeps **Equalizer** and **Power Saving**; their
   changes wait for Apply or OK, which send them as one chain that stops at the
   first failure and finishes even when the window closes, and Cancel discards

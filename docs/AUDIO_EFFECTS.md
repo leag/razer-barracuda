@@ -18,7 +18,7 @@ There is no raw HID fallback, periodic settings polling or background service.
 
 | Control | Native implementation |
 | --- | --- |
-| EQ presets | Default, Game, Music, Movie and Custom; applied preset shown in bold |
+| EQ presets | Default, Game, Music, Movie and Custom |
 | Custom EQ | Ten bands from 31 Hz to 16 kHz; relative levels -5 to +5, encoded as 0–10 |
 | Bluetooth gaming mode | Low-latency Bluetooth audio; readable through USB and Bluetooth; settable only over Bluetooth (USB SET was accepted without changing GET state); the widget's switch is disabled through the dongle; separate from Game EQ |
 | Do Not Disturb | Native Boolean setting, stored through USB or Bluetooth; firmware applies it to the connected Bluetooth link, or when that link connects |

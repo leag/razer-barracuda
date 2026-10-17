@@ -49,15 +49,18 @@ pointer hover; keyboard navigation retains the theme's focus indicator.
 
 Click opens the popup. Every function has one place, chosen by what it is: the
 popup holds the headset and its connections, the configuration window how it
-sounds and when it turns itself off, and **More actions** the way out to KDE's
-audio settings.
+sounds and when it turns itself off, and **Configure Audio Devices…** in the
+heading the way out to KDE's audio settings.
 
 The heading shows the widget's name, **More actions** (☰) and a configure
 button (the gear). In the system tray, Plasma draws this heading itself; in a
-panel or on the desktop the widget draws the same one. **More actions** holds
+panel or on the desktop the widget draws one like it. **More actions** holds
 only **Configure Audio Devices…**, which opens KDE's audio settings, and the gear
-opens the widget's configuration window. The right-click menu shows the same two
-entries together with Plasma's own. Below the heading, from top to bottom:
+opens the widget's configuration window. In the system tray before Plasma 6.8,
+Plasma shows that single action as a button with its own icon instead of
+**More actions**; the widget's own heading always shows the menu. The
+right-click menu shows the same two entries together with Plasma's own. Below
+the heading, from top to bottom:
 
 - **State and battery**, beside the headset artwork: Connected (USB dongle,
   Bluetooth, or both), Disconnected, Link not confirmed, USB dongle not
@@ -190,8 +193,9 @@ Each page reads the headset when it opens. Every change on a page waits for the
 window's **Apply** or **OK**, which send it, and **Cancel** discards it; a
 profile is therefore heard only after **Apply**.
 
-On the **Equalizer** page, the **Sound profile** selector shows the applied
-profile. Choose **Custom** to reveal its bands, which start from the curve
+On the **Equalizer** page, the **Sound profile** selector shows the profile
+stored on the headset until you choose another, which **Apply** or **OK** then
+sends. Choose **Custom** to reveal its bands, which start from the curve
 stored on the headset; **Reset Bands** returns them to 0. **Apply** sends the
 profile first and then the edited bands, and stops at the first failure. Plasma
 closes the page as soon as **OK** is pressed or another category opens, so the

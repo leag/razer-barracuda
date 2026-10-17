@@ -138,7 +138,9 @@ The gear in the popup heading opens the widget's configuration window for how
 the headset sounds (**Equalizer**) and when it turns itself off (**Power
 Saving**); its changes are sent with the window's **Apply** or **OK**. **More
 actions** (☰) holds **Configure Audio Devices…**, which opens KDE's audio
-settings. The right-click menu shows the same two entries.
+settings. In the system tray before Plasma 6.8, Plasma shows that single action
+as a button in the heading instead; in a panel or on the desktop the widget's
+heading always has the menu. The right-click menu shows the same two entries.
 
 Status reads do not send commands to the headset. Native controls require the
 appropriate helpers, permissions and supported transport. Software EQ and

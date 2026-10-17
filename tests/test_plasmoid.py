@@ -62,7 +62,7 @@ class PlasmoidTests(unittest.TestCase):
 
     def test_single_action_leads_to_kde_audio_settings(self):
         # Every headset command lives in the popup; the only widget action is
-        # the way out to KDE's audio settings (More actions and right-click).
+        # the way out to KDE's audio settings (the heading and right-click).
         source = (ROOT / 'plasmoid/contents/ui/main.qml').read_text()
         actions = re.search(r'\n    Plasmoid\.contextualActions: \[(.*?)\n    \]', source, re.S).group(1)
         self.assertEqual(actions.count('PlasmaCore.Action {'), 1)

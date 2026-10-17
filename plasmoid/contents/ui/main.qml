@@ -23,7 +23,7 @@ PlasmoidItem {
     readonly property var target: Output.headsetTarget(sink, linkStatus)
     readonly property bool slashed: Output.slashed(connection)
     readonly property string emblem: Output.emblem(connection, battery)
-    // Inside the system tray, which draws the heading and the actions menu.
+    // Inside the system tray, which draws the heading and the applet actions.
     readonly property bool inTray: (Plasmoid.containmentDisplayHints
         & PlasmaCore.Types.ContainmentDrawsPlasmoidHeading) !== 0
     // The full view is on screen: the expanded popup, or the desktop, which
@@ -175,10 +175,12 @@ PlasmoidItem {
         passive: PlasmaCore.Types.PassiveStatus,
         attention: PlasmaCore.Types.NeedsAttentionStatus
     })[Output.trayStatus(connection, battery)]
-    // The widget's only action leads out to KDE's own audio settings. The
-    // system tray draws it in its More actions menu, the widget's own heading
-    // builds the same menu from this list, and Plasma copies it into the
-    // right-click menu. Every headset command lives in the popup.
+    // The widget's only action leads out to KDE's own audio settings. On
+    // Plasma 6.8 and later the system tray draws it in its More actions menu;
+    // earlier versions draw a single action as a button in the tray heading.
+    // The widget's own heading, in a panel or on the desktop, always builds the
+    // menu from this list, and Plasma copies it into the right-click menu.
+    // Every headset command lives in the popup.
     Plasmoid.contextualActions: [
         PlasmaCore.Action {
             id: audioDevicesAction

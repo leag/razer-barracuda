@@ -25,10 +25,12 @@
   status read each time the full view is shown with a confirmed link. Explicit
   pairing and power-off run the existing CLIs with `--yes` only after that
   confirmation; the widget shows activity and the final result. The single
-  contextual action, **Configure Audio Devices…**, opens KDE's audio settings;
-  the system tray draws it in its More actions menu, and in a panel or on the
-  desktop the widget's own heading builds the same menu from
-  `Plasmoid.contextualActions`, next to a gear for the configuration window.
+  contextual action, **Configure Audio Devices…**, opens KDE's audio settings.
+  The system tray draws it in its More actions menu on Plasma 6.8 and later,
+  where the action sets `alwaysShowAsMenu`, and as a single heading button on
+  earlier versions. In a panel or on the desktop the widget's own heading, a
+  `PlasmoidHeading`, always builds the menu from `Plasmoid.contextualActions`,
+  next to a gear for the configuration window.
   The configuration window (`contents/config`) has two categories,
   **Equalizer** and **Power Saving**; their changes are sent on Apply or OK as
   one chain that finishes even when Plasma closes the page. Help is one
