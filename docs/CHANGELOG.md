@@ -24,8 +24,8 @@
   a headset card (artwork with transport glyphs, state, percentage, battery
   bar, transport and charge state, and expandable details), **Modes** with
   **Do not disturb** and **Bluetooth gaming mode** switch rows (no switch for
-  an unknown value; one trailing slot for Reading…, Unknown, Only over
-  Bluetooth or a busy indicator) and **Bluetooth Devices** (Quick Connect)
+  an unknown value, which reads Reading… or Unknown; Only over Bluetooth as a
+  second line; a busy indicator while a change runs) and **Bluetooth Devices** (Quick Connect)
   with **Connect** rows. Every state without a confirmed link, pairing, and a
   power-off started without a confirmed link replace the body with one message
   with its own artwork; **Disconnected** offers **Pair Headset…**. One
