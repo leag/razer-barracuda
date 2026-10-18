@@ -1,32 +1,42 @@
 import QtQuick
 import QtTest
-import org.kde.plasma.core as PlasmaCore
 import "../plasmoid/contents/code/output.js" as Output
 
+// Pure logic only: this suite also runs where Qt is installed without Plasma.
 TestCase {
     name: "HeadsetLogic"
+    // QAction::Priority values, which Plasma's actions use.
+    readonly property int normalPriority: 128
+    readonly property int highPriority: 256
+    // The action properties that output.js reads.
+    component FakeAction: QtObject {
+        property bool isSeparator: false
+        property string text: ""
+        property int priority: 128
+        property bool visible: true
+    }
     property list<QtObject> actions: [
-        PlasmaCore.Action { id: leadingSeparator; isSeparator: true },
-        PlasmaCore.Action { id: high; text: "Pair Headset…"; priority: PlasmaCore.Action.HighPriority },
-        PlasmaCore.Action { id: powerOff; text: "Turn Off Headset…" },
-        PlasmaCore.Action { id: hidden; text: "Hidden"; visible: false },
-        PlasmaCore.Action { id: separator; isSeparator: true },
-        PlasmaCore.Action { id: doubled; isSeparator: true },
-        PlasmaCore.Action { id: audio; text: "Configure Audio Devices…" },
-        PlasmaCore.Action { id: configure; text: "&Configure Barracuda Headset…" },
-        PlasmaCore.Action { id: trailingSeparator; isSeparator: true }
+        FakeAction { id: leadingSeparator; isSeparator: true },
+        FakeAction { id: high; text: "Pair Headset…"; priority: 256 },
+        FakeAction { id: powerOff; text: "Turn Off Headset…" },
+        FakeAction { id: hidden; text: "Hidden"; visible: false },
+        FakeAction { id: separator; isSeparator: true },
+        FakeAction { id: doubled; isSeparator: true },
+        FakeAction { id: audio; text: "Configure Audio Devices…" },
+        FakeAction { id: configure; text: "&Configure Barracuda Headset…" },
+        FakeAction { id: trailingSeparator; isSeparator: true }
     ]
     function test_more_actions_match_the_tray() {
         // Visible normal-priority actions without Plasma's configure action;
         // a separator stays only between two entries, once.
-        compare(Output.moreActions(actions, configure, PlasmaCore.Action.NormalPriority), [powerOff, doubled, audio]);
-        compare(Output.moreActions([audio, separator], configure, PlasmaCore.Action.NormalPriority), [audio]);
-        compare(Output.moreActions([separator, audio], configure, PlasmaCore.Action.NormalPriority), [audio]);
-        compare(Output.moreActions([], configure, PlasmaCore.Action.NormalPriority), []);
-        compare(Output.moreActions(null, null, PlasmaCore.Action.NormalPriority), []);
+        compare(Output.moreActions(actions, configure, normalPriority), [powerOff, doubled, audio]);
+        compare(Output.moreActions([audio, separator], configure, normalPriority), [audio]);
+        compare(Output.moreActions([separator, audio], configure, normalPriority), [audio]);
+        compare(Output.moreActions([], configure, normalPriority), []);
+        compare(Output.moreActions(null, null, normalPriority), []);
         // The heading's icon buttons are the high-priority actions.
-        compare(Output.primaryActions(actions, PlasmaCore.Action.HighPriority), [high]);
-        compare(Output.primaryActions(null, PlasmaCore.Action.HighPriority), []);
+        compare(Output.primaryActions(actions, highPriority), [high]);
+        compare(Output.primaryActions(null, highPriority), []);
     }
     function linked(link, bluetooth, battery) {
         return {ok: true, usb: {adapter: "present", driver: true, link: link, battery: battery || null},

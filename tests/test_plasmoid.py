@@ -224,7 +224,9 @@ class PlasmoidTests(unittest.TestCase):
             self.assertEqual(len(log.read_text().splitlines()), 2)
             self.assertEqual(leftovers(), [])
 
-    @unittest.skipUnless(Path(RUNNER).is_file(), 'Qt 6 QML test runner not installed')
+    @unittest.skipUnless(Path(RUNNER).is_file()
+                         and Path('/usr/lib/qt6/qml/org/kde/plasma/configuration/qmldir').is_file(),
+                         'Qt 6 and Plasma configuration components required')
     def test_configuration_category_in_both_languages(self):
         with tempfile.TemporaryDirectory() as directory:
             probe = Path(directory) / 'tst_categories.qml'
