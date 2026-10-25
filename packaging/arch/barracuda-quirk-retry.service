@@ -1,0 +1,12 @@
+[Unit]
+Description=Retry the Barracuda jack quirk build that failed during an upgrade
+ConditionPathExists=/var/lib/hid-razer-barracuda/quirk-retry
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/barracuda-snd-usb-audio-quirk --all-kernels
+
+[Install]
+WantedBy=multi-user.target

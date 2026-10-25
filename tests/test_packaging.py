@@ -28,6 +28,15 @@ class PackagingTests(unittest.TestCase):
             self.assertIn('Target = usr/lib/modules/*/build/Makefile', hook.read_text())
             self.assertIn('When = PostTransaction', hook.read_text())
             self.assertIn('--all-kernels', hook.read_text())
+            units = destination / 'usr/lib/systemd/system'
+            unit = units / 'barracuda-quirk-retry.service'
+            self.assertIn('ConditionPathExists=/var/lib/hid-razer-barracuda/quirk-retry',
+                          unit.read_text())
+            self.assertIn('ExecStart=/usr/bin/barracuda-snd-usb-audio-quirk --all-kernels',
+                          unit.read_text())
+            wants = units / 'multi-user.target.wants/barracuda-quirk-retry.service'
+            self.assertEqual(wants.readlink(), Path('../barracuda-quirk-retry.service'))
+            self.assertEqual(wants.resolve(), unit.resolve())
             launcher = destination / 'usr/bin/barracuda-snd-usb-audio-quirk'
             self.assertIn('--no-profile-set', launcher.read_text())
             self.assertTrue(launcher.stat().st_mode & 0o111)
@@ -36,6 +45,28 @@ class PackagingTests(unittest.TestCase):
             for path in destination.rglob('*'):
                 self.assertNotIn('.git', path.parts)
                 self.assertNotIn('sound/usb', str(path.relative_to(destination)))
+
+    def test_upgrade_unregisters_other_driver_versions(self):
+        status = ('hid-razer-barracuda/0.5.1.local1, 7.3.0-4-cachyos, x86_64: built\n'
+                  'hid-razer-barracuda/0.5.1.local1, 6.18.55-2-cachyos-lts, x86_64: installed\n'
+                  'hid-razer-barracuda/0.4.0: added\n'
+                  'hid-razer-barracuda/0.6.0, 7.3.0-4-cachyos, x86_64: installed\n')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'status').write_text(status)
+            dkms = root / 'dkms'
+            dkms.write_text('#!/bin/sh\n'
+                            f'[ "$1" = status ] && exec cat "{root}/status"\n'
+                            f'echo "$*" >> "{root}/calls"\n')
+            dkms.chmod(0o755)
+            for scriptlet in ('post_install', 'post_upgrade'):
+                (root / 'calls').unlink(missing_ok=True)
+                subprocess.run(['sh', '-c', f'. "$1"; {scriptlet} 0.6.0-2 0.5.1-1', 'sh',
+                                str(ROOT / 'packaging/arch/hid-razer-barracuda-dkms.install')],
+                               env={'PATH': f'{root}:/usr/bin:/bin'}, check=True)
+                self.assertEqual((root / 'calls').read_text().splitlines(),
+                                 ['remove -m hid-razer-barracuda -v 0.4.0 --all',
+                                  'remove -m hid-razer-barracuda -v 0.5.1.local1 --all'])
 
     def test_versions_agree(self):
         pkgver = field(PKGBUILD, r'^pkgver=(\S+)')

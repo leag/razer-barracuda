@@ -19,10 +19,17 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 NAME = 'snd-usb-audio-barracuda'
 REVISION = 'barracuda1'
-STABLE = 'https://github.com/gregkh/linux.git'
+# kernel.org ignores the blob filter, so it is slower and only a fallback.
+MIRRORS = ('https://github.com/gregkh/linux.git',
+           'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git')
+FETCH_ATTEMPTS = 3
+FETCH_DELAY = 10
+# Present while a kernel still lacks its quirk; barracuda-quirk-retry.service runs then.
+RETRY_MARKER = Path('/var/lib/hid-razer-barracuda/quirk-retry')
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / 'kernel' / 'snd-usb-audio'
 PACKAGING = ROOT / 'packaging'
@@ -94,10 +101,23 @@ def patches():
     return found
 
 
-def fetch_sound_usb(tag, work):
-    run('git', 'clone', '-q', '--depth', '1', '--filter=blob:none', '--sparse',
-        '-b', tag, STABLE, str(work))
-    run('git', 'sparse-checkout', 'set', 'sound/usb', cwd=work)
+def fetch_sound_usb(tag, work, mirrors=MIRRORS, attempts=FETCH_ATTEMPTS, delay=FETCH_DELAY):
+    """Download sound/usb, retrying each mirror to ride out short network outages."""
+    errors = []
+    for attempt in range(attempts):
+        if attempt:
+            time.sleep(delay * attempt)
+        for url in mirrors:
+            shutil.rmtree(work, ignore_errors=True)
+            try:
+                run('git', '-c', 'advice.detachedHead=false', 'clone', '-q', '--depth', '1',
+                    '--filter=blob:none', '--sparse', '-b', tag, url, str(work))
+                run('git', 'sparse-checkout', 'set', 'sound/usb', cwd=work)
+                return
+            except subprocess.SubprocessError as error:
+                errors.append(f'{url}: {error}')
+    raise RuntimeError(f'could not download sound/usb {tag} after {attempts} attempts per mirror '
+                       f'(network unavailable?); last error: {errors[-1]}')
 
 
 def apply_patches(tree):
@@ -149,6 +169,43 @@ def dkms_status(version, release=None):
                           capture_output=True, text=True).stdout.strip()
 
 
+def built_release(target):
+    """The kernel release a staged build is restricted to, or None."""
+    try:
+        conf = (target / 'dkms.conf').read_text()
+    except OSError:
+        return None
+    match = re.search(r'^BUILD_EXCLUSIVE_KERNEL="\^(.*)\$"$', conf, re.M)
+    return re.sub(r'\\(.)', r'\1', match.group(1)) if match else None
+
+
+def remove_build(target):
+    if target.is_symlink():
+        raise RuntimeError(f'Refusing symlink destination: {target}')
+    version = target.name[len(NAME) + 1:]
+    if dkms_status(version):
+        run('dkms', 'remove', '-m', NAME, '-v', version, '--all')
+    shutil.rmtree(target)
+
+
+def prune_removed_kernels(modules, source_root):
+    """Remove package-managed builds whose kernel is gone; report hand-made ones."""
+    for target in sorted(source_root.glob(f'{NAME}-*')):
+        release = built_release(target)
+        # Leftover DKMS modules can keep the directory, so look for the kernel's
+        # own modules or its headers instead.
+        kernel = modules / release if release else None
+        if kernel is None or (kernel / 'kernel').is_dir() or (kernel / 'build/Makefile').is_file():
+            continue
+        if (target / '.pacman-managed').is_file():
+            remove_build(target)
+            print(f'Removed {target.name}: kernel {release} is no longer installed.')
+        else:
+            print(f'Leaving {target}: kernel {release} is no longer installed, but this build '
+                  'was not made by the package. Remove it with --kernel '
+                  f'{release} --remove if unused.')
+
+
 def install_kernel(release, source_root=Path('/usr/src'), managed=False):
     version = package_version(release)
     target = source_root / f'{NAME}-{version}'
@@ -171,20 +228,20 @@ def install_kernel(release, source_root=Path('/usr/src'), managed=False):
 
 
 def all_kernels(modules=Path('/usr/lib/modules'), source_root=Path('/usr/src'),
-                remove=False, force=False):
+                remove=False, force=False, retry_marker=None):
+    retry_marker = retry_marker or RETRY_MARKER
     failures = []
     if remove:
         targets = sorted(source_root.glob(f'{NAME}-*/.pacman-managed'))
         for marker in targets:
-            target = marker.parent
-            if target.is_symlink() or marker.is_symlink():
-                raise RuntimeError(f'Refusing symlink destination: {target}')
-            version = target.name[len(NAME) + 1:]
-            if dkms_status(version):
-                run('dkms', 'remove', '-m', NAME, '-v', version, '--all')
-            shutil.rmtree(target)
+            if marker.is_symlink():
+                raise RuntimeError(f'Refusing symlink destination: {marker.parent}')
+            remove_build(marker.parent)
+        retry_marker.unlink(missing_ok=True)
         return 0
+    prune_removed_kernels(modules, source_root)
     if not force and pipewire_wireless_support():
+        retry_marker.unlink(missing_ok=True)
         print('PipeWire ALSA supports USB wireless_status; skipping the jack quirk. '
               'Existing quirk builds are kept. Use --all-kernels --remove to remove '
               'package-managed builds after verifying native switching, then reboot.')
@@ -197,8 +254,14 @@ def all_kernels(modules=Path('/usr/lib/modules'), source_root=Path('/usr/src'),
             install_kernel(release, source_root, managed=True)
         except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
             failures.append(release)
-            print(f'Barracuda jack quirk failed for {release}: {error}. '
-                  'Retry with sudo barracuda-snd-usb-audio-quirk --all-kernels.', file=sys.stderr)
+            print(f'Barracuda jack quirk failed for {release}: {error}. It is retried at the next '
+                  'boot, or now with sudo barracuda-snd-usb-audio-quirk --all-kernels.',
+                  file=sys.stderr)
+    if failures:
+        retry_marker.parent.mkdir(parents=True, exist_ok=True)
+        retry_marker.write_text(''.join(f'{release}\n' for release in failures))
+    else:
+        retry_marker.unlink(missing_ok=True)
     if releases:
         print('Reboot to load newly installed modules. No audio services were restarted.')
     return int(bool(failures))

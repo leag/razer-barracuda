@@ -18,6 +18,14 @@
   rest, latest levels only, and a change the headset did not apply returns the
   controls to the stored value. The heading loses its gear, the card's details
   keep only the connection, and the Apply chain is gone.
+- Make kernel upgrades more robust for the driver package. Installing or
+  upgrading `hid-razer-barracuda-dkms` (and `scripts/install_dkms.py`)
+  unregisters other DKMS versions of the driver, which install the same module
+  path and made DKMS abort for new kernels. The jack quirk retries its source
+  download and falls back to the kernel.org mirror; a build that still fails
+  is retried at the next boot by `barracuda-quirk-retry.service`. Quirk builds
+  for removed kernels are cleaned up, and git no longer prints detached-HEAD
+  advice during the hook.
 - Give the Modes rows monochrome icons and lay them out like the Bluetooth
   device rows (icon column, title column, switch on the trailing edge, reason as
   a second line). Bluetooth device rows use the monochrome Bluetooth icon.

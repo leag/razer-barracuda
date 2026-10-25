@@ -1,3 +1,21 @@
+# Other registered versions install the same module path, so DKMS refuses to
+# install the packaged one for new kernels. Unregister them; sources stay.
+remove_other_versions() {
+  dkms status -m hid-razer-barracuda 2>/dev/null |
+    sed -n 's|^hid-razer-barracuda/\([^,:]*\)[,:].*|\1|p' | sort -u |
+    while read -r version; do
+      [ "$version" = "$1" ] || dkms remove -m hid-razer-barracuda -v "$version" --all
+    done
+}
+
+post_install() {
+  remove_other_versions "${1%-*}"
+}
+
+post_upgrade() {
+  remove_other_versions "${1%-*}"
+}
+
 pre_remove() {
   barracuda-snd-usb-audio-quirk --all-kernels --remove
 }

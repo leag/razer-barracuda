@@ -25,6 +25,15 @@ class DkmsInstallerTests(unittest.TestCase):
         # Version strings are not used in-tree; dkms.conf carries the version.
         self.assertNotIn('MODULE_VERSION', source)
 
+    def test_other_registered_versions(self):
+        status = (f'{installer.NAME}/0.5.1.local1, 7.3.0-4-cachyos, x86_64: built\n'
+                  f'{installer.NAME}/0.5.1.local1, 6.18.55-2-cachyos-lts, x86_64: installed\n'
+                  f'{installer.NAME}/0.4.0: added\n'
+                  f'{installer.NAME}/{installer.VERSION}, 7.3.0-4-cachyos, x86_64: installed\n'
+                  'gpu-unlock/1.0.0, 7.3.0-4-cachyos, x86_64: installed\n')
+        self.assertEqual(installer.other_versions(status), ['0.4.0', '0.5.1.local1'])
+        self.assertEqual(installer.other_versions(''), [])
+
     def test_legacy_package_is_detected(self):
         with tempfile.TemporaryDirectory() as directory:
             src = Path(directory)

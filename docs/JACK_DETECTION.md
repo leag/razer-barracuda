@@ -27,7 +27,13 @@ rechecks when the ALSA plugin is upgraded, including downgrades without support.
 Use `--all-kernels --force` to override the check; explicit single-kernel installs
 remain available. This check does not require a plugged-in dongle or running audio
 session. Native switching still needs the HID driver to expose `wireless_status`.
-To retry a failed hook, run `sudo barracuda-snd-usb-audio-quirk --all-kernels`.
+Downloads are retried three times, falling back from GitHub to the slower
+kernel.org stable mirror. If a kernel still has no quirk, for example because
+the upgrade ran offline, `barracuda-quirk-retry.service` builds it at the next
+boot once the network is up, and the module loads on the boot after that. To
+retry immediately, run `sudo barracuda-snd-usb-audio-quirk --all-kernels`.
+Each run also removes hook-managed builds for kernels that are no longer
+installed; builds made by hand are only reported.
 The package already provides the profile set described below. Removing it also
 removes the quirk builds created by the hook. Installation never reloads modules
 or restarts audio; reboot to activate the new module.
