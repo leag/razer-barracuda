@@ -13,6 +13,33 @@ The capture is retained in ignored `private/native-controls/gaming-transaction.j
 Bluetooth activation and the firmware condition preventing this USB change
 remain unverified. The Game EQ preset is a separate control.
 
+## Persistence: off after every power cycle
+
+Static analysis of the published headset application (firmware 01.06.00.00,
+see [headset firmware analysis](HEADSET_FIRMWARE_ANALYSIS.md)) finds that
+gaming mode is kept in RAM only:
+
+- GET `14` (`0x1ffb75e6`) returns the byte at GP+31708. Its only writers are
+  the MMI event handler at `0x1ffb3cde`, reached through events `84/85`, and
+  the handler of command `ab` near `0x1ffb7a30`, whose purpose is not
+  established.
+- SET `94` (`0x1ffb7394`) only passes request byte 3 to `0x1ffb5542`, which
+  queues event `84` or `85`. Unlike the EQ, Do Not Disturb, idle shutdown and
+  Quick Connect setters, it never calls the configuration writer
+  (`0x1ffb2500`).
+- The configuration record that holds Do Not Disturb (record 2, 11 bytes,
+  packed at `0x1ffb568a` and loaded at `0x1ffb56ec`) stores GP+31712,
+  GP+31764..31767, GP+31769 and GP+31771..31775, but not GP+31708.
+- Start-up code near `0x1ffb388a` reads GP+31769 and, when it is 1 (the `ab`
+  value that also sets GP+31708), resets it to 0 and saves the record again.
+
+One observation on the installed headset agrees: enabled from the official
+phone app, gaming mode read off through the USB dongle after the headset was
+turned off and on. The plasmoid therefore shows the Bluetooth gaming mode row
+only when the settings are read over Bluetooth, where it can be changed; through
+the dongle the value is still read, because Quick Connect needs it off, and the
+Bluetooth Devices note says where to turn it off.
+
 The following sections describe the earlier investigation stages.
 
 The later [installed ROM analysis](LIVE_ROM_ANALYSIS.md) establishes the

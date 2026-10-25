@@ -1,10 +1,9 @@
 # Native headset controls and Linux audio tuning
 
-The widget's configuration window has one **Headset** page for the native EQ
-(sound profile and custom bands) and idle shutdown, whose changes are sent with
-the window's Apply or OK; there is no System tab. Do Not Disturb, Bluetooth
-gaming mode and Quick Connect Bluetooth source switching (**Bluetooth Devices**)
-are in the popup. Software output EQ,
+The widget's popup has the native EQ (sound profile and custom bands) on its
+**Sound** tab and idle shutdown on its **Power** tab; each change is sent at
+once, with no Apply. Do Not Disturb, Bluetooth gaming mode and Quick Connect
+Bluetooth source switching (**Bluetooth Devices**) are on its **Headset** tab. Software output EQ,
 microphone EQ and sidetone are removed. Native sidetone is not exposed because
 its audible effect and gain semantics remain unresolved.
 
@@ -21,7 +20,7 @@ There is no raw HID fallback, periodic settings polling or background service.
 | --- | --- |
 | EQ presets | Default, Game, Music, Movie and Custom |
 | Custom EQ | Ten bands from 31 Hz to 16 kHz; relative levels -5 to +5, encoded as 0–10 |
-| Bluetooth gaming mode | Low-latency Bluetooth audio; readable through USB and Bluetooth; settable only over Bluetooth (USB SET was accepted without changing GET state); the widget's switch is disabled through the dongle; separate from Game EQ |
+| Bluetooth gaming mode | Low-latency Bluetooth audio; readable through USB and Bluetooth; settable only over Bluetooth (USB SET was accepted without changing GET state); kept in RAM and off after every power cycle ([gaming mode](GAMING_MODE.md#persistence-off-after-every-power-cycle)); the widget shows its switch only over Bluetooth; separate from Game EQ |
 | Do Not Disturb | Native Boolean setting, stored through USB or Bluetooth; firmware applies it to the connected Bluetooth link, or when that link connects |
 | Idle shutdown | Never, 5, 15, 30, 45 or 60 minutes |
 | Quick Connect | Switch only to a Bluetooth address returned by the headset |

@@ -122,26 +122,30 @@ headset is not connected. Hover over the icon for a one-line summary of the
 connection and battery. Click it to open the popup:
 
 - The heading holds the commands, as in KDE's Bluetooth applet: **+**
-  (**Pair Headset…**), **More actions** (☰) with **Turn Off Headset…** and
-  **Configure Audio Devices…** (KDE's audio settings), and a gear for the
-  widget's configuration window. Pairing and turning off ask first in a dialog
-  whose safe default is **Cancel**.
-- With a confirmed link, a headset card shows the state, the battery
-  percentage with a bar, and the transport (USB dongle, Bluetooth or both);
-  click it for details such as the charging cable and voltage.
-- **Modes**: **Do not disturb** and **Bluetooth gaming mode** (low-latency
-  Bluetooth audio) switches, read from the headset each time the popup opens
-  with a confirmed link. Gaming mode can be changed only over Bluetooth.
-- **Bluetooth Devices**: the sources the headset knows (Razer Quick Connect),
-  with **Connect** for each inactive one.
+  (**Pair Headset…**) and **More actions** (☰) with **Turn Off Headset…** and
+  **Configure Audio Devices…** (KDE's audio settings). Pairing and turning off
+  ask first in a dialog whose safe default is **Cancel**.
+- With a confirmed link, the popup has three tabs, as KDE's volume applet has
+  **Devices** and **Applications**. It always opens on the first:
+  - **Headset**: a card with the state, the battery percentage with a bar and
+    the transport (USB dongle, Bluetooth or both), which you can click for
+    connection details; **Modes**, with **Do not disturb** and **Bluetooth
+    gaming mode** (low-latency Bluetooth audio) switches, where gaming mode is
+    shown only over Bluetooth, the one place it can be changed, and turns off
+    with the headset; and **Bluetooth Devices**, the sources the
+    headset knows (Razer Quick Connect), with **Connect** for each inactive
+    one.
+  - **Sound**: the sound profile and, with **Custom**, its ten bands.
+  - **Power**: the battery charge, charging cable and voltage, and when the
+    headset turns itself off.
+- Settings are read from the headset each time the popup opens with a
+  confirmed link. Every change is sent at once: a profile or idle shutdown
+  when you choose it, the bands when you let go of a slider.
 - Without a confirmed link, one message replaces all of this: Disconnected
   (with a **Pair Headset…** button), Link not confirmed, USB dongle not
   detected, Status unavailable or Checking.
 
-The gear opens the configuration window's **Headset** page: how the headset
-sounds (sound profile and custom bands) and when it turns itself off. Its
-changes are sent with the window's **Apply** or **OK**. The right-click menu
-holds the same commands as the heading.
+The right-click menu holds the same commands as the heading.
 
 Status reads do not send commands to the headset. Native controls require the
 appropriate helpers, permissions and supported transport. Software EQ and
@@ -168,7 +172,7 @@ Turn the headset back on with its physical button.
 | Getting started | [Installation](docs/INSTALL.md), [usage](docs/USAGE.md), [troubleshooting](docs/TROUBLESHOOTING.md) |
 | Headset controls | [Native settings and audio tuning](docs/AUDIO_EFFECTS.md), [Bluetooth controls](docs/BLUETOOTH_CONTROLS.md) |
 | Linux integration | [HID driver and DKMS](docs/DKMS.md), [jack detection](docs/JACK_DETECTION.md), [architecture](docs/ARCHITECTURE.md) |
-| Protocol and research | [Protocol observations](docs/PROTOCOL.md), [firmware research index](docs/FIRMWARE_ANALYSIS.md#research-index-and-completed-static-analysis-scope), [dongle-to-headset commands](docs/DONGLE_HEADSET_COMMANDS.md), [voice prompts](docs/VOICE_PROMPT_ANALYSIS.md) |
+| Protocol and research | [Protocol observations](docs/PROTOCOL.md), [firmware research index](docs/FIRMWARE_ANALYSIS.md#research-index-and-completed-static-analysis-scope), [installed dongle flash](docs/LIVE_DONGLE_FLASH.md), [dongle-to-headset commands](docs/DONGLE_HEADSET_COMMANDS.md), [voice prompts](docs/VOICE_PROMPT_ANALYSIS.md) |
 | Design proposals | [Separating controls into userspace](docs/CONTROL_SEPARATION_SPEC.md), [implementation plan](docs/CONTROL_SEPARATION_PLAN.md) |
 | Project development | [Contributing](CONTRIBUTING.md), [kernel submission](docs/UPSTREAM.md), [releasing](docs/RELEASING.md), [change history](docs/CHANGELOG.md) |
 

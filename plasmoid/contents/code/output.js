@@ -10,20 +10,6 @@ function headsetCommand(request, target) {
     return "barracuda-headset --request '" + JSON.stringify(command).replace(/'/g, "'\\''") + "'";
 }
 
-// Set requests from the configuration window, run in order: each starts only
-// after the previous one succeeded, and the last reply is printed. Plasma
-// destroys a configuration page, and kills its shell, as soon as OK closes
-// the window or another category replaces it. The chain therefore runs in a
-// background subshell that finishes on its own and writes to a private file;
-// the waiting shell reports the reply when it is still there to read it. The
-// file is unlinked before the chain starts and read through a descriptor
-// opened beforehand, so nothing is left behind when the shell is killed.
-function headsetChainCommand(requests, target) {
-    const chain = requests.map(request => headsetCommand(request, target)).join(" && ");
-    return "f=$(mktemp -p \"${XDG_RUNTIME_DIR:-/tmp}\") || exit 1; exec 3>\"$f\" 4<\"$f\"; rm -f \"$f\"; ("
-        + chain + ") >&3 3>&- 4<&- 2>/dev/null & exec 3>&-; wait $!; s=$?; tail -n 1 <&4; exit $s";
-}
-
 // Finite, read-only query of the driver's published link and BlueZ; no HID access.
 function linkCommand() {
     return "barracuda-headset --request '{\"op\":\"link\"}'";
@@ -103,10 +89,9 @@ function voltageText(millivolts, locale) {
 }
 
 // Key/value rows of the headset card's details, empty until a status has been
-// read: the dongle, its 2.4 GHz link, Bluetooth, and with a confirmed dongle
-// link the charging cable and voltage; then the charge state when the card's
-// line leaves it out.
-function detailRows(status, battery, locale) {
+// read: the dongle, its 2.4 GHz link and Bluetooth. What the battery reports
+// is on the Power tab (powerRows).
+function detailRows(status, locale) {
     if (!status || !status.ok)
         return [];
     const usb = status.usb;
@@ -125,18 +110,32 @@ function detailRows(status, battery, locale) {
         rows.push(["Bluetooth", bt.state === "connected" ? text("Connected", "Conectado", locale)
             : bt.state === "disconnected" ? text("Not connected", "No conectado", locale)
             : text("Unknown", "Desconocido", locale)]);
+    return rows;
+}
+
+// The Battery section of the Power tab, as {key, label, value} rows: the
+// charge, then with a confirmed dongle link the driver's charging cable and
+// voltage readings. Nothing here queries the headset; the driver publishes
+// these values with its link report.
+function powerRows(status, battery, locale) {
+    if (!status || !status.ok)
+        return [];
+    const charge = !battery ? text("Unavailable", "No disponible", locale)
+        : percentText(battery.percent, locale) + " · " + (chargeNote(battery, locale)
+            || text("On battery", "Con batería", locale));
+    const rows = [{key: "charge", label: text("Charge", "Carga", locale), value: charge}];
+    const usb = status.usb;
     // Retained values are not shown as current without a confirmed link.
     const reading = usb.adapter === "present" && usb.link === "connected" ? usb.battery : null;
     if (reading) {
-        rows.push([text("Charging cable", "Cable de carga", locale),
-            reading.cable === true ? text("Connected", "Conectado", locale)
-                : reading.cable === false ? text("Not connected", "No conectado", locale)
-                : text("Unknown", "Desconocido", locale)]);
+        rows.push({key: "cable", label: text("Charging cable", "Cable de carga", locale),
+                   value: reading.cable === true ? text("Connected", "Conectado", locale)
+                       : reading.cable === false ? text("Not connected", "No conectado", locale)
+                       : text("Unknown", "Desconocido", locale)});
         if (typeof reading.voltage_mv === "number" && reading.voltage_mv > 0)
-            rows.push([text("Battery voltage", "Voltaje de batería", locale), voltageText(reading.voltage_mv, locale)]);
+            rows.push({key: "voltage", label: text("Battery voltage", "Voltaje de batería", locale),
+                       value: voltageText(reading.voltage_mv, locale)});
     }
-    if (battery && battery.state === "Discharging")
-        rows.push([text("Charge", "Carga", locale), text("On battery", "Con batería", locale)]);
     return rows;
 }
 
@@ -214,11 +213,10 @@ function commandDetails(name, data) {
 }
 
 // The More actions entries, chosen as the system tray chooses them: visible,
-// normal-priority actions other than Plasma's own configure action, with a
-// separator kept only between two entries.
-function moreActions(actions, configure, normalPriority) {
+// normal-priority actions, with a separator kept only between two entries.
+function moreActions(actions, normalPriority) {
     const candidates = Array.from(actions || []).filter(action => action && action.visible
-        && action.priority === normalPriority && action !== configure);
+        && action.priority === normalPriority);
     return candidates.reduce((entries, action, index) => {
         if (!action.isSeparator) {
             const previous = candidates[index - 1];
@@ -465,11 +463,14 @@ function toolTip(value, battery, locale) {
     return parts.join(" · ");
 }
 
-// A popup setting in the middle of a sentence.
+// A headset setting in the middle of a sentence.
 function settingName(feature, locale) {
     return ({dnd: text("the Do not disturb setting", "el ajuste No molestar", locale),
              gaming: text("Bluetooth gaming mode", "el modo gaming Bluetooth", locale),
-             devices: text("the list of Bluetooth devices", "la lista de dispositivos Bluetooth", locale)})[feature] || "";
+             devices: text("the list of Bluetooth devices", "la lista de dispositivos Bluetooth", locale),
+             preset: text("the sound profile", "el perfil de sonido", locale),
+             bands: text("the custom bands", "las bandas personalizadas", locale),
+             standby: text("idle shutdown", "el apagado por inactividad", locale)})[feature] || "";
 }
 
 // Error codes after which the user has something to do; the others (a
@@ -488,7 +489,10 @@ function settingsFailure(feature, code, reason, locale) {
             + (actionableError(code) ? " " + reason : "");
     const change = {dnd: text("Couldn't change the Do not disturb setting.", "No se pudo cambiar el ajuste No molestar.", locale),
                     gaming: text("Couldn't change Bluetooth gaming mode.", "No se pudo cambiar el modo gaming Bluetooth.", locale),
-                    devices: text("Couldn't switch devices.", "No se pudo cambiar de dispositivo.", locale)}[feature]
+                    devices: text("Couldn't switch devices.", "No se pudo cambiar de dispositivo.", locale),
+                    preset: text("Couldn't change the sound profile.", "No se pudo cambiar el perfil de sonido.", locale),
+                    bands: text("Couldn't change the custom bands.", "No se pudieron cambiar las bandas personalizadas.", locale),
+                    standby: text("Couldn't change idle shutdown.", "No se pudo cambiar el apagado por inactividad.", locale)}[feature]
         || text("Couldn't change the setting.", "No se pudo cambiar el ajuste.", locale);
     return change + " " + reason;
 }
@@ -497,15 +501,23 @@ function settingsFailure(feature, code, reason, locale) {
 function readFailure(features, locale) {
     if (features.length !== 1)
         return text("Couldn't read some settings.", "No se pudieron leer algunos ajustes.", locale);
-    return text("Couldn't read %1.", "No se pudo leer %1.", locale).replace("%1", settingName(features[0], locale));
+    // The custom bands are plural in Spanish.
+    const spanish = features[0] === "bands" ? "No se pudieron leer %1." : "No se pudo leer %1.";
+    return text("Couldn't read %1.", spanish, locale).replace("%1", settingName(features[0], locale));
 }
 
 // The one line under the Bluetooth Devices heading, when there is one.
-function devicesNote(devices, reading, gaming, locale) {
+// "settable" is false through the USB dongle, where gaming mode has no row:
+// the note then says where it can be turned off.
+function devicesNote(devices, reading, gaming, settable, locale) {
     if (devices === null)
         return reading ? text("Reading…", "Leyendo…", locale) : "";
     if (devices.length === 0)
         return text("No known devices.", "Sin dispositivos conocidos.", locale);
+    if (gaming === true && !settable)
+        return text("Bluetooth gaming mode is on. Turn it off from a device connected over Bluetooth to switch devices.",
+                    "El modo gaming Bluetooth está activo. Desactívalo desde un dispositivo conectado por Bluetooth para cambiar de dispositivo.",
+                    locale);
     if (gaming === true)
         return text("Turn off Bluetooth gaming mode to switch devices.",
                     "Desactiva el modo gaming Bluetooth para cambiar de dispositivo.", locale);

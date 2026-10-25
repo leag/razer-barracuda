@@ -43,7 +43,6 @@ package_plasma6-applets-barracuda() {
   install -Dm644 plasmoid/metadata.json -t "$target"
   install -Dm644 plasmoid/contents/ui/*.qml -t "$target/contents/ui"
   install -Dm644 plasmoid/contents/code/output.js -t "$target/contents/code"
-  install -Dm644 plasmoid/contents/config/config.qml -t "$target/contents/config"
   install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
 }
 

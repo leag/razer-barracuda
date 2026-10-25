@@ -25,23 +25,25 @@
   the tray draws as the heading's '+', and **Turn Off Headset…**, a separator
   and **Configure Audio Devices…**, which it draws in More actions; in a panel
   or on the desktop the widget's own heading (`HeadsetHeading`, a
-  `PlasmoidHeading`) draws the same row with the same selection rules, next to
-  a gear for the configuration window. **Pair Headset…** and **Turn Off
-  Headset…** open a `Kirigami.PromptDialog` (`HeadsetPrompt`) in the popup and
-  run the existing CLI with `--yes` only after that confirmation; **Configure
-  Audio Devices…** and the gear open their settings directly. The popup
-  (`HeadsetView`, a `PlasmaExtras.Representation` with one `ListView`) shows,
-  with a confirmed link, the headset card (`HeroCard`, `DetailsGrid`), the
-  Modes switch rows (`ModeSwitch`) and the Bluetooth Devices as
-  `ExpandableListItem` rows, all fed by one `barracuda-headset` status read
-  each time the full view is shown with a confirmed link; every other state,
-  pairing and a power-off without a confirmed link show one
-  `StatePlaceholder`, whose Disconnected state offers the pairing action. One
-  `Kirigami.InlineMessage` holds outcomes and problems. The configuration
-  window (`contents/config`) has one **Headset** page (`HeadsetConfigPage`,
-  `HeadsetSettings`); its changes are sent on Apply or OK as one chain that
-  finishes even when Plasma closes the page. Help is one contextual help
-  button per view at most. The powermanagement data engine supplies the
+  `PlasmoidHeading`) draws the same row with the same selection rules. There
+  is no configuration window. **Pair Headset…** and **Turn Off Headset…** open
+  a `Kirigami.PromptDialog` (`HeadsetPrompt`) in the popup and run the
+  existing CLI with `--yes` only after that confirmation; **Configure Audio
+  Devices…** opens KDE's audio settings directly. The popup (`HeadsetView`, a
+  `PlasmaExtras.Representation`) has, with a confirmed link, three tabs in its
+  heading's `TabBar`, which in the tray is all the view's own heading holds:
+  **Headset**, one `ListView` with the headset card (`HeroCard`,
+  `DetailsGrid`), the Modes switch rows (`ModeSwitch`) and the Bluetooth
+  Devices as `ExpandableListItem` rows; **Sound** (`SoundPage`), the sound
+  profile (`ChoiceRow`) and the custom bands; and **Power** (`PowerPage`), the
+  battery readings (`ValueRow`) and idle shutdown. One `barracuda-headset`
+  status read each time the full view is shown with a confirmed link feeds all
+  three, and each change is one request sent at once; band edits wait for the
+  pointer to let go and for any running request, latest levels only. Every
+  other state, pairing and a power-off without a confirmed link show one
+  `StatePlaceholder` and no tabs; its Disconnected state offers the pairing
+  action. One `Kirigami.InlineMessage` holds outcomes and problems. Help is one
+  contextual help button per tab at most. The powermanagement data engine supplies the
   Barracuda battery published by the driver through UPower/Solid, without HID
   reads. The popup loads KDE's detailed headset SVG through `Kirigami.Icon`;
   panel and system tray icons use the theme's symbolic glyph. The package

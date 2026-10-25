@@ -11,13 +11,18 @@ import "../code/output.js" as Output
 // Representation whose header is the applet's heading and whose body is a
 // ScrollView with one ListView.
 //
-// With a confirmed link the list's header holds, in dependency order, the
-// headset (HeroCard), the single feedback slot, the Modes section and the
-// Bluetooth Devices section heading; the list rows are the devices the
-// headset knows. Without a confirmed link, and while pairing, one
-// placeholder replaces the body, with the feedback slot under it; it also
-// waits for a power-off started without a confirmed link. The Disconnected
-// placeholder offers the heading's pairing action as its next step.
+// With a confirmed link the heading has three tabs, as the volume applet has
+// Devices and Applications; the view always opens on the first. Headset: the
+// list's header holds, in dependency order, the headset (HeroCard), the
+// single feedback slot, the Modes section and the Bluetooth Devices section
+// heading, and the list rows are the devices the headset knows. Sound
+// (SoundPage): the sound profile and its custom bands. Power (PowerPage):
+// the battery readings and idle shutdown. One settings read serves all three,
+// and every change is sent at once. Without a confirmed link, and while
+// pairing, there are no tabs and one placeholder replaces the body, with the
+// feedback slot under it; it also waits for a power-off started without a
+// confirmed link. The Disconnected placeholder offers the heading's pairing
+// action as its next step.
 //
 // Visual vocabulary, one form per kind of thing:
 //   headset command with consequences  PlasmaCore.Action with "…" in the
@@ -25,6 +30,10 @@ import "../code/output.js" as Output
 //   confirmation                       Kirigami.PromptDialog (HeadsetPrompt)
 //   headset boolean                    a list row that is a Switch (ModeSwitch),
 //                                     its indicator in the trailing slot
+//   headset setting with named values  a row with a ComboBox in the trailing
+//                                     slot (ChoiceRow)
+//   reading that cannot change          a row with its value in the trailing
+//                                     slot (ValueRow)
 //   one item's action in a list        ExpandableListItem default action
 //   more information                   'expand'/'collapse' at a row's trailing edge
 //   command in progress                BusyIndicator in that trailing slot, or in
@@ -34,12 +43,14 @@ import "../code/output.js" as Output
 //   kind of row                        a monochrome symbolic icon in the icon column
 //   outcome or problem                 the one Kirigami.InlineMessage slot
 //   explanation                        one PlasmaExtras.ContextualHelpButton
+//                                     per tab
 //
-// Columns, shared by every row (see the geometry block below): the section
-// text starts at the list's edge; device icons, the Modes icons (centred in
-// the same box) and the headset drawing share the icon column; switch labels,
-// device titles and section notes share the title column; switch indicators,
-// Connect buttons and busy indicators end on the same trailing edge.
+// Columns, shared by every row of every tab (see the geometry block below):
+// the section text starts at the list's edge; device icons, the row icons
+// (centred in the same box) and the headset drawing share the icon column;
+// row labels, device titles and section notes share the title column; switch
+// indicators, ComboBoxes, values, Connect buttons and busy indicators end on
+// the same trailing edge.
 PlasmaExtras.Representation {
     id: view
 
@@ -55,9 +66,8 @@ PlasmaExtras.Representation {
     // Inside the system tray, which draws the heading itself.
     property bool inTray: false
     property string localeName: Qt.locale().name
-    // Plasmoid.contextualActions and Plasmoid.internalAction("configure").
+    // Plasmoid.contextualActions.
     property var actions: []
-    property QtObject configureAction: null
     // The view is on screen; closing it closes what was open in it.
     property bool activeView: true
 
@@ -131,10 +141,19 @@ PlasmaExtras.Representation {
     // Gaming mode changes only over Bluetooth; the reading says which way the
     // settings went.
     readonly property bool gamingSettable: settingsState !== null && settings.response.transport === "bluetooth"
+    // So its row is shown only over Bluetooth; before a reading, the
+    // controller's target says which way the settings go. Quick Connect still
+    // uses the value read through the dongle.
+    readonly property bool gamingShown: sectionsShown && (settingsState !== null ? gamingSettable
+        : settings !== null && settings.targetKey !== undefined && settings.targetKey !== "usb")
     readonly property bool settingsEnabled: connected && !settingsBusy && !pairingBusy && !powerBusy
     readonly property var devices: settingsState !== null && settingsState.devices
         && settingsState.devices.length !== undefined ? settingsState.devices : null
     readonly property var readErrors: settingsState !== null && settings.response.errors ? settings.response.errors : ({})
+    // --- tabs: only with a confirmed link, and each showing starts on Headset.
+    readonly property bool tabsShown: !showPlaceholder
+    readonly property int currentTab: tabsShown ? header.currentTab : 0
+    onTabsShownChanged: header.currentTab = 0
     readonly property bool sectionsShown: connected && !readFailed
     // A list that failed to read is left out; the feedback slot says so.
     readonly property bool devicesShown: sectionsShown && (devices !== null || reading)
@@ -163,7 +182,7 @@ PlasmaExtras.Representation {
                                                  settings.errorCode, settingsError, localeName),
                     retry: settingsState === null ? "read" : ""};
         }
-        const failed = ["dnd", "gaming", "devices"].filter(feature => readErrors[feature]);
+        const failed = ["dnd", "gaming", "devices", "preset", "bands", "standby"].filter(feature => readErrors[feature]);
         if (connected && failed.length > 0)
             return {type: Kirigami.MessageType.Warning, text: Output.readFailure(failed, localeName), retry: "read"};
         return {type: Kirigami.MessageType.Information, text: "", retry: ""};
@@ -189,6 +208,7 @@ PlasmaExtras.Representation {
         if (!activeView) {
             dismissedNotice = "";
             header.closeMenu();
+            header.currentTab = 0;
         }
     }
 
@@ -207,8 +227,12 @@ PlasmaExtras.Representation {
     property Item dndControl: null
     property Item gamingControl: null
     property Item placeholderButton: null
-    // The card takes focus only when it can expand.
-    readonly property var bodyControls: (showPlaceholder ? [placeholderButton] : [heroItem, dndControl, gamingControl])
+    // The card takes focus only when it can expand. Tab moves through the
+    // Sound and Power controls; arrows enter and leave them.
+    readonly property var bodyControls: (showPlaceholder ? [placeholderButton]
+        : currentTab === 1 ? [soundPage.profileControl]
+        : currentTab === 2 ? [powerPage.standbyControl]
+        : [heroItem, dndControl, gamingControl])
         .filter(item => item !== null && item.visible && item.enabled && item.expandable !== false)
     function focusBody(index, reason) {
         const controls = bodyControls;
@@ -217,12 +241,12 @@ PlasmaExtras.Representation {
             controls[index].forceActiveFocus(reason);
             return true;
         }
-        if (index >= controls.length && list.count > 0) {
+        if (index >= controls.length && currentTab === 0 && list.count > 0) {
             list.currentIndex = 0;
             list.currentItem.forceActiveFocus(reason);
             return true;
         }
-        if (index < 0 && !inTray && header.visible) {
+        if (index < 0 && header.visible) {
             header.focusFirst(reason);
             return true;
         }
@@ -238,14 +262,17 @@ PlasmaExtras.Representation {
         event.accepted = !list.activeFocus && focusBody(0, Qt.TabFocusReason);
     }
 
-    // Inside the system tray the tray draws this row itself; the tray merges
-    // only a visible heading, so a hidden one leaves its heading alone.
+    // Inside the system tray the tray draws the title row itself, and the
+    // heading only holds the tabs; the tray merges only a visible heading, so
+    // a hidden one leaves its heading alone.
     header: HeadsetHeading {
-        visible: !view.inTray
+        visible: !view.inTray || view.tabsShown
+        titleShown: !view.inTray
         title: view.title
         actions: view.actions
-        configureAction: view.configureAction
         moreActionsText: view.label("More actions", "Más acciones")
+        tabs: view.tabsShown ? [view.label("Headset", "Auricular"), view.label("Sound", "Sonido"),
+                                view.label("Power", "Energía")] : []
     }
 
     HeadsetPrompt {
@@ -322,10 +349,26 @@ PlasmaExtras.Representation {
         }
     }
 
+    SoundPage {
+        id: soundPage
+        anchors.fill: parent
+        visible: view.currentTab === 1
+        view: view
+        feedback: feedbackComponent
+    }
+    PowerPage {
+        id: powerPage
+        anchors.fill: parent
+        visible: view.currentTab === 2
+        view: view
+        feedback: feedbackComponent
+    }
+
     PC3.ScrollView {
         id: scroll
         objectName: "bodyScroll"
         anchors.fill: parent
+        visible: view.currentTab === 0
         PC3.ScrollBar.horizontal.policy: PC3.ScrollBar.AlwaysOff
         contentWidth: availableWidth - contentItem.leftMargin - contentItem.rightMargin
 
@@ -387,7 +430,7 @@ PlasmaExtras.Representation {
                     connection: view.connection
                     battery: view.battery
                     turningOff: view.powerBusy
-                    details: Output.detailRows(view.linkStatus, view.battery, view.localeName)
+                    details: Output.detailRows(view.linkStatus, view.localeName)
                     localeName: view.localeName
                     // The drawing, not its square, starts on the device icons' column.
                     artworkX: view.iconColumn + view.deviceIconInset - Math.round(Kirigami.Units.iconSizes.huge * 7 / 64)
@@ -404,7 +447,7 @@ PlasmaExtras.Representation {
                 Loader {
                     Layout.fillWidth: true
                     Layout.topMargin: Kirigami.Units.smallSpacing
-                    active: view.noticeShown && !view.showPlaceholder
+                    active: view.noticeShown && !view.showPlaceholder && view.currentTab === 0
                     visible: active
                     sourceComponent: feedbackComponent
                 }
@@ -415,14 +458,14 @@ PlasmaExtras.Representation {
                     Layout.fillWidth: true
                     visible: view.sectionsShown
                     text: view.label("Modes", "Modos")
-                    // The popup's only help.
+                    // This tab's only help.
                     PlasmaExtras.ContextualHelpButton {
                         objectName: "modesHelp"
                         // Its default caps it at the header row's text height.
                         Layout.maximumHeight: -1
                         toolTipText: view.label(
-                            "Do not disturb keeps calls from a phone connected over Bluetooth from interrupting the dongle's audio; desktop notifications are not affected. Bluetooth gaming mode lowers Bluetooth audio delay; it is not the Game sound profile and changes only over Bluetooth. Bluetooth Devices (Razer Quick Connect) moves the headset's Bluetooth link to a device it already knows, while gaming mode is off.",
-                            "No molestar evita que las llamadas de un teléfono conectado por Bluetooth interrumpan el audio del dongle; no afecta a las notificaciones del escritorio. El modo gaming Bluetooth reduce el retraso del audio Bluetooth; no es el perfil de sonido Juegos y solo se cambia por Bluetooth. Dispositivos Bluetooth (Quick Connect de Razer) mueve la conexión Bluetooth del auricular a un dispositivo que ya conoce, con el modo gaming desactivado.")
+                            "Do not disturb keeps calls from a phone connected over Bluetooth from interrupting the dongle's audio; desktop notifications are not affected. Bluetooth gaming mode lowers Bluetooth audio delay; it is not the Game sound profile, is shown and changed only over Bluetooth, and turns off when the headset does. Bluetooth Devices (Razer Quick Connect) moves the headset's Bluetooth link to a device it already knows, while gaming mode is off.",
+                            "No molestar evita que las llamadas de un teléfono conectado por Bluetooth interrumpan el audio del dongle; no afecta a las notificaciones del escritorio. El modo gaming Bluetooth reduce el retraso del audio Bluetooth; no es el perfil de sonido Juegos, solo se muestra y se cambia por Bluetooth, y se desactiva al apagar el auricular. Dispositivos Bluetooth (Quick Connect de Razer) mueve la conexión Bluetooth del auricular a un dispositivo que ya conoce, con el modo gaming desactivado.")
                     }
                 }
                 ModeSwitch {
@@ -450,7 +493,7 @@ PlasmaExtras.Representation {
                     Layout.fillWidth: true
                     // The list's own row spacing.
                     Layout.topMargin: list.spacing
-                    visible: view.sectionsShown
+                    visible: view.gamingShown
                     iconName: "input-gamepad-symbolic"
                     indicatorX: view.iconColumn
                     labelX: view.titleColumn
@@ -459,9 +502,8 @@ PlasmaExtras.Representation {
                     text: view.label("Bluetooth gaming mode", "Modo gaming Bluetooth")
                     value: view.gamingState
                     busy: view.pendingFeature === "gaming"
-                    interactive: view.settingsEnabled && view.gamingSettable
-                    note: value !== null && !view.gamingSettable ? view.label("Only over Bluetooth", "Solo por Bluetooth")
-                        : view.rowNote(value)
+                    interactive: view.settingsEnabled
+                    note: view.rowNote(value)
                     onToggleRequested: value => view.settingChangeRequested("gaming", value)
                     Keys.onDownPressed: event => view.stepFocus(control, 1, event)
                     Keys.onUpPressed: event => view.stepFocus(control, -1, event)
@@ -484,7 +526,8 @@ PlasmaExtras.Representation {
                     visible: view.devicesShown && text.length > 0
                     wrapMode: Text.Wrap
                     textFormat: Text.PlainText
-                    text: Output.devicesNote(view.devices, view.reading, view.gamingState, view.localeName)
+                    text: Output.devicesNote(view.devices, view.reading, view.gamingState, view.gamingSettable,
+                                             view.localeName)
                 }
             }
 

@@ -25,8 +25,6 @@ Plasma5Support.DataSource {
     // The feature of the last set request ("dnd", "gaming", "devices", …), or
     // empty for a status read, so its feedback can appear beside its control.
     property string requestFeature: ""
-    // Requests in the last chain; 1 for a single request.
-    property int chainLength: 1
     property string localeName: Qt.locale().name
     signal loaded(var result)
     function label(en, es) { return Output.text(en, es, localeName); }
@@ -58,9 +56,7 @@ Plasma5Support.DataSource {
     // Failures after which the headset certainly kept its previous state: the
     // last reading stays, so controls keep showing confirmed values. Any other
     // failure of a change (a timeout, an unconfirmed change) may have changed
-    // the headset, so nothing stays known. Neither does a failed chain of
-    // several changes: its reply is the failing step's alone, and a step
-    // before it may already have changed the headset.
+    // the headset, so nothing stays known.
     readonly property var unchangedCodes: ["rejected", "busy", "gaming-active", "unknown-device", "gaming-not-applied",
                                            "missing-adapter", "unknown-link", "permission-denied", "driver-required"]
     function request(value) {
@@ -70,23 +66,8 @@ Plasma5Support.DataSource {
         error = "";
         errorCode = "";
         requestFeature = value.op === "set" ? String(value.feature) : "";
-        chainLength = 1;
         requestedKey = targetKey;
         connectSource(Output.headsetCommand(value, target));
-    }
-    // Set requests from the configuration window, in order; the chain stops at
-    // the first failure and its last reply is the result. It completes even
-    // if the window closes before it ends.
-    function requestChain(values) {
-        if (busy || values.length === 0)
-            return;
-        busy = true;
-        error = "";
-        errorCode = "";
-        requestFeature = String(values[values.length - 1].feature);
-        chainLength = values.length;
-        requestedKey = targetKey;
-        connectSource(Output.headsetChainCommand(values, target));
     }
     onNewData: (sourceName, data) => {
         disconnectSource(sourceName);
@@ -108,7 +89,7 @@ Plasma5Support.DataSource {
         }
         if (!result.ok) {
             errorCode = String(result.error || "");
-            if (requestFeature === "" || chainLength > 1 || !unchangedCodes.includes(errorCode))
+            if (requestFeature === "" || !unchangedCodes.includes(errorCode))
                 response = null;
             error = errorLabel(errorCode);
             return;

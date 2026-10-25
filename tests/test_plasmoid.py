@@ -141,8 +141,7 @@ class PlasmoidTests(unittest.TestCase):
     def test_popup_requests_reach_the_settings_controller(self):
         source = (ROOT / 'plasmoid/contents/ui/main.qml').read_text()
         view = source.split('fullRepresentation: HeadsetView {', 1)[1]
-        for line in ('settings: settingsController', 'actions: Plasmoid.contextualActions',
-                     'configureAction: Plasmoid.internalAction("configure")', 'title: Plasmoid.title',
+        for line in ('settings: settingsController', 'actions: Plasmoid.contextualActions', 'title: Plasmoid.title',
                      'inTray: root.inTray', 'activeView: root.viewShown',
                      'onPairingConfirmed: root.openPairing()', 'onPowerOffConfirmed: root.turnOffHeadset()',
                      'onSettingChangeRequested: (feature, value) => root.setSetting(feature, value)',
@@ -152,95 +151,15 @@ class PlasmoidTests(unittest.TestCase):
         set_setting = source.split('function setSetting(feature, value) {', 1)[1].split('\n    }', 1)[0]
         self.assertIn('connected && !settingsController.busy && !pairingBusy && !powerBusy', set_setting)
         self.assertIn('settingsController.request({op: "set", feature: feature, value: value})', set_setting)
-        # The old popup and configuration pages are gone.
+        # The popup's tabs replaced the configuration window; there is no
+        # Apply, so no chain of changes either.
+        self.assertNotIn('configureAction', view)
+        self.assertNotIn('requestChain', '\n'.join(path.read_text() for path in (ROOT / 'plasmoid').rglob('*.*')))
+        self.assertFalse((ROOT / 'plasmoid/contents/config').exists())
         for removed in ('ConnectionSummary.qml', 'HeadsetPanel.qml', 'SettingRow.qml',
-                        'ConfigEqualizer.qml', 'ConfigPowerSaving.qml'):
+                        'ConfigEqualizer.qml', 'ConfigPowerSaving.qml', 'ConfigHeadset.qml',
+                        'HeadsetConfigPage.qml', 'HeadsetSettings.qml'):
             self.assertFalse((ROOT / 'plasmoid/contents/ui' / removed).exists(), removed)
-
-    @unittest.skipUnless(Path(RUNNER).is_file() and shutil.which('sh'), 'Qt 6 QML test runner required')
-    def test_configuration_chain_survives_the_closed_window(self):
-        # Plasma ends a configuration page's process when OK closes the
-        # window. Run the command output.js builds, with fake helpers, and
-        # check that it stops at the first failure, reports the last reply,
-        # finishes even when the waiting shell is killed at once and never
-        # leaves its private file behind.
-        with tempfile.TemporaryDirectory() as directory:
-            base = Path(directory)
-            probe = base / 'tst_chain.qml'
-            probe.write_text('import QtQuick\nimport QtTest\nimport "%s" as Output\n'
-                             'TestCase { name: "Chain"; function test_print() { console.log("CHAIN " + '
-                             'Output.headsetChainCommand([{op: "set", feature: "preset", value: 255}, '
-                             '{op: "set", feature: "bands", value: [1,0,0,0,0,0,0,0,0,0]}], {transport: "usb"})) } }\n'
-                             % (ROOT / 'plasmoid/contents/code/output.js').as_uri())
-            result, _ = run_qml(probe)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            command = next(line.split('CHAIN ', 1)[1] for line in (result.stdout + result.stderr).splitlines()
-                           if 'CHAIN ' in line)
-            # The file is unlinked before the chain starts.
-            self.assertLess(command.index('rm -f "$f"'), command.index('(barracuda-headset'))
-            leftovers = lambda: sorted(path.name for path in base.glob('tmp.*'))
-            fakes = base / 'bin'
-            fakes.mkdir()
-            log = base / 'calls.log'
-            helper = fakes / 'barracuda-headset'
-            # Records each request; fails the preset step when asked to.
-            helper.write_text('#!/bin/sh\n'
-                              'sleep "${FAKE_DELAY:-0}"\n'
-                              f'echo "$2" >> "{log}"\n'
-                              'case "$2" in *preset*) if [ -n "$FAKE_FAIL" ]; then '
-                              'echo \'{"ok": false, "error": "rejected"}\'; exit 1; fi;; esac\n'
-                              'echo \'{"ok": true, "sent": "x"}\'\n')
-            helper.chmod(0o755)
-            env = {**os.environ, 'PATH': f'{fakes}{os.pathsep}{os.environ["PATH"]}',
-                   'XDG_RUNTIME_DIR': str(base)}
-            done = subprocess.run(['sh', '-c', command], env=env, capture_output=True, text=True, timeout=30)
-            self.assertEqual(done.returncode, 0)
-            self.assertEqual(done.stdout, '{"ok": true, "sent": "x"}\n')
-            calls = log.read_text().splitlines()
-            self.assertEqual(len(calls), 2)
-            self.assertIn('"feature":"preset"', calls[0])
-            self.assertIn('"feature":"bands"', calls[1])
-            self.assertEqual(leftovers(), [])
-            log.unlink()
-            failed = subprocess.run(['sh', '-c', command], env={**env, 'FAKE_FAIL': '1'},
-                                    capture_output=True, text=True, timeout=30)
-            self.assertNotEqual(failed.returncode, 0)
-            self.assertEqual(json.loads(failed.stdout), {'ok': False, 'error': 'rejected'})
-            self.assertEqual(len(log.read_text().splitlines()), 1)
-            self.assertEqual(leftovers(), [])
-            log.unlink()
-            # The window closes while the first step runs: the waiting shell is
-            # killed, and the chain still completes.
-            waiting = subprocess.Popen(['sh', '-c', command], env={**env, 'FAKE_DELAY': '0.3'},
-                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(0.1)
-            waiting.kill()
-            waiting.wait(timeout=10)
-            self.assertFalse(log.exists())
-            self.assertEqual(leftovers(), [])
-            deadline = time.monotonic() + 10
-            while time.monotonic() < deadline and not (log.exists() and len(log.read_text().splitlines()) == 2):
-                time.sleep(0.05)
-            self.assertEqual(len(log.read_text().splitlines()), 2)
-            self.assertEqual(leftovers(), [])
-
-    @unittest.skipUnless(Path(RUNNER).is_file()
-                         and Path('/usr/lib/qt6/qml/org/kde/plasma/configuration/qmldir').is_file(),
-                         'Qt 6 and Plasma configuration components required')
-    def test_configuration_category_in_both_languages(self):
-        with tempfile.TemporaryDirectory() as directory:
-            probe = Path(directory) / 'tst_categories.qml'
-            probe.write_text('import QtQuick\nimport QtTest\nTestCase { name: "Categories"; '
-                             'function test_print() { const model = Qt.createComponent("%s").createObject(null); '
-                             'const names = []; for (let i = 0; i < model.count; ++i) names.push(model.get(i).name); '
-                             'console.log("NAMES " + JSON.stringify(names)) } }\n'
-                             % (ROOT / 'plasmoid/contents/config/config.qml').as_uri())
-            for language, names in (('en_US.UTF-8', ['Headset']), ('es_CL.UTF-8', ['Auricular'])):
-                result, _ = run_qml(probe, LC_ALL=language, LANG=language, LANGUAGE=language.split('.')[0])
-                output = result.stdout + result.stderr
-                self.assertEqual(result.returncode, 0, output)
-                line = next(line for line in output.splitlines() if 'NAMES ' in line)
-                self.assertEqual(json.loads(line.split('NAMES ', 1)[1]), names)
 
     def test_arch_package(self):
         with tempfile.TemporaryDirectory() as directory:

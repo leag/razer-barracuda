@@ -23,17 +23,16 @@ TestCase {
         FakeAction { id: separator; isSeparator: true },
         FakeAction { id: doubled; isSeparator: true },
         FakeAction { id: audio; text: "Configure Audio Devices…" },
-        FakeAction { id: configure; text: "&Configure Barracuda Headset…" },
         FakeAction { id: trailingSeparator; isSeparator: true }
     ]
     function test_more_actions_match_the_tray() {
-        // Visible normal-priority actions without Plasma's configure action;
-        // a separator stays only between two entries, once.
-        compare(Output.moreActions(actions, configure, normalPriority), [powerOff, doubled, audio]);
-        compare(Output.moreActions([audio, separator], configure, normalPriority), [audio]);
-        compare(Output.moreActions([separator, audio], configure, normalPriority), [audio]);
-        compare(Output.moreActions([], configure, normalPriority), []);
-        compare(Output.moreActions(null, null, normalPriority), []);
+        // Visible normal-priority actions; a separator stays only between
+        // two entries, once.
+        compare(Output.moreActions(actions, normalPriority), [powerOff, doubled, audio]);
+        compare(Output.moreActions([audio, separator], normalPriority), [audio]);
+        compare(Output.moreActions([separator, audio], normalPriority), [audio]);
+        compare(Output.moreActions([], normalPriority), []);
+        compare(Output.moreActions(null, normalPriority), []);
         // The heading's icon buttons are the high-priority actions.
         compare(Output.primaryActions(actions, highPriority), [high]);
         compare(Output.primaryActions(null, highPriority), []);
@@ -49,21 +48,15 @@ TestCase {
         compare(Output.macAddress("abc"), "abc");
         compare(Output.macAddress(undefined), "");
     }
-    function test_configuration_changes_run_as_one_chain() {
-        const requests = [{op: "set", feature: "preset", value: 255},
-                          {op: "set", feature: "bands", value: [1, 0, 0, 0, 0, 0, 0, 0, 0, -1]}];
-        compare(Output.headsetChainCommand(requests, {transport: "usb"}),
-                // The file is unlinked before the chain starts and read
-                // through a descriptor opened earlier.
-                "f=$(mktemp -p \"${XDG_RUNTIME_DIR:-/tmp}\") || exit 1; exec 3>\"$f\" 4<\"$f\"; rm -f \"$f\"; ("
-                + "barracuda-headset --request '{\"op\":\"set\",\"feature\":\"preset\",\"value\":255}' && "
-                + "barracuda-headset --request '{\"op\":\"set\",\"feature\":\"bands\",\"value\":[1,0,0,0,0,0,0,0,0,-1]}'"
-                + ") >&3 3>&- 4<&- 2>/dev/null & exec 3>&-; wait $!; s=$?; tail -n 1 <&4; exit $s");
-        // Over Bluetooth every step names the headset's address.
-        const bluetooth = Output.headsetChainCommand([{op: "set", feature: "standby", value: 0}],
-                                                     {transport: "bluetooth", address: "01:02:03:04:05:06"});
-        verify(bluetooth.includes('"transport":"bluetooth","address":"01:02:03:04:05:06"'));
-        verify(!bluetooth.includes("&&"));
+    function test_each_change_is_one_request() {
+        // The popup sends every change on its own; there is no chain of
+        // changes waiting for an Apply.
+        compare(Output.headsetChainCommand, undefined);
+        compare(Output.headsetCommand({op: "set", feature: "standby", value: 0}, {transport: "usb"}),
+                "barracuda-headset --request '{\"op\":\"set\",\"feature\":\"standby\",\"value\":0}'");
+        const bluetooth = Output.headsetCommand({op: "set", feature: "bands", value: [1, 0, 0, 0, 0, 0, 0, 0, 0, -1]},
+                                                {transport: "bluetooth", address: "01:02:03:04:05:06"});
+        verify(bluetooth.includes('"value":[1,0,0,0,0,0,0,0,0,-1],"transport":"bluetooth","address":"01:02:03:04:05:06"'));
     }
     function test_link_parsing_and_command() {
         compare(Output.linkCommand(), "barracuda-headset --request '{\"op\":\"link\"}'");
@@ -116,28 +109,54 @@ TestCase {
         compare(Output.connectionText({state: "checking"}, "en_US"), "Checking…");
     }
     function test_connection_detail_rows() {
-        compare(Output.detailRows({ok: true, usb: {adapter: "missing"}, bluetooth: null}, null, "en_US"),
+        compare(Output.detailRows({ok: true, usb: {adapter: "missing"}, bluetooth: null}, "en_US"),
                 [["USB dongle", "Not detected"]]);
-        compare(Output.detailRows({ok: true, usb: {adapter: "multiple"}, bluetooth: null}, null, "es_CL"),
+        compare(Output.detailRows({ok: true, usb: {adapter: "multiple"}, bluetooth: null}, "es_CL"),
                 [["Dongle USB", "Más de uno"]]);
-        compare(Output.detailRows(linked("disconnected", {state: "disconnected", address: "x"}), null, "es_CL"),
+        compare(Output.detailRows(linked("disconnected", {state: "disconnected", address: "x"}), "es_CL"),
                 [["Dongle USB", "Detectado"], ["Enlace 2,4 GHz", "Desconectado"], ["Bluetooth", "No conectado"]]);
         compare(Output.detailRows({ok: true, usb: {adapter: "present", driver: false, link: "unknown"},
-                                   bluetooth: {state: "unknown"}}, null, "en_US"),
+                                   bluetooth: {state: "unknown"}}, "en_US"),
                 [["USB dongle", "Detected"], ["2.4 GHz link", "Driver required"], ["Bluetooth", "Unknown"]]);
-        compare(Output.detailRows(linked("unknown"), null, "es_CL")[1], ["Enlace 2,4 GHz", "No confirmado"]);
+        compare(Output.detailRows(linked("unknown"), "es_CL")[1], ["Enlace 2,4 GHz", "No confirmado"]);
+        // The card names the connection only; the battery is on the Power tab.
         const battery = {percent: 65, status: "Charging", cable: true, voltage_mv: 4123};
-        compare(Output.detailRows(linked("connected", null, battery), null, "es_CL").slice(2),
-                [["Cable de carga", "Conectado"], ["Voltaje de batería", "4,12 V"]]);
+        compare(Output.detailRows(linked("connected", null, battery), "en_US"),
+                [["USB dongle", "Detected"], ["2.4 GHz link", "Connected"]]);
+    }
+    function test_power_rows() {
+        compare(Output.powerRows(null, null, "en_US"), []);
+        compare(Output.powerRows({ok: false}, null, "en_US"), []);
+        const values = rows => rows.map(row => [row.key, row.label, row.value]);
+        const battery = {percent: 65, status: "Charging", cable: true, voltage_mv: 4123};
+        compare(values(Output.powerRows(linked("connected", null, battery), {percent: 65, state: "Charging"}, "en_US")),
+                [["charge", "Charge", "65% · Charging"], ["cable", "Charging cable", "Connected"],
+                 ["voltage", "Battery voltage", "4.12 V"]]);
+        compare(values(Output.powerRows(linked("connected", null, battery), {percent: 65, state: "Charging"}, "es_CL")),
+                [["charge", "Carga", "65" + nbsp + "% · Cargando"], ["cable", "Cable de carga", "Conectado"],
+                 ["voltage", "Voltaje de batería", "4,12 V"]]);
+        // A discharging battery says so; a low one says it is low.
+        compare(Output.powerRows(linked("connected"), {percent: 65, state: "Discharging"}, "en_US")[0].value,
+                "65% · On battery");
+        compare(Output.powerRows(linked("connected"), {percent: 65, state: "Discharging"}, "es_CL")[0].value,
+                "65" + nbsp + "% · Con batería");
+        compare(Output.powerRows(linked("connected"), {percent: 8, state: "Discharging"}, "en_US")[0].value,
+                "8% · Low battery");
+        compare(Output.powerRows(linked("connected"), {percent: 100, state: "FullyCharged"}, "en_US")[0].value,
+                "100% · Fully charged");
+        compare(Output.powerRows(linked("connected"), null, "en_US")[0].value, "Unavailable");
+        compare(Output.powerRows(linked("connected"), null, "es_CL")[0].value, "No disponible");
         battery.cable = null;
         battery.voltage_mv = null;
-        compare(Output.detailRows(linked("connected", null, battery), null, "en_US").slice(2),
-                [["Charging cable", "Unknown"]]);
+        compare(values(Output.powerRows(linked("connected", null, battery), null, "en_US")).slice(1),
+                [["cable", "Charging cable", "Unknown"]]);
         battery.cable = false;
-        compare(Output.detailRows(linked("connected", null, battery), null, "en_US").slice(2),
-                [["Charging cable", "Not connected"]]);
-        // Retained values are not shown as current while the link is not confirmed.
-        compare(Output.detailRows(linked("unknown", null, battery), null, "en_US").length, 2);
+        compare(Output.powerRows(linked("connected", null, battery), null, "es_CL")[1].value, "No conectado");
+        // Retained values are not shown as current while the link is not
+        // confirmed, and Bluetooth alone has no driver reading.
+        compare(Output.powerRows(linked("unknown", null, battery), null, "en_US").length, 1);
+        compare(Output.powerRows({ok: true, usb: {adapter: "missing"}, bluetooth: {state: "connected"}},
+                                 {percent: 65, state: "Discharging"}, "en_US").length, 1);
     }
     function test_driver_battery_fallback() {
         compare(Output.driverBattery(null), null);
@@ -465,20 +484,11 @@ TestCase {
                                    "en_US").state, "pairing");
     }
     function test_detail_rows() {
-        compare(Output.detailRows(null, null, "en_US"), []);
-        compare(Output.detailRows({ok: false}, null, "en_US"), []);
-        const battery = {percent: 65, status: "Charging", cable: true, voltage_mv: 4123};
-        compare(Output.detailRows(linked("connected", null, battery), {percent: 65, state: "Charging"}, "en_US"),
-                [["USB dongle", "Detected"], ["2.4 GHz link", "Connected"],
-                 ["Charging cable", "Connected"], ["Battery voltage", "4.12 V"]]);
-        // A discharging battery, which the card's line leaves out, is named here.
-        compare(Output.detailRows(linked("connected", {state: "disconnected"}), {percent: 65, state: "Discharging"}, "es_CL"),
-                [["Dongle USB", "Detectado"], ["Enlace 2,4 GHz", "Conectado"], ["Bluetooth", "No conectado"],
-                 ["Carga", "Con batería"]]);
-        compare(Output.detailRows(linked("connected"), {percent: 65, state: "Discharging"}, "en_US").slice(-1),
-                [["Charge", "On battery"]]);
-        compare(Output.detailRows({ok: true, usb: {adapter: "missing"}, bluetooth: {state: "connected"}},
-                                  {percent: 65, state: "FullyCharged"}, "en_US"),
+        compare(Output.detailRows(null, "en_US"), []);
+        compare(Output.detailRows({ok: false}, "en_US"), []);
+        compare(Output.detailRows(linked("connected", {state: "disconnected"}), "es_CL"),
+                [["Dongle USB", "Detectado"], ["Enlace 2,4 GHz", "Conectado"], ["Bluetooth", "No conectado"]]);
+        compare(Output.detailRows({ok: true, usb: {adapter: "missing"}, bluetooth: {state: "connected"}}, "en_US"),
                 [["USB dongle", "Not detected"], ["Bluetooth", "Connected"]]);
     }
     function test_tooltip_is_one_line() {
@@ -506,7 +516,13 @@ TestCase {
         compare(Output.settingName("gaming", "es_CL"), "el modo gaming Bluetooth");
         compare(Output.settingName("devices", "en_US"), "the list of Bluetooth devices");
         compare(Output.settingName("devices", "es_CL"), "la lista de dispositivos Bluetooth");
-        compare(Output.settingName("preset", "en_US"), "");
+        compare(Output.settingName("preset", "en_US"), "the sound profile");
+        compare(Output.settingName("preset", "es_CL"), "el perfil de sonido");
+        compare(Output.settingName("bands", "en_US"), "the custom bands");
+        compare(Output.settingName("bands", "es_CL"), "las bandas personalizadas");
+        compare(Output.settingName("standby", "en_US"), "idle shutdown");
+        compare(Output.settingName("standby", "es_CL"), "el apagado por inactividad");
+        compare(Output.settingName("other", "en_US"), "");
         // A failed read names a reason only when the user can act on it.
         for (const code of ["driver-required", "permission-denied", "helper-missing", "bluetooth-runtime-unavailable",
                             "route-failed", "missing-adapter", "busy", "bluetooth-unsupported"]) {
@@ -524,6 +540,9 @@ TestCase {
         const changes = {dnd: ["Couldn't change the Do not disturb setting.", "No se pudo cambiar el ajuste No molestar."],
                          gaming: ["Couldn't change Bluetooth gaming mode.", "No se pudo cambiar el modo gaming Bluetooth."],
                          devices: ["Couldn't switch devices.", "No se pudo cambiar de dispositivo."],
+                         preset: ["Couldn't change the sound profile.", "No se pudo cambiar el perfil de sonido."],
+                         bands: ["Couldn't change the custom bands.", "No se pudieron cambiar las bandas personalizadas."],
+                         standby: ["Couldn't change idle shutdown.", "No se pudo cambiar el apagado por inactividad."],
                          other: ["Couldn't change the setting.", "No se pudo cambiar el ajuste."]};
         for (const feature of Object.keys(changes)) {
             compare(Output.settingsFailure(feature, "timeout", "Reason.", "en_US"), changes[feature][0] + " Reason.");
@@ -533,23 +552,33 @@ TestCase {
         compare(Output.readFailure(["gaming"], "es_CL"), "No se pudo leer el modo gaming Bluetooth.");
         compare(Output.readFailure(["dnd"], "en_US"), "Couldn't read the Do not disturb setting.");
         compare(Output.readFailure(["devices"], "es_CL"), "No se pudo leer la lista de dispositivos Bluetooth.");
+        compare(Output.readFailure(["standby"], "en_US"), "Couldn't read idle shutdown.");
+        compare(Output.readFailure(["bands"], "es_CL"), "No se pudieron leer las bandas personalizadas.");
         compare(Output.readFailure(["dnd", "gaming"], "en_US"), "Couldn't read some settings.");
         compare(Output.readFailure(["dnd", "devices"], "es_CL"), "No se pudieron leer algunos ajustes.");
     }
     function test_bluetooth_devices_note() {
         const devices = [{address: "010203040506", name: "Phone", active: true}];
-        compare(Output.devicesNote(null, true, null, "en_US"), "Reading…");
-        compare(Output.devicesNote(null, true, null, "es_CL"), "Leyendo…");
-        compare(Output.devicesNote(null, false, null, "en_US"), "");
-        compare(Output.devicesNote([], false, false, "en_US"), "No known devices.");
-        compare(Output.devicesNote([], false, true, "es_CL"), "Sin dispositivos conocidos.");
-        compare(Output.devicesNote(devices, false, true, "en_US"), "Turn off Bluetooth gaming mode to switch devices.");
-        compare(Output.devicesNote(devices, false, true, "es_CL"),
+        compare(Output.devicesNote(null, true, null, true, "en_US"), "Reading…");
+        compare(Output.devicesNote(null, true, null, true, "es_CL"), "Leyendo…");
+        compare(Output.devicesNote(null, false, null, true, "en_US"), "");
+        compare(Output.devicesNote([], false, false, true, "en_US"), "No known devices.");
+        compare(Output.devicesNote([], false, true, true, "es_CL"), "Sin dispositivos conocidos.");
+        compare(Output.devicesNote(devices, false, true, true, "en_US"), "Turn off Bluetooth gaming mode to switch devices.");
+        compare(Output.devicesNote(devices, false, true, true, "es_CL"),
                 "Desactiva el modo gaming Bluetooth para cambiar de dispositivo.");
-        compare(Output.devicesNote(devices, false, null, "en_US"),
+        compare(Output.devicesNote(devices, false, null, true, "en_US"),
                 "Switching devices needs Bluetooth gaming mode to be read first.");
-        compare(Output.devicesNote(devices, false, null, "es_CL"),
+        compare(Output.devicesNote(devices, false, null, true, "es_CL"),
                 "Para cambiar de dispositivo, primero hay que leer el modo gaming Bluetooth.");
-        compare(Output.devicesNote(devices, false, false, "en_US"), "");
+        compare(Output.devicesNote(devices, false, false, true, "en_US"), "");
+        // Through the dongle gaming mode has no row; the note says where to
+        // turn it off.
+        compare(Output.devicesNote(devices, false, true, false, "en_US"),
+                "Bluetooth gaming mode is on. Turn it off from a device connected over Bluetooth to switch devices.");
+        compare(Output.devicesNote(devices, false, true, false, "es_CL"),
+                "El modo gaming Bluetooth está activo. Desactívalo desde un dispositivo conectado por Bluetooth para cambiar de dispositivo.");
+        compare(Output.devicesNote(devices, false, false, false, "en_US"), "");
+        compare(Output.devicesNote([], false, true, false, "en_US"), "No known devices.");
     }
 }

@@ -25,7 +25,6 @@ Item {
     // main.qml's rule for pairing and power-off.
     readonly property bool commandsEnabled: !pairingBusy && !powerBusy && !Output.adapterMissing(status)
     property int audioTriggers: 0
-    property int configureTriggers: 0
     // As main.qml, which starts the command and so ends the question.
     property bool busyOnConfirm: false
     function label(english, spanish) { return Output.text(english, spanish, host.localeName) }
@@ -67,14 +66,6 @@ Item {
             onTriggered: host.audioTriggers++
         }
     ]
-    // Plasma's own configure action, with its accelerator marker.
-    PlasmaCore.Action {
-        id: configureAction
-        text: host.label("&Configure Barracuda Headset…", "&Configurar Auricular Barracuda…")
-        icon.name: "configure"
-        onTriggered: host.configureTriggers++
-    }
-
     // An unknown engine name loads nothing. An empty one would keep the
     // engine that the component itself sets, and run it.
     BatteryMonitor {
@@ -95,6 +86,7 @@ Item {
         property string error: ""
         property string errorCode: ""
         property string requestFeature: ""
+        property string targetKey: "usb"
         function errorLabel(code) { return "label:" + code }
     }
 
@@ -106,7 +98,6 @@ Item {
         title: host.label("Barracuda Headset", "Auricular Barracuda")
         localeName: host.localeName
         actions: host.actions
-        configureAction: configureAction
         linkStatus: host.status
         battery: host.battery
         settings: fakeSettings
@@ -134,7 +125,6 @@ Item {
         title: view.title
         localeName: host.localeName
         actions: host.actions
-        configureAction: configureAction
         linkStatus: host.status
         battery: host.battery
         settings: fakeSettings
@@ -235,7 +225,12 @@ Item {
                 target.dismissedNotice = ""
                 target.pendingAddress = ""
                 findChild(target, "hero").expanded = false
+                target.header.currentTab = 0
+                const sound = findChild(target, "soundPage")
+                sound.dragging = 0
+                sound.showConfirmed()
             }
+            fakeSettings.targetKey = "usb"
             pairingSpy.clear()
             powerSpy.clear()
             settingSpy.clear()
@@ -246,7 +241,7 @@ Item {
             host.status = null
             fakeSettings.response = null
         }
-        function test_heading_title_actions_and_gear() {
+        function test_heading_title_and_actions() {
             const heading = view.header
             verify(heading.visible)
             // Plasma's heading, with the theme's background and separator.
@@ -255,7 +250,8 @@ Item {
             const title = findChild(heading, "popupTitle")
             const plus = findChild(heading, "primaryAction")
             const more = findChild(heading, "moreActionsButton")
-            const gear = findChild(heading, "configureButton")
+            // Everything the configuration window held is in the popup's tabs.
+            compare(findChild(heading, "configureButton"), null)
             for (const locale of ["en_US", "es_CL"]) {
                 host.localeName = locale
                 const english = locale === "en_US"
@@ -263,8 +259,6 @@ Item {
                 // The '+' is the pairing action, named by its tooltip.
                 compare(plus.text, english ? "Pair Headset…" : "Emparejar auricular…")
                 compare(more.text, english ? "More actions" : "Más acciones")
-                // Plasma's own configure text, without its accelerator marker.
-                compare(gear.text, english ? "Configure Barracuda Headset…" : "Configurar Auricular Barracuda…")
                 // More actions: Turn Off, a separator, the audio settings.
                 compare(heading.menuActions.map(action => action.isSeparator ? "—" : action.text),
                         english ? ["Turn Off Headset…", "—", "Configure Audio Devices…"]
@@ -273,20 +267,15 @@ Item {
             host.localeName = "en_US"
             compare(plus.display, PC3.AbstractButton.IconOnly)
             compare(plus.contentItem.source, "list-add-symbolic")
-            compare(gear.display, PC3.AbstractButton.IconOnly)
-            compare(gear.icon.name, "configure")
             compare(more.icon.name, "application-menu")
             verify(more.checkable)
             compare(more.Accessible.role, Accessible.ButtonMenu)
             compare(heading.menuActions[0].icon.name, "system-shutdown-symbolic")
             compare(heading.menuActions[2].icon.name, "audio-card-symbolic")
-            // Title, '+', More actions, then the gear at the top right.
+            // Title, '+', then More actions at the top right.
             verify(plus.x > title.x)
             verify(more.x > plus.x)
-            verify(gear.x > more.x)
-            // The gear opens the widget's configuration window.
-            mouseClick(gear)
-            compare(host.configureTriggers, 1)
+            verify(more.x + more.width > heading.width - Kirigami.Units.gridUnit * 2)
             // The '+' asks before pairing.
             host.status = linked("disconnected")
             mouseClick(plus)
@@ -294,12 +283,370 @@ Item {
             compare(prompt.title, "Pair Headset?")
             closePrompt()
             compare(pairingSpy.count, 0)
-            // Inside the system tray, the tray draws this row itself.
+            // Inside the system tray, the tray draws this row itself; without
+            // a confirmed link there are no tabs either.
             verify(!trayView.header.visible)
+            verify(!findChild(view.header, "tabBar").visible)
             // The commands have no second copy in the body.
             for (const name of ["pairButton", "powerOffButton", "deviceCommands", "pairingStatus", "powerStatus",
                                 "connectionHelp", "headsetSettings", "detailsToggle", "quickConnect"])
                 compare(findChild(view, name), null)
+        }
+        function tab(target, index) {
+            return findChild(target.header, "tabBar").itemAt(index)
+        }
+        function bandSliders() {
+            return findAll(findChild(view, "soundPage"), item => item.objectName === "bandSlider")
+        }
+        function sentSettings() {
+            const sent = []
+            for (let index = 0; index < settingSpy.count; ++index)
+                sent.push([settingSpy.signalArguments[index][0], settingSpy.signalArguments[index][1]])
+            return sent
+        }
+        function test_tabs_only_with_a_confirmed_link() {
+            const tabBar = findChild(view.header, "tabBar")
+            const trayTabs = findChild(trayView.header, "tabBar")
+            // Without a confirmed link, one placeholder and no tabs; the tray
+            // keeps only its own heading.
+            for (const state of [null, linked("disconnected"), linked("unknown"), noDongle]) {
+                host.status = state
+                verify(!tabBar.visible)
+                verify(!trayView.header.visible)
+                compare(view.currentTab, 0)
+            }
+            host.status = linked("connected")
+            read({preset: 7, bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], standby: 15, dnd: false, gaming: false, devices: []})
+            verify(tabBar.visible)
+            verify(findChild(view.header, "titleRow").visible)
+            // In the tray the view's heading holds the tabs alone, under the
+            // tray's own title row.
+            verify(trayView.header.visible)
+            verify(trayTabs.visible)
+            verify(!findChild(trayView.header, "titleRow").visible)
+            for (const locale of ["en_US", "es_CL"]) {
+                host.localeName = locale
+                compare([0, 1, 2].map(index => tab(view, index).text),
+                        locale === "en_US" ? ["Headset", "Sound", "Power"] : ["Auricular", "Sonido", "Energía"])
+            }
+            host.localeName = "en_US"
+            // Each showing opens on Headset.
+            compare(view.currentTab, 0)
+            verify(findChild(view, "bodyScroll").visible)
+            verify(!findChild(view, "soundPage").visible)
+            verify(!findChild(view, "powerPage").visible)
+            mouseClick(tab(view, 1))
+            compare(view.currentTab, 1)
+            verify(!findChild(view, "bodyScroll").visible)
+            verify(findChild(view, "soundPage").visible)
+            mouseClick(tab(view, 2))
+            compare(view.currentTab, 2)
+            verify(findChild(view, "powerPage").visible)
+            verify(!findChild(view, "soundPage").visible)
+            view.activeView = false
+            view.activeView = true
+            compare(view.currentTab, 0)
+            compare(tabBar.currentIndex, 0)
+            verify(findChild(view, "bodyScroll").visible)
+            // A lost link closes the tabs; it comes back on Headset.
+            mouseClick(tab(view, 2))
+            host.status = linked("unknown")
+            verify(!tabBar.visible)
+            verify(placeholder().visible)
+            verify(!findChild(view, "powerPage").visible)
+            host.status = linked("connected")
+            compare(view.currentTab, 0)
+            verify(findChild(view, "bodyScroll").visible)
+            // Pairing replaces the link: no tabs either.
+            host.pairingBusy = true
+            verify(!tabBar.visible)
+            host.pairingBusy = false
+        }
+        function test_sound_profile_is_sent_when_chosen() {
+            host.status = linked("connected")
+            read({preset: 8, bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], standby: 15})
+            view.header.currentTab = 1
+            const page = findChild(view, "soundPage")
+            const row = findChild(page, "profile")
+            const profile = row.control
+            verify(row.visible)
+            compare(findChild(page, "equalizerHeader").text, "Equalizer")
+            compare(findChild(row, "choiceLabel").text, "Sound profile")
+            compare(findChild(row, "choiceIcon").source, "view-media-equalizer-symbolic")
+            compare(Array.from(profile.model), ["Default", "Game", "Music", "Movie", "Custom"])
+            compare(profile.displayText, "Music")
+            compare(profile.Accessible.name, "Sound profile")
+            verify(!profile.wheelEnabled)
+            verify(profile.enabled)
+            host.localeName = "es_CL"
+            compare(findChild(page, "equalizerHeader").text, "Ecualizador")
+            compare(findChild(row, "choiceLabel").text, "Perfil de sonido")
+            compare(Array.from(profile.model), ["Predeterminado", "Juegos", "Música", "Cine", "Personalizado"])
+            tryCompare(profile, "displayText", "Música")
+            host.localeName = "en_US"
+            // Custom bands only with the Custom profile.
+            verify(!findChild(page, "customBands").visible)
+            verify(!findChild(page, "resetBands").visible)
+            // A choice is sent at once, and the selector stays on the
+            // confirmed profile until a reading says otherwise.
+            profile.activated(1)
+            compare(sentSettings(), [["preset", 7]])
+            compare(profile.currentIndex, 2)
+            compare(profile.displayText, "Music")
+            // Choosing the stored profile again sends nothing.
+            profile.activated(2)
+            compare(settingSpy.count, 1)
+            // While it is sent, a busy indicator stands before the selector,
+            // which waits.
+            fakeSettings.busy = true
+            fakeSettings.requestFeature = "preset"
+            verify(findChild(row, "choiceBusy").visible)
+            verify(!profile.enabled)
+            fakeSettings.busy = false
+            read({preset: 7, bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], standby: 15})
+            verify(!findChild(row, "choiceBusy").visible)
+            compare(profile.displayText, "Game")
+            // Another request, or a command on the headset, waits too.
+            fakeSettings.busy = true
+            fakeSettings.requestFeature = "dnd"
+            verify(!profile.enabled)
+            verify(!findChild(row, "choiceBusy").visible)
+            fakeSettings.busy = false
+            fakeSettings.requestFeature = ""
+            host.powerBusy = true
+            verify(!profile.enabled)
+            host.powerBusy = false
+            // The arrow keys move the focus; they never change the profile.
+            profile.forceActiveFocus(Qt.TabFocusReason)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Up)
+            compare(settingSpy.count, 1)
+            compare(profile.displayText, "Game")
+            // A profile this widget does not know is Unknown, and stays.
+            read({preset: 3, standby: 15})
+            compare(profile.displayText, "Unknown")
+            verify(!profile.enabled)
+            host.localeName = "es_CL"
+            compare(profile.displayText, "Desconocido")
+            host.localeName = "en_US"
+            // The reading still runs.
+            fakeSettings.response = null
+            fakeSettings.busy = true
+            compare(profile.displayText, "Reading…")
+            verify(!profile.enabled)
+            fakeSettings.busy = false
+            // A failed change names the profile and keeps the reading.
+            read({preset: 7, standby: 15})
+            fakeSettings.requestFeature = "preset"
+            fakeSettings.errorCode = "rejected"
+            fakeSettings.error = "label:rejected"
+            verify(feedback(page) !== null)
+            compare(feedback(page).text, "Couldn't change the sound profile. label:rejected")
+            host.localeName = "es_CL"
+            compare(feedback(page).text, "No se pudo cambiar el perfil de sonido. label:rejected")
+            host.localeName = "en_US"
+            // Nothing read: the section goes and the message says why.
+            fakeSettings.response = null
+            fakeSettings.requestFeature = ""
+            fakeSettings.errorCode = "timeout"
+            fakeSettings.error = "label:timeout"
+            verify(!row.visible)
+            verify(!findChild(page, "equalizerHeader").visible)
+            compare(feedback(page).text, "Couldn't read the headset.")
+        }
+        function test_sound_tab_help() {
+            host.status = linked("connected")
+            read({preset: 7, standby: 15, dnd: false, gaming: false, devices: []})
+            view.header.currentTab = 1
+            // One help on this tab, in the Equalizer heading.
+            const helps = findAll(view, item => item.toolTipText !== undefined && item.visible)
+            compare(helps.length, 1)
+            compare(helps[0].objectName, "equalizerHelp")
+            compare(helps[0].toolTipText, "Profiles and the custom bands are stored on the headset, and each change is "
+                    + "sent at once. With Custom, each band is relative and 0 is neutral. The Game profile is not "
+                    + "Bluetooth gaming mode.")
+            host.localeName = "es_CL"
+            compare(helps[0].toolTipText, "Los perfiles y las bandas personalizadas se guardan en el auricular, y cada "
+                    + "cambio se envía al momento. Con Personalizado, cada banda es relativa y 0 es neutro. El perfil "
+                    + "Juegos no es el modo gaming Bluetooth.")
+            host.localeName = "en_US"
+            view.header.currentTab = 2
+            compare(findAll(view, item => item.toolTipText !== undefined && item.visible).length, 0)
+        }
+        function test_custom_bands_are_sent_once_they_rest() {
+            const curve = [2, 1, 0, -1, 0, 1, 2, 3, 1, 0]
+            host.status = linked("connected")
+            read({preset: 255, bands: curve.slice(), standby: 15})
+            view.header.currentTab = 1
+            const page = findChild(view, "soundPage")
+            const bands = findChild(page, "customBands")
+            const reset = findChild(page, "resetBands")
+            verify(bands.visible)
+            verify(reset.visible)
+            compare(bandSliders().length, 10)
+            compare(bandSliders().map(slider => slider.value), curve)
+            compare(bandSliders()[0].Accessible.name, "31 Hz")
+            compare(bandSliders()[9].Accessible.name, "16k Hz")
+            compare(findChild(page, "bandsUnit").text, "Hz · relative levels")
+            compare(reset.text, "Reset Bands")
+            host.localeName = "es_CL"
+            compare(findChild(page, "bandsUnit").text, "Hz · niveles relativos")
+            compare(reset.text, "Restablecer bandas")
+            host.localeName = "en_US"
+            // As a drag does: the sliders follow at once, the curve is sent
+            // after the pointer lets go and the levels rest.
+            page.dragging = 1
+            bandSliders()[0].decrease()
+            bandSliders()[0].moved()
+            bandSliders()[0].decrease()
+            bandSliders()[0].moved()
+            compare(page.bands[0], 0)
+            verify(page.bandsEdited)
+            wait(600)
+            compare(settingSpy.count, 0)
+            page.dragging = 0
+            bandSliders()[0].pressedChanged()
+            compare(settingSpy.count, 0)
+            const edited = [0, 1, 0, -1, 0, 1, 2, 3, 1, 0]
+            tryCompare(settingSpy, "count", 1)
+            compare(sentSettings(), [["bands", edited]])
+            verify(!page.bandsEdited)
+            // While it is sent the sliders stay usable; edits wait for the
+            // reply and then go, latest levels only.
+            fakeSettings.busy = true
+            fakeSettings.requestFeature = "bands"
+            verify(findChild(page, "bandsBusy").visible)
+            verify(bands.enabled)
+            bandSliders()[9].increase()
+            bandSliders()[9].moved()
+            bandSliders()[9].increase()
+            bandSliders()[9].moved()
+            wait(600)
+            compare(settingSpy.count, 1)
+            fakeSettings.busy = false
+            read({preset: 255, bands: edited.slice(), standby: 15})
+            const latest = [0, 1, 0, -1, 0, 1, 2, 3, 1, 2]
+            tryCompare(settingSpy, "count", 2)
+            compare(sentSettings()[1], ["bands", latest])
+            compare(page.bands, latest)
+            // The reading confirms them.
+            read({preset: 255, bands: latest.slice(), standby: 15})
+            compare(page.bands, latest)
+            verify(!page.bandsEdited)
+            // A change the headset did not apply puts the sliders back on the
+            // confirmed curve, and the message says so.
+            bandSliders()[5].decrease()
+            bandSliders()[5].moved()
+            tryCompare(settingSpy, "count", 3)
+            fakeSettings.requestFeature = "bands"
+            fakeSettings.errorCode = "rejected"
+            fakeSettings.error = "label:rejected"
+            compare(page.bands, latest)
+            compare(bandSliders().map(slider => slider.value), latest)
+            compare(feedback(page).text, "Couldn't change the custom bands. label:rejected")
+            host.localeName = "es_CL"
+            compare(feedback(page).text, "No se pudieron cambiar las bandas personalizadas. label:rejected")
+            host.localeName = "en_US"
+            fakeSettings.error = ""
+            fakeSettings.errorCode = ""
+            fakeSettings.requestFeature = ""
+            // Reset Bands is a change like any other.
+            verify(reset.enabled)
+            mouseClick(reset)
+            compare(page.bands, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+            tryCompare(settingSpy, "count", 4)
+            compare(sentSettings()[3], ["bands", [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
+            read({preset: 255, bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], standby: 15})
+            verify(!reset.enabled)
+            // Bands the reading did not return cannot be edited.
+            read({preset: 255, bands: null, standby: 15}, "usb", {bands: "timeout"})
+            verify(bands.visible)
+            verify(!bands.enabled)
+            compare(feedback(page).text, "Couldn't read the custom bands.")
+            // Another headset drops edits made for the previous one.
+            read({preset: 255, bands: curve.slice(), standby: 15})
+            page.setBands([5, 5, 5, 5, 5, 5, 5, 5, 5, 5])
+            page.bandsEdited = true
+            fakeSettings.targetKey = "01:02:03:04:05:06"
+            compare(page.bands, curve)
+            verify(!page.bandsEdited)
+            wait(600)
+            compare(settingSpy.count, 4)
+            fakeSettings.targetKey = "usb"
+            // Edits waiting when the profile stops being Custom are dropped.
+            read({preset: 255, bands: curve.slice(), standby: 15})
+            bandSliders()[2].increase()
+            bandSliders()[2].moved()
+            read({preset: 7, bands: curve.slice(), standby: 15})
+            verify(!bands.visible)
+            wait(600)
+            compare(settingSpy.count, 4)
+            verify(!page.bandsEdited)
+        }
+        function test_power_tab() {
+            host.status = linked("connected", null, {percent: 65, status: "Discharging", cable: false, voltage_mv: 3920})
+            host.battery = {percent: 65, state: "Discharging"}
+            read({preset: 7, standby: 15})
+            view.header.currentTab = 2
+            const page = findChild(view, "powerPage")
+            const keys = () => findAll(page, item => item.objectName === "valueLabel" && item.visible).map(item => item.text)
+            const values = () => findAll(page, item => item.objectName === "valueText" && item.visible).map(item => item.text)
+            compare(findChild(page, "batteryHeader").text, "Battery")
+            compare(keys(), ["Charge", "Charging cable", "Battery voltage"])
+            compare(values(), ["65% · On battery", "Not connected", "3.92 V"])
+            compare(findChild(page, "battery-charge").iconName, "battery-good-symbolic")
+            compare(findChild(page, "battery-cable").iconName, "quickopen-symbolic")
+            compare(findChild(page, "battery-voltage").iconName, "speedometer-symbolic")
+            host.localeName = "es_CL"
+            compare(findChild(page, "batteryHeader").text, "Batería")
+            tryVerify(() => keys().length === 3)
+            compare(keys(), ["Carga", "Cable de carga", "Voltaje de batería"])
+            compare(values(), ["65" + nbsp + "% · Con batería", "No conectado", "3,92 V"])
+            host.localeName = "en_US"
+            // Idle shutdown, sent at once.
+            const row = findChild(page, "standby")
+            const standby = row.control
+            compare(findChild(page, "shutdownHeader").text, "Shutdown")
+            compare(findChild(row, "choiceLabel").text, "Turn off when idle")
+            compare(findChild(row, "choiceIcon").source, "chronometer-symbolic")
+            compare(Array.from(standby.model), ["Never", "5 min", "15 min", "30 min", "45 min", "60 min"])
+            compare(standby.displayText, "15 min")
+            standby.activated(0)
+            compare(sentSettings(), [["standby", 0]])
+            compare(standby.displayText, "15 min")
+            host.localeName = "es_CL"
+            compare(findChild(page, "shutdownHeader").text, "Apagado")
+            compare(findChild(row, "choiceLabel").text, "Apagar por inactividad")
+            compare(standby.model[0], "Nunca")
+            host.localeName = "en_US"
+            fakeSettings.busy = true
+            fakeSettings.requestFeature = "standby"
+            verify(findChild(row, "choiceBusy").visible)
+            fakeSettings.busy = false
+            read({preset: 7, standby: 0})
+            tryCompare(standby, "displayText", "Never")
+            // A value the reading did not return is Unknown, and the message
+            // names it.
+            read({preset: 7, standby: null}, "usb", {standby: "timeout"})
+            compare(standby.displayText, "Unknown")
+            verify(!standby.enabled)
+            compare(feedback(page).text, "Couldn't read idle shutdown.")
+            // Nothing read: idle shutdown goes, the battery stays.
+            fakeSettings.response = null
+            fakeSettings.errorCode = "timeout"
+            fakeSettings.error = "label:timeout"
+            verify(!row.visible)
+            verify(!findChild(page, "shutdownHeader").visible)
+            compare(keys().length, 3)
+            compare(feedback(page).text, "Couldn't read the headset.")
+            fakeSettings.error = ""
+            fakeSettings.errorCode = ""
+            // Over Bluetooth alone there is no driver reading, only the charge.
+            host.status = bluetoothOnly("connected")
+            host.battery = null
+            read({preset: 7, standby: 15}, "bluetooth")
+            compare(keys(), ["Charge"])
+            compare(values(), ["Unavailable"])
         }
         function test_commands_wait_only_for_a_missing_dongle_or_a_running_command() {
             const plus = findChild(view.header, "primaryAction")
@@ -419,15 +766,16 @@ Item {
             compare(expand.icon.name, "collapse")
             compare(expand.text, "Collapse")
             compare(hero.Accessible.description, "Expanded")
-            tryCompare(keys(), "length", 4)
-            compare(keys(), ["USB dongle:", "2.4 GHz link:", "Charging cable:", "Battery voltage:"])
-            compare(values(), ["Detected", "Connected", "Connected", "4.12 V"])
+            // The connection only; the battery readings are on the Power tab.
+            tryCompare(keys(), "length", 2)
+            compare(keys(), ["USB dongle:", "2.4 GHz link:"])
+            compare(values(), ["Detected", "Connected"])
             host.localeName = "es_CL"
             compare(expand.text, "Contraer")
             compare(hero.Accessible.description, "Expandido")
-            tryCompare(values(), "length", 4)
-            compare(keys(), ["Dongle USB:", "Enlace 2,4 GHz:", "Cable de carga:", "Voltaje de batería:"])
-            compare(values()[3], "4,12 V")
+            tryCompare(values(), "length", 2)
+            compare(keys(), ["Dongle USB:", "Enlace 2,4 GHz:"])
+            compare(values(), ["Detectado", "Conectado"])
             host.localeName = "en_US"
             // The expand button toggles too.
             mouseClick(expand)
@@ -439,11 +787,10 @@ Item {
             host.localeName = "en_US"
             mouseClick(expand)
             verify(hero.expanded)
-            // A discharging battery is named in the details.
+            // Nor does a discharging battery add a row here.
             host.battery = {percent: 65, state: "Discharging"}
-            tryCompare(keys(), "length", 5)
-            compare(keys()[4], "Charge:")
-            compare(values()[4], "On battery")
+            wait(20)
+            compare(keys().length, 2)
             // Closing the popup folds them again.
             view.activeView = false
             verify(!hero.expanded)
@@ -913,33 +1260,39 @@ Item {
             const label = findChild(row, "modeLabel")
             const reason = findChild(row, "modeSubtitle")
             compare(findChild(row, "modeIcon").source, "input-gamepad-symbolic")
-            // Read through the USB dongle: shown, not settable, and its second
-            // line says why, as a device row's subtitle.
+            // Read through the USB dongle it cannot change, and the headset
+            // turns it off with itself: no row, under Do not disturb alone.
             read({dnd: false, gaming: false, devices: []})
-            compare(label.text, "Bluetooth gaming mode")
-            verify(control.visible)
-            verify(!control.checked)
-            verify(!control.enabled)
-            verify(reason.visible)
-            verify(!note.visible)
-            compare(reason.text, "Only over Bluetooth")
-            compare(control.Accessible.description, "Only over Bluetooth")
-            host.localeName = "es_CL"
-            compare(label.text, "Modo gaming Bluetooth")
-            compare(reason.text, "Solo por Bluetooth")
-            host.localeName = "en_US"
+            verify(!row.visible)
+            verify(findChild(view, "dnd").visible)
+            read({dnd: false, gaming: true, devices: []})
+            verify(!row.visible)
             // Also with both links, while the settings are read through the dongle.
             host.status = linked("connected", {state: "connected", address: "A1:B2:C3:D4:E5:F6"})
             read({dnd: false, gaming: true, devices: []})
-            verify(control.checked)
-            verify(!control.enabled)
-            compare(reason.text, "Only over Bluetooth")
+            verify(!row.visible)
+            // Before a reading, the controller's target decides.
+            fakeSettings.response = null
+            fakeSettings.busy = true
+            verify(!row.visible)
+            fakeSettings.targetKey = "A1:B2:C3:D4:E5:F6"
+            verify(row.visible)
+            compare(note.text, "Reading…")
+            fakeSettings.busy = false
             // Over Bluetooth the switch sets the new value.
             host.status = bluetoothOnly("connected")
             read({dnd: false, gaming: false, devices: []}, "bluetooth")
+            verify(row.visible)
+            compare(label.text, "Bluetooth gaming mode")
+            host.localeName = "es_CL"
+            compare(label.text, "Modo gaming Bluetooth")
+            host.localeName = "en_US"
             verify(control.enabled)
             verify(!note.visible)
             verify(!reason.visible)
+            // The row has just appeared; click it once it is laid out.
+            tryVerify(() => control.width > 0 && row.mapToItem(view, 0, 0).y > findChild(view, "dnd").mapToItem(view, 0, 0).y)
+            waitForRendering(view)
             mouseClick(control)
             compare(Array.from(settingSpy.signalArguments[0]), ["gaming", true])
             verify(!control.checked)
@@ -1035,8 +1388,18 @@ Item {
             read({dnd: false, gaming: true, devices: [phone, laptop]})
             tryCompare(rows(), "length", 2)
             verify(note.visible)
-            compare(note.text, "Turn off Bluetooth gaming mode to switch devices.")
+            // Through the dongle gaming mode has no row, so the note says
+            // where to turn it off.
+            compare(note.text, "Bluetooth gaming mode is on. Turn it off from a device connected over Bluetooth "
+                    + "to switch devices.")
             verify(!rows()[1].defaultActionButtonAction.enabled)
+            host.localeName = "es_CL"
+            compare(note.text, "El modo gaming Bluetooth está activo. Desactívalo desde un dispositivo conectado "
+                    + "por Bluetooth para cambiar de dispositivo.")
+            host.localeName = "en_US"
+            read({dnd: false, gaming: true, devices: [phone, laptop]}, "bluetooth")
+            tryCompare(rows(), "length", 2)
+            compare(note.text, "Turn off Bluetooth gaming mode to switch devices.")
             host.localeName = "es_CL"
             compare(note.text, "Desactiva el modo gaming Bluetooth para cambiar de dispositivo.")
             host.localeName = "en_US"
@@ -1310,14 +1673,15 @@ Item {
             compare(helps[0].objectName, "modesHelp")
             compare(helps[0].toolTipText, "Do not disturb keeps calls from a phone connected over Bluetooth from "
                     + "interrupting the dongle's audio; desktop notifications are not affected. Bluetooth gaming mode "
-                    + "lowers Bluetooth audio delay; it is not the Game sound profile and changes only over Bluetooth. "
+                    + "lowers Bluetooth audio delay; it is not the Game sound profile, is shown and changed only over "
+                    + "Bluetooth, and turns off when the headset does. "
                     + "Bluetooth Devices (Razer Quick Connect) moves the headset's Bluetooth link to a device it already "
                     + "knows, while gaming mode is off.")
             host.localeName = "es_CL"
             compare(helps[0].toolTipText, "No molestar evita que las llamadas de un teléfono conectado por Bluetooth "
                     + "interrumpan el audio del dongle; no afecta a las notificaciones del escritorio. El modo gaming "
-                    + "Bluetooth reduce el retraso del audio Bluetooth; no es el perfil de sonido Juegos y solo se cambia "
-                    + "por Bluetooth. Dispositivos Bluetooth (Quick Connect de Razer) mueve la conexión Bluetooth del "
+                    + "Bluetooth reduce el retraso del audio Bluetooth; no es el perfil de sonido Juegos, solo se muestra "
+                    + "y se cambia por Bluetooth, y se desactiva al apagar el auricular. Dispositivos Bluetooth (Quick Connect de Razer) mueve la conexión Bluetooth del "
                     + "auricular a un dispositivo que ya conoce, con el modo gaming desactivado.")
             host.localeName = "en_US"
         }
@@ -1351,8 +1715,9 @@ Item {
             tryVerify(() => dnd.activeFocus)
             keyClick(Qt.Key_Up)
             tryVerify(() => hero.activeFocus)
+            // Above the body are the tabs, the heading's row nearest to it.
             keyClick(Qt.Key_Up)
-            tryVerify(() => plus.activeFocus)
+            tryVerify(() => findChild(view.header, "tabBar").currentItem.activeFocus)
             // A control that cannot be used is skipped.
             read({dnd: false, gaming: false, devices: [phone, laptop]}, "usb")
             plus.forceActiveFocus(Qt.TabFocusReason)
@@ -1367,12 +1732,12 @@ Item {
             keyClick(Qt.Key_Down)
             wait(50)
             verify(!hero.activeFocus)
-            // In the tray, which draws the heading, Up from the card stays.
+            // In the tray, which draws the title row, Up from the card goes to
+            // the tabs, all the view's own heading holds there.
             const trayHero = findChild(trayView, "hero")
             trayHero.forceActiveFocus(Qt.TabFocusReason)
             keyClick(Qt.Key_Up)
-            wait(50)
-            verify(trayHero.activeFocus)
+            tryVerify(() => findChild(trayView.header, "tabBar").currentItem.activeFocus)
             // While the headset turns off, the card takes no focus.
             host.powerBusy = true
             plus.forceActiveFocus(Qt.TabFocusReason)
@@ -1393,7 +1758,8 @@ Item {
                 trayView.height = height
                 const scrolling = height < Kirigami.Units.gridUnit * 20
                 tryCompare(scroll.PC3.ScrollBar.vertical, "visible", scrolling)
-                tryCompare(rows(trayView), "length", 4)
+                // Rows far below a short view are not created yet.
+                tryVerify(() => scrolling ? rows(trayView).length > 0 : rows(trayView).length === 4)
                 for (const row of rows(trayView).concat([findChild(trayView, "dnd"), findChild(trayView, "hero")]))
                     tryVerify(() => row.mapToItem(list, row.width, 0).x <= list.width - list.rightMargin + 0.5,
                               5000, row.objectName)
@@ -1423,40 +1789,16 @@ Item {
                 }
             }
         }
-        function test_hidden_settings_page_sends_nothing() {
-            // Plasma may create the page without showing it; no command runs.
-            const component = Qt.createComponent("../plasmoid/contents/ui/ConfigHeadset.qml")
-            compare(component.status, Component.Ready, component.errorString())
-            const page = component.createObject(null)
-            verify(page !== null)
-            verify(!page.shown)
-            // Plasma's Apply calls saveConfig(); with nothing unsaved it sends nothing.
-            verify(!page.unsavedChanges)
-            page.saveConfig()
-            wait(20)
-            const controller = findChild(page, "headsetController")
-            verify(!controller.busy)
-            compare(controller.connectedSources.length, 0)
-            page.destroy()
-        }
-        function test_settings_category_and_icon() {
-            const model = Qt.createComponent("../plasmoid/contents/config/config.qml").createObject(null)
-            verify(model !== null)
-            // One page for what the headset stores; its connection is in the popup.
-            compare(model.count, 1)
-            compare(model.get(0).source, "ConfigHeadset.qml")
-            compare(model.get(0).icon, "audio-headset")
-            compare(model.get(0).name, Qt.locale().name.startsWith("es") ? "Auricular" : "Headset")
-            model.destroy()
-            for (const removed of ["ConfigEqualizer.qml", "ConfigPowerSaving.qml", "ConfigQuickConnect.qml"])
-                compare(Qt.createComponent("../plasmoid/contents/ui/" + removed).status, Component.Error)
-        }
-        function test_config_pages_compile() {
-            for (const page of ["../plasmoid/contents/ui/ConfigHeadset.qml",
-                                "../plasmoid/contents/config/config.qml"]) {
-                const component = Qt.createComponent(page)
-                compare(component.status, Component.Ready, component.errorString())
-            }
+        function test_no_configuration_window() {
+            // The popup's tabs replace the configuration window's page.
+            for (const removed of ["../plasmoid/contents/config/config.qml",
+                                   "../plasmoid/contents/ui/ConfigHeadset.qml",
+                                   "../plasmoid/contents/ui/HeadsetConfigPage.qml",
+                                   "../plasmoid/contents/ui/HeadsetSettings.qml",
+                                   "../plasmoid/contents/ui/ConfigEqualizer.qml",
+                                   "../plasmoid/contents/ui/ConfigPowerSaving.qml",
+                                   "../plasmoid/contents/ui/ConfigQuickConnect.qml"])
+                compare(Qt.createComponent(removed).status, Component.Error, removed)
         }
         function test_battery_reconnect_and_late_data() {
             const frame = {Product: "Razer Barracuda X (2022)", Type: "Headset",

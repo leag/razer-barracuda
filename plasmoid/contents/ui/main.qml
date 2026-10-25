@@ -109,9 +109,9 @@ PlasmoidItem {
         }
     }
 
-    // Do Not Disturb, Bluetooth gaming mode and the Bluetooth devices, from
-    // one status read per showing. The popup changes them only on an explicit
-    // switch or Connect; a transport change while it is shown reads them
+    // Every headset setting the popup's tabs show, from one status read per
+    // showing. The popup changes them only on an explicit switch, choice,
+    // band edit or Connect; a transport change while it is shown reads them
     // again.
     HeadsetController {
         id: settingsController
@@ -122,7 +122,9 @@ PlasmoidItem {
         if (connected && !settingsController.busy)
             settingsController.request({op: "status"});
     }
-    // "dnd" and "gaming" take a boolean; "devices" takes a known address.
+    // "dnd" and "gaming" take a boolean; "devices" takes a known address;
+    // "preset", "standby" and "bands" take the values the Sound and Power tabs
+    // offer.
     // The controls stay at the confirmed value; the reply's reading moves them.
     function setSetting(feature, value) {
         if (connected && !settingsController.busy && !pairingBusy && !powerBusy)
@@ -170,8 +172,7 @@ PlasmoidItem {
     }
 
     // The panel and tray draw the symbolic glyph in compactRepresentation; this
-    // icon only names the widget. Plasma gives the configuration window its own
-    // generic icon regardless of this value.
+    // icon only names the widget.
     Plasmoid.icon: "audio-headset"
     // Always shown in the tray, so pairing stays reachable; a low battery asks
     // for attention.
@@ -249,8 +250,8 @@ PlasmoidItem {
         }
     ]
 
-    // The widget names itself as Plasma does: the tray heading, the configure
-    // action and the configuration window use the same metadata name.
+    // The widget names itself as Plasma does: the tray heading and Plasma's
+    // own menu entries use the same metadata name.
     toolTipMainText: Plasmoid.title
     toolTipSubText: Output.toolTip(connection, battery, Qt.locale().name)
     // Only the desktop forces the full view. Panels choose the compact icon by
@@ -300,7 +301,6 @@ PlasmoidItem {
         inTray: root.inTray
         title: Plasmoid.title
         actions: Plasmoid.contextualActions
-        configureAction: Plasmoid.internalAction("configure")
         pairingBusy: root.pairingBusy
         pairingError: root.pairingError
         pairingResult: root.pairingResult

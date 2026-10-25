@@ -46,20 +46,25 @@ navigation retains the theme's focus indicator.
 
 Click opens the popup, 24 by 24 grid units in a panel and in the tray. Every
 function has one place and one visual form, taken from Plasma's own applets:
-the commands in the heading, the headset and its settings in the popup, and how
-it sounds and when it turns itself off in the configuration window. No colour is
-added; states are told apart by their words, artwork, opacity and emblems.
+the commands in the heading, and the headset, how it sounds and its battery on
+three tabs under it. No colour is added; states are told apart by their words,
+artwork, opacity and emblems.
 
 ### Heading and commands
 
-The heading shows the widget's name, **+** (**Pair Headset…**), **More
-actions** (☰) and a configure button (the gear), as in KDE's Bluetooth applet.
-In the system tray, Plasma draws this heading itself from the widget's actions;
-in a panel or on the desktop the widget draws the same row. **More actions**
-holds **Turn Off Headset…** and, after a separator, **Configure Audio
-Devices…**, which opens KDE's audio settings. The gear opens the widget's
-configuration window. The right-click menu shows the same commands together
-with Plasma's own.
+The heading shows the widget's name, **+** (**Pair Headset…**) and **More
+actions** (☰), as in KDE's Bluetooth applet. In the system tray, Plasma draws
+this row itself from the widget's actions; in a panel or on the desktop the
+widget draws the same row. **More actions** holds **Turn Off Headset…** and,
+after a separator, **Configure Audio Devices…**, which opens KDE's audio
+settings. The right-click menu shows the same commands together with Plasma's
+own. There is no configuration window: everything the headset stores is in the
+popup.
+
+With a confirmed link, three tabs sit under that row, as **Devices** and
+**Applications** do in KDE's volume applet: **Headset**, **Sound** and
+**Power**. The popup always opens on **Headset**. Without a confirmed link, and
+while pairing, there are no tabs and one message fills the popup.
 
 **Pair Headset…** and **Turn Off Headset…** each ask first in a dialog over the
 popup, titled with a question, whose focused default is **Cancel**; Escape
@@ -76,10 +81,9 @@ heading and the popup's controls.
   Bluetooth glyph beside it (both when both links are confirmed), the state and
   battery percentage, a battery bar, and a line with the transport and the
   charge state when it adds something (**Charging**, **Fully charged**, **Low
-  battery**). Click the card for its details: whether the USB dongle is
-  detected, the 2.4 GHz link, the paired Bluetooth connection, a discharging
-  battery, and, while the dongle link is confirmed, the charging cable and
-  battery voltage last reported by the driver. While the headset turns off, the
+  battery**). Click the card for its connection details: whether the USB dongle
+  is detected, the 2.4 GHz link and the paired Bluetooth connection; the
+  battery readings are on the **Power** tab. While the headset turns off, the
   card reads **Turning off…**.
 - **Modes**: the **Do not disturb** and **Bluetooth gaming mode** switches (see
   [below](#modes-and-bluetooth-devices)).
@@ -176,17 +180,18 @@ This is a separate audio-policy preference for all outputs in your WirePlumber
 session, not a widget option.
 
 Help follows KDE's standard pattern: an **ⓘ** button explains on hover or
-click, with at most one per view. In the popup it sits in the **Modes** heading
-and covers Do not disturb, Bluetooth gaming mode and Bluetooth Devices; on the
-**Headset** page it sits next to **Sound profile** and explains the bands and
-Apply. The text follows the desktop language (English or Spanish). Opening Help
+click, with at most one per tab. On **Headset** it sits in the **Modes** heading
+and covers Do not disturb, Bluetooth gaming mode and Bluetooth Devices; on
+**Sound** it sits in the **Equalizer** heading and explains the profiles and
+bands. The text follows the desktop language (English or Spanish). Opening Help
 does not query or change headset settings.
 
 ## Modes and Bluetooth devices
 
-Each time the popup is shown with a confirmed link, including the desktop's
-inline view, it reads the headset settings once; the same status read also
-returns the Bluetooth devices, so no extra query is made. It reads them again if
+These are on the **Headset** tab. Each time the popup is shown with a confirmed
+link, including the desktop's inline view, it reads the headset settings once;
+the same status read also returns the Bluetooth devices and what the **Sound**
+and **Power** tabs show, so no extra query is made. It reads them again if
 the link returns or its transport changes while the popup is shown.
 
 **Do not disturb** keeps calls from a phone connected by Bluetooth from
@@ -199,11 +204,14 @@ reported value until the headset's reply confirms it. Without a reading the row
 draws no switch and says **Reading…** or **Unknown**, so an unknown value never
 looks Off, and nothing is shown as current without a confirmed link. While its
 own change runs, the row shows a busy indicator; every row is disabled while
-any request, pairing or power-off runs. Bluetooth gaming mode is read through
-either transport but can be changed only over Bluetooth: while the settings are
-read through the USB dongle, its switch is disabled and the row's second line
-says **Only over Bluetooth**. With both links confirmed, the settings follow the default output,
-so this can happen while Bluetooth is connected too.
+any request, pairing or power-off runs. Bluetooth gaming mode can be changed
+only over Bluetooth and turns off whenever the headset does, so its row is shown
+only while the settings are read over Bluetooth; through the USB dongle
+**Modes** holds **Do not disturb** alone. With both links confirmed, the
+settings follow the default output, so the row can be hidden while Bluetooth is
+connected too. Through the dongle the value is still read: when it is on,
+**Connect** stays disabled and the note under **Bluetooth Devices** says to turn
+it off from a device connected over Bluetooth.
 
 When the headset certainly did not apply a change, for example a rejected
 one, the message slot names the change with the headset's reason and the switch
@@ -223,34 +231,41 @@ be turned off, so switching then needs Bluetooth. The active device changes only
 when a reading says so; open the popup again to read the headset again. A list
 the reading could not return is hidden, and the message names it.
 
-## Headset settings
+## Sound and Power
 
-The gear in the popup heading opens the widget's configuration window; so does
-**Configure Barracuda Headset…** in the right-click menu, which uses Plasma's
-own name for it. The window has one **Headset** page for what the headset
-stores: the **Sound profile** with its custom bands, and **Turn off when idle**.
-The page reads the headset when it opens, with a loading message meanwhile, and
-shows **Settings not read** with **Try Again** when nothing could be read. Every
-change waits for the window's **Apply** or **OK**, which send it, and **Cancel**
-discards it; a profile is therefore heard only after **Apply**.
+The **Sound** tab holds the **Sound profile** and, with **Custom**, its ten
+bands; the **Power** tab holds the **Battery** readings and **Turn off when
+idle**. Both come from the popup's one settings read, and every change is sent
+to the headset at once: there is no **Apply** and nothing to cancel, so a
+profile is heard as soon as you choose it.
 
-The **Sound profile** selector shows the profile stored on the headset until you
-choose another. Choose **Custom** to reveal its ten **Bands**, which start from
-the curve stored on the headset; **Reset Bands** returns them to 0. **Apply**
-sends the profile first, then the edited bands, then idle shutdown, and stops at
-the first failure. Plasma closes the page as soon as **OK** is pressed or
-another category opens, so the changes are sent by a background process that
-finishes on its own. When a send fails, the page says the changes were not
-applied and keeps your choices for another **Apply**. When that **Apply** sent
-more than one change, an earlier one may already have been applied, so the page
-no longer knows what the headset stores: it shows **Settings not read**, and
-**Try Again** reads the headset before the next **Apply**. A setting the reading
-could not return is shown as a disabled selector saying **Unknown**, and the
-message at the top of the page names it, with **Try Again**. Preset names follow
-the desktop language (English or Spanish). Session buffer and sample-rate tuning
-are no longer exposed in the plasmoid. Software EQ and sidetone are removed.
-See [audio effects](AUDIO_EFFECTS.md) for native control details, dependencies and CLI-only Linux tuning.
-Use KDE Sound settings for microphone mute and volume.
+Each setting is a row like the Modes rows, with its selector on the right
+showing the value the headset reported. Choosing another value asks for it; the
+selector keeps showing the reported value, with a busy indicator beside it,
+until the headset's reply confirms it. Scrolling over a selector and the arrow
+keys never change it; **Space** opens it. A setting the reading could not
+return is shown as a disabled selector saying **Unknown**, and the message slot
+names it, with **Try Again**.
+
+Choose **Custom** to reveal its ten bands, which show the curve stored on the
+headset; levels are relative, from −5 to +5, and 0 is neutral. A band follows
+the pointer while you drag it. Once you let go and the levels rest for a
+moment, the whole curve is sent as one request; edits made while a request
+runs wait for it and are then sent together, latest levels only. **Reset
+Bands** returns every band to 0 and is sent the same way. When the headset
+does not apply a change, the bands return to the stored curve and the message
+says so. Edits still waiting when the profile stops being **Custom** are
+dropped.
+
+**Battery** shows the charge with its state, and through the USB dongle the
+charging cable and the battery voltage the driver reports; it needs no headset
+request. Over Bluetooth alone only the charge is shown. **Turn off when idle**
+is the headset's own idle shutdown: **Never** or 5 to 60 minutes. Preset names
+follow the desktop language (English or Spanish). Session buffer and
+sample-rate tuning are no longer exposed in the plasmoid. Software EQ and
+sidetone are removed. See [audio effects](AUDIO_EFFECTS.md) for native control
+details, dependencies and CLI-only Linux tuning. Use KDE Sound settings for
+microphone mute and volume.
 
 ## Play/pause
 

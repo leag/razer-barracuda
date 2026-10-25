@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Show the **Bluetooth gaming mode** row only when the settings are read over
+  Bluetooth. Through the USB dongle it could not be changed, and the headset
+  firmware keeps it in RAM only, so it is off after every power cycle. Its
+  value is still read for Quick Connect, whose note now says to turn it off
+  from a device connected over Bluetooth. The **Only over Bluetooth** line is
+  gone, and [gaming mode](GAMING_MODE.md) documents the firmware evidence.
+- Replace the configuration window with tabs in the popup, as **Devices** and
+  **Applications** in KDE's volume applet: **Headset** (the card, **Modes** and
+  **Bluetooth Devices**), **Sound** (the sound profile and its custom bands)
+  and **Power** (charge, charging cable, battery voltage and idle shutdown).
+  The tabs appear only with a confirmed link, and the popup always opens on
+  **Headset**. Every change is sent at once, with no Apply: the profile and
+  idle shutdown when chosen, the bands once the pointer lets go and the levels
+  rest, latest levels only, and a change the headset did not apply returns the
+  controls to the stored value. The heading loses its gear, the card's details
+  keep only the connection, and the Apply chain is gone.
 - Give the Modes rows monochrome icons and lay them out like the Bluetooth
   device rows (icon column, title column, switch on the trailing edge, reason as
   a second line). Bluetooth device rows use the monochrome Bluetooth icon.

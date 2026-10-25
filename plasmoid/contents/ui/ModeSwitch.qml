@@ -11,8 +11,8 @@ import org.kde.plasma.extras as PlasmaExtras
 // The whole row is the switch, so a click anywhere toggles it. A value the
 // headset has not confirmed draws no indicator: the trailing slot says
 // "Reading…" or "Unknown" instead, so an unknown value never looks Off. A
-// reason a known switch cannot change ("Only over Bluetooth") is the second
-// line, as a device row's subtitle. While its own request runs, a busy
+// reason a known switch cannot change is the second line, as a device
+// row's subtitle. While its own request runs, a busy
 // indicator replaces the switch. Nothing is optimistic: the switch returns
 // to the confirmed value at once and moves only when a reading says so.
 Item {
