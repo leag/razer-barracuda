@@ -65,6 +65,11 @@ package_hid-razer-barracuda-dkms() {
     -t "$pkgdir/usr/share/wireplumber/wireplumber.conf.d"
   # Build the jack quirk on the target machine for each exact kernel release.
   install -Dm644 packaging/arch/71-barracuda-quirk.hook -t "$pkgdir/usr/share/libalpm/hooks"
+  # A build that failed during the upgrade, e.g. offline, is retried at boot.
+  local units="$pkgdir/usr/lib/systemd/system"
+  install -Dm644 packaging/arch/barracuda-quirk-retry.service -t "$units"
+  install -dm755 "$units/multi-user.target.wants"
+  ln -s ../barracuda-quirk-retry.service "$units/multi-user.target.wants/barracuda-quirk-retry.service"
   local share="$pkgdir/usr/share/hid-razer-barracuda"
   install -Dm644 kernel/snd-usb-audio/*.patch kernel/snd-usb-audio/Makefile -t "$share/kernel/snd-usb-audio"
   install -Dm755 scripts/install_snd_usb_audio_quirk.py -t "$share/scripts"

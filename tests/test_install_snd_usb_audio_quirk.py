@@ -20,6 +20,12 @@ class SndUsbAudioQuirkTests(unittest.TestCase):
         support = mock.patch.object(installer, 'pipewire_wireless_support', return_value=False)
         self.support = support.start()
         self.addCleanup(support.stop)
+        state = tempfile.TemporaryDirectory()
+        self.addCleanup(state.cleanup)
+        self.marker = Path(state.name) / 'state/quirk-retry'
+        marker = mock.patch.object(installer, 'RETRY_MARKER', self.marker)
+        marker.start()
+        self.addCleanup(marker.stop)
 
     def test_native_pipewire_skips_downloads_and_dkms(self):
         self.support.return_value = True
@@ -178,6 +184,89 @@ class SndUsbAudioQuirkTests(unittest.TestCase):
                 installer.install_kernel('7.2.6-1-cachyos', Path(directory))
             run.assert_not_called()
             self.assertEqual(list(Path(directory).iterdir()), [])
+
+    def test_fetch_retries_and_falls_back_to_the_second_mirror(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(installer.time, 'sleep') as sleep, \
+                mock.patch.object(installer, 'run') as run:
+            work = Path(directory) / 'linux'
+            clones = []
+
+            def clone(*command, cwd=None):
+                if 'clone' in command:
+                    clones.append(command[-2])
+                    work.mkdir()  # A partial clone must not block the next attempt.
+                    if len(clones) < 4:
+                        raise subprocess.CalledProcessError(128, 'git')
+
+            run.side_effect = clone
+            installer.fetch_sound_usb('v7.3', work, mirrors=('first', 'second'))
+            self.assertEqual(clones, ['first', 'second', 'first', 'second'])
+            sleep.assert_called_once_with(installer.FETCH_DELAY)
+            run.assert_called_with('git', 'sparse-checkout', 'set', 'sound/usb', cwd=work)
+
+    def test_fetch_gives_up_with_a_network_hint(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(installer.time, 'sleep') as sleep, \
+                mock.patch.object(installer, 'run',
+                                  side_effect=subprocess.CalledProcessError(128, 'git')) as run:
+            with self.assertRaisesRegex(RuntimeError, 'network unavailable'):
+                installer.fetch_sound_usb('v7.3', Path(directory) / 'linux',
+                                          mirrors=('first', 'second'), attempts=3)
+            self.assertEqual(run.call_count, 6)
+            self.assertEqual(sleep.call_count, 2)
+
+    def test_built_release_reads_the_exclusive_kernel(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self.assertIsNone(installer.built_release(target))
+            for release in ('7.3.0-4-cachyos', '6.18.55-2-cachyos-lts', '7.3-arch1-1'):
+                (target / 'dkms.conf').write_text(installer.dkms_conf(release))
+                self.assertEqual(installer.built_release(target), release)
+
+    def test_builds_for_removed_kernels_are_pruned(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            modules, sources = root / 'modules', root / 'sources'
+            sources.mkdir()
+            # A removed kernel can leave its directory behind with only DKMS modules.
+            (modules / '7.2.9-2-cachyos/updates/dkms').mkdir(parents=True)
+            (modules / '7.3.0-4-cachyos/kernel').mkdir(parents=True)
+            builds = {}
+            for release, managed in (('7.2.9-2-cachyos', True), ('7.3.0-2-cachyos', False),
+                                     ('7.3.0-4-cachyos', True)):
+                target = sources / f'{installer.NAME}-{installer.package_version(release)}'
+                target.mkdir()
+                (target / 'dkms.conf').write_text(installer.dkms_conf(release))
+                if managed:
+                    (target / '.pacman-managed').touch()
+                builds[release] = target
+            with mock.patch.object(installer, 'dkms_status', return_value='') as status, \
+                    mock.patch.object(installer, 'run') as run:
+                installer.prune_removed_kernels(modules, sources)
+            status.assert_called_once()
+            run.assert_not_called()
+            self.assertFalse(builds['7.2.9-2-cachyos'].exists())
+            self.assertTrue(builds['7.3.0-2-cachyos'].exists())
+            self.assertTrue(builds['7.3.0-4-cachyos'].exists())
+
+    def test_retry_marker_follows_failures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            modules = Path(directory)
+            headers = modules / '7.3.0-4-cachyos/build'
+            headers.mkdir(parents=True)
+            (headers / 'Makefile').touch()
+            with mock.patch.object(installer, 'install_kernel',
+                                   side_effect=RuntimeError('offline')):
+                self.assertEqual(installer.all_kernels(modules, modules), 1)
+            self.assertEqual(self.marker.read_text(), '7.3.0-4-cachyos\n')
+            with mock.patch.object(installer, 'install_kernel'):
+                self.assertEqual(installer.all_kernels(modules, modules), 0)
+            self.assertFalse(self.marker.exists())
+            self.marker.parent.mkdir(exist_ok=True)
+            self.marker.touch()
+            self.assertEqual(installer.all_kernels(modules, modules, remove=True), 0)
+            self.assertFalse(self.marker.exists())
 
     def test_automatic_install_continues_after_unsupported_kernel(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -60,6 +60,22 @@ def legacy_sources(src=Path('/usr/src')):
     return sorted(path for path in src.glob(f'{LEGACY}-*') if path.is_dir())
 
 
+def other_versions(status):
+    """Registered versions other than VERSION, from `dkms status -m NAME` output."""
+    versions = {line.split('/', 1)[1].split(',')[0].split(':')[0].strip()
+                for line in status.splitlines() if line.startswith(f'{NAME}/')}
+    return sorted(versions - {VERSION})
+
+
+def remove_other_versions():
+    # They install the same module path, so DKMS would refuse this version.
+    status = subprocess.run(['dkms', 'status', '-m', NAME], check=True, timeout=30,
+                            capture_output=True, text=True).stdout
+    for version in other_versions(status):
+        run('dkms', 'remove', '-m', NAME, '-v', version, '--all')
+        print(f'Unregistered {NAME}/{version}; its sources stay in /usr/src.')
+
+
 def install(source, target):
     if target.is_symlink():
         raise RuntimeError(f'Refusing symlink destination: {target}')
@@ -95,6 +111,7 @@ def main():
     devices = matching_devices() if args.activate else []
     source = Path(__file__).resolve().parent.parent / 'kernel' / NAME
     install(source, Path('/usr/src') / f'{NAME}-{VERSION}')
+    remove_other_versions()
     run('dkms', 'install', '-m', NAME, '-v', VERSION, '-k', os.uname().release)
     rule = source.parent.parent / 'packaging/99-barracuda-battery.rules'
     shutil.copyfile(rule, '/etc/udev/rules.d/99-barracuda-battery.rules')
