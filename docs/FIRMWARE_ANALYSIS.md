@@ -78,6 +78,7 @@ findings have been recorded; it does not mean every firmware path is decoded.
 | Evidence | Findings | Detailed record |
 | --- | --- | --- |
 | Packaged T3 dongle images and Windows SDK | Bridge dispatch, tunnel framing, connection queries, diagnostic routing and command inventory | This page and [command review](COMMAND_REVIEW.md) |
+| Authorized live dongle flash read | 1 MiB local storage capture, read framing, two-pass verification and packaged-image comparison | [Installed dongle flash](LIVE_DONGLE_FLASH.md) |
 | T3 dongle XIP/patch and installed headset receiver | Relayed diagnostic commands, autonomous SPP_Audio builders and unresolved dongle EX9 fields | [Dongle-to-headset inventory](DONGLE_HEADSET_COMMANDS.md) |
 | Razer Audio Android T3 providers | App control IDs, EQ bands, Gaming and voice-language download path | [Android analysis](ANDROID_ANALYSIS.md) |
 | Published T3BT headset update | Six native control handlers, neutral EQ encoding and partial Gaming/sidetone paths | [Headset firmware](HEADSET_FIRMWARE_ANALYSIS.md) |
