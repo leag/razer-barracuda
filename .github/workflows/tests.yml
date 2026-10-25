@@ -41,7 +41,9 @@ jobs:
       - name: Apply the series to HID for-next
         run: |
           git clone -q --depth 1 -b for-next https://git.kernel.org/pub/scm/linux/kernel/git/hid/hid.git linux
+          git -C linux log --oneline -1
           git -C linux -c user.name=CI -c user.email=ci@invalid am "$PWD"/upstream/hid/000[12]-*.patch
       - name: Run KUnit
         working-directory: linux
-        run: ./tools/testing/kunit/kunit.py run --arch=x86_64 --kunitconfig="$GITHUB_WORKSPACE/upstream/.kunitconfig" --jobs=$(nproc)
+        # The raw console shows why QEMU stopped when no KTAP output arrives.
+        run: ./tools/testing/kunit/kunit.py run --arch=x86_64 --kunitconfig="$GITHUB_WORKSPACE/upstream/.kunitconfig" --jobs=$(nproc) --raw_output=all
