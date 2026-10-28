@@ -7,6 +7,20 @@
   removes the old translation module from a user installation, and the widget
   no longer passes it. The widget still follows the desktop locale (English and
   Spanish) for everything it shows; helper output only reaches the journal.
+- Add `barracuda-headset doctor`, a read-only installation check. It reports
+  the driver and its binding, the published link state, access to the dongle
+  and to the settings and power-off controls (including `audio` group
+  membership), the udev rules, the jack quirk for the running kernel, the
+  helpers on the Plasma session's `PATH` and duplicate installations, each
+  with a fix. It never opens the hidraw node or the driver attributes.
+- `scripts/install.py` gains `--system`, which installs the udev rules, the
+  DKMS driver and the jack quirk with one `pkexec` prompt, and `--widget`,
+  which installs or upgrades the Plasma widget. Without `--system` it prints
+  the administrator commands still needed. It warns when `~/.local/bin` is not
+  on `PATH` and ends with the installation check.
+- The Arch packages print next steps after installing or upgrading: reboot,
+  reconnect the dongle, the `audio` group, the jack-quirk retry command and the
+  installation check.
 - Show the **Bluetooth gaming mode** row only when the settings are read over
   Bluetooth. Through the USB dongle it could not be changed, and the headset
   firmware keeps it in RAM only, so it is off after every power cycle. Its

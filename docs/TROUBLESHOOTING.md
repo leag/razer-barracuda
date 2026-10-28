@@ -1,5 +1,9 @@
 # Troubleshooting
 
+Start with `barracuda-headset doctor`. It reports what is missing, with a fix
+for each item, and sends nothing to the device; see
+[checking the installation](INSTALL.md#checking-the-installation).
+
 ## Pairing permissions or missing adapter
 
 Check `lsusb -d 1532:0552` and the udev rule

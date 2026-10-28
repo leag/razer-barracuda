@@ -36,6 +36,7 @@ user in their conversation language. Read README.md and docs/PROTOCOL.md first.
   the theme's symbolic glyph; the popup loads detailed Breeze headset
   artwork.
 - barracuda_pair/pairing.py: pairing sequence, `barracuda-pair` CLI and hidraw lookup.
+- barracuda_pair/doctor.py: read-only installation check (`barracuda-headset doctor`).
 - tests/: hardware-independent unittest suite.
 - scripts/install.py and packaging/: CLI user installation, udev rules and
   the ALSA card profile set for the jack quirk.
@@ -128,8 +129,11 @@ Keep all public docs and CLI output in English, and ensure the widget's English
 and Spanish strings are tested. Do not introduce personal absolute paths into tracked files.
 
 Repository edits do not update an installed copy automatically. The user installer
-copies only the pairing modules and creates the CLI launcher. It does not create
-desktop/autostart entries. Installing the plasmoid does not modify panel layouts.
+copies only the pairing modules and creates the CLI launchers; `--system` (udev
+rules, DKMS driver, jack quirk through one pkexec prompt) and `--widget` are
+explicit opt-ins, and neither rebinds the dongle or reloads modules. It does not
+create desktop/autostart entries. `barracuda-headset doctor` must stay read-only:
+no hidraw or driver-attribute access. Installing the plasmoid does not modify panel layouts.
 Plasma may cache QML across widget removal/re-addition. An authorized shell
 restart can refresh it without restarting audio; inspect logs for binding errors.
 A legacy local barracuda-status.service may exist as a transient user service;

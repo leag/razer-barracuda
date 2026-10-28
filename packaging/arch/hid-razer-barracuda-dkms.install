@@ -10,10 +10,22 @@ remove_other_versions() {
 
 post_install() {
   remove_other_versions "${1%-*}"
+  cat <<'EOF'
+==> Reboot to load the Barracuda driver; nothing was reloaded now.
+==> After the reboot, reconnect the dongle and select the Barracuda output once.
+==> Headset settings and power-off need membership in the audio group.
+==> If the jack-quirk step below fails, retry with:
+==>   sudo barracuda-snd-usb-audio-quirk --all-kernels
+==> Check the installation any time with: barracuda-headset doctor
+EOF
 }
 
 post_upgrade() {
   remove_other_versions "${1%-*}"
+  cat <<'EOF'
+==> Reboot to load the updated Barracuda driver; nothing was reloaded now.
+==> Check the installation with: barracuda-headset doctor
+EOF
 }
 
 pre_remove() {

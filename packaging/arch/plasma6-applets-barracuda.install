@@ -1,0 +1,12 @@
+post_install() {
+  cat <<'EOF'
+==> The system tray shows Barracuda Headset after your next Plasma login.
+==> Installing the widget does not change your panels.
+EOF
+}
+
+post_upgrade() {
+  cat <<'EOF'
+==> Log out and back in to load the updated Barracuda widget.
+EOF
+}

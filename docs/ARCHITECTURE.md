@@ -9,6 +9,8 @@
   driver's bounded, serialized sysfs mailbox, and the read-only `link` request
   (driver `wireless_status`, power-supply values and BlueZ connection). No raw
   HID fallback or monitor.
+- `barracuda_pair/doctor.py`: the read-only `barracuda-headset doctor`
+  installation check. The command-line tools are English only.
 - `plasmoid/`: native Plasma 6.7+ QML widget for the headset connection. It
   runs the read-only `barracuda-headset` link query through Plasma5Support's
   executable engine: on load, every 5 s while the popup is open, and when a

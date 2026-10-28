@@ -39,7 +39,24 @@ sudo barracuda-snd-usb-audio-quirk --all-kernels
 Reboot to load the module. Installation does not reload modules or restart audio.
 Reconnect the dongle after installing udev rules. Log in again for the WirePlumber
 icon rule. Select the Barracuda output once; WirePlumber handles subsequent
-availability changes. See [jack detection](JACK_DETECTION.md).
+availability changes. See [jack detection](JACK_DETECTION.md). pacman prints
+these next steps after installing or upgrading each package.
+
+## Checking the installation
+
+```bash
+barracuda-headset doctor
+```
+
+The check reports the driver and its binding, the headset link as the driver
+last published it, access to the dongle and to the settings and power-off
+controls (which need the `audio` group), the udev rules, the jack quirk for the
+running kernel, whether the helpers are on the Plasma session's `PATH`, and
+duplicate user and package copies. Each problem comes with a fix. It reads
+sysfs, files and the Plasma shell's environment only: it does not open the
+hidraw node or the driver attributes, so nothing is sent to the dongle or the
+headset. It exits with status 1 when a check fails; warnings and an
+unconfirmed link do not count as failures.
 
 ## Building Arch packages locally
 
@@ -65,18 +82,28 @@ alone does not change the source. Use the checkout installation instructions
 below to try unreleased CLI/widget changes, and the
 [release guide](RELEASING.md) for tagged/container builds.
 
-## Pairing CLI from a checkout
+## Installing from a checkout
 
 No third-party Python runtime dependencies are needed:
 
 ```bash
-python3 scripts/install.py
-sudo install -Dm644 packaging/99-razer-barracuda.rules /etc/udev/rules.d/99-razer-barracuda.rules
-sudo udevadm control --reload-rules
-~/.local/bin/barracuda-pair --help
+python3 scripts/install.py --system --widget
 ```
 
-Reconnect the dongle. The user installer copies the Python helper modules under
+`--system` runs the administrator steps with one `pkexec` prompt, stopping at
+the first failure: the hidraw rule in `/etc/udev/rules.d`,
+`scripts/install_dkms.py` (driver, battery and power rules) and
+`scripts/install_snd_usb_audio_quirk.py` for the running kernel. It skips the
+parts the Arch packages already provide, a driver version DKMS has already
+installed for the running kernel, and the jack quirk when PipeWire supports
+USB `wireless_status`. Without `--system`, the installer prints the remaining
+commands for `sudo` instead. `--widget` runs `kpackagetool6 --install`, or
+`--upgrade` for an existing user copy, and skips the widget when the
+`plasma6-applets-barracuda` package provides it. Neither option rebinds the
+dongle or reloads modules: reboot, or reconnect the dongle, afterwards. The
+installer ends with the [installation check](#checking-the-installation).
+
+The user installer copies the Python helper modules under
 `$XDG_DATA_HOME/barracuda-pair` (default `~/.local/share/barracuda-pair`) and
 creates `barracuda-pair`, `barracuda-power` and `barracuda-headset` in
 `~/.local/bin`. Keep its Python interpreter available. No desktop entries,
@@ -89,7 +116,8 @@ HID permissions remain separate.
 ## Plasma widget from a checkout
 
 Requires Plasma 6.7 or later, `plasma-pa`, and Breeze icons installed under
-`/usr/share/icons/breeze/devices/64/` (Arch package `breeze-icons`):
+`/usr/share/icons/breeze/devices/64/` (Arch package `breeze-icons`).
+`scripts/install.py --widget` installs it, or directly:
 
 ```bash
 kpackagetool6 --type Plasma/Applet --install plasmoid

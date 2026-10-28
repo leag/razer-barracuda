@@ -27,6 +27,7 @@ package_barracuda-pair() {
               'pipewire: optional barracuda-audio Linux tuning'
               'wireplumber: optional barracuda-audio suspend and headroom policy'
               'libpulse: optional microphone controls')
+  install=barracuda-pair.install
   cd "razer-barracuda-$pkgver"
   python -m installer --destdir="$pkgdir" dist/*.whl
   install -Dm644 packaging/99-razer-barracuda.rules -t "$pkgdir/usr/lib/udev/rules.d"
@@ -38,6 +39,7 @@ package_plasma6-applets-barracuda() {
   pkgdesc="Plasma 6 widget showing the Barracuda X headset connection status"
   depends=('plasma-workspace>=6.7' plasma-pa plasma5support breeze-icons)
   optdepends=('barracuda-pair: connection status, pairing and headset controls from the widget')
+  install=plasma6-applets-barracuda.install
   cd "razer-barracuda-$pkgver"
   local target="$pkgdir/usr/share/plasma/plasmoids/org.razer.barracuda.output"
   install -Dm644 plasmoid/metadata.json -t "$target"

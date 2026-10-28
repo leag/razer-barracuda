@@ -5,6 +5,7 @@ import errno
 import json
 from pathlib import Path
 import secrets
+import sys
 
 from .control import adapters, control_lock, power_attribute
 from .bluetooth import BluetoothSession, headset_presence
@@ -242,9 +243,14 @@ def dispatch(request):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog='barracuda-headset', description=__doc__)
+    parser.add_argument('command', nargs='?', choices=('doctor',),
+                        help='doctor: check the installation without touching the device')
     parser.add_argument('--request', default='{"op":"status"}')
     args = parser.parse_args(argv)
+    if args.command == 'doctor':
+        from . import doctor
+        return doctor.report(doctor.run_checks(), sys.stdout)
     try:
         request = json.loads(args.request)
         if not isinstance(request, dict):

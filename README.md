@@ -61,37 +61,39 @@ sudo pacman -U barracuda-pair-*.pkg.tar.zst hid-razer-barracuda-dkms-*.pkg.tar.z
 Reboot to load the driver, reconnect the dongle to apply device permissions,
 and select the Barracuda output once. WirePlumber handles subsequent
 availability changes. The automatic jack-quirk build may need internet access.
+Then check the installation; it only reads files and sends nothing to the
+device:
+
+```bash
+barracuda-headset doctor
+```
 
 See the [installation guide](docs/INSTALL.md) for kernel-specific requirements,
 local package builds and migration from the former `barracuda-status` package.
 
 ### From a checkout
 
-Install the pairing CLI and its device-access rule:
+Install everything with one command, with DKMS, `git` and your kernel's
+headers already installed:
 
 ```bash
-python3 scripts/install.py
-sudo install -Dm644 packaging/99-razer-barracuda.rules /etc/udev/rules.d/99-razer-barracuda.rules
-sudo udevadm control --reload-rules
-~/.local/bin/barracuda-pair --help
+python3 scripts/install.py --system --widget
 ```
 
-Reconnect the dongle. Add `~/.local/bin` to your desktop session's `PATH` to use
-pairing from the widget. This installer copies the Python helper modules and creates the
-`barracuda-pair`, `barracuda-power` and `barracuda-headset` launchers. It does
-not install the driver or Plasma widget.
-
-To install the Plasma widget with its dependencies already available:
-
-```bash
-kpackagetool6 --type Plasma/Applet --install plasmoid
-```
+This installs the `barracuda-pair`, `barracuda-power` and `barracuda-headset`
+launchers in `~/.local/bin`. `--system` installs the udev rules, the DKMS
+driver and, when PipeWire needs it, the jack quirk, with one `pkexec` prompt.
+`--widget` installs or upgrades the Plasma widget for your user. Without
+`--system`, the installer prints the administrator commands that are still
+needed. It ends with the same check as `barracuda-headset doctor`, and it warns
+when `~/.local/bin` is not on your `PATH`, since the widget cannot find the
+helpers otherwise. Then reboot, or reconnect the dongle if the driver was
+already installed.
 
 The system tray is the main place for the widget: it enables **Barracuda
 Headset** (**Auricular Barracuda**) by itself the first time it finds it, at the
 next Plasma start. You can also add it to a panel from Plasma's widget picker.
-Use `--upgrade plasmoid` for an existing user installation. Installing the widget
-does not change panel layouts.
+Installing the widget does not change panel layouts.
 
 Follow the [installation guide](docs/INSTALL.md) for other checkout options and
 the [driver guide](docs/DKMS.md) for DKMS setup. Checkout edits do not update

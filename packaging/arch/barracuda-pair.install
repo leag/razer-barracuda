@@ -1,0 +1,6 @@
+post_install() {
+  cat <<'EOF'
+==> Reconnect the dongle to apply its device access rule.
+==> Check the installation with: barracuda-headset doctor
+EOF
+}

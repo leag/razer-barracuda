@@ -61,12 +61,27 @@ class PackagingTests(unittest.TestCase):
             dkms.chmod(0o755)
             for scriptlet in ('post_install', 'post_upgrade'):
                 (root / 'calls').unlink(missing_ok=True)
-                subprocess.run(['sh', '-c', f'. "$1"; {scriptlet} 0.6.0-2 0.5.1-1', 'sh',
-                                str(ROOT / 'packaging/arch/hid-razer-barracuda-dkms.install')],
-                               env={'PATH': f'{root}:/usr/bin:/bin'}, check=True)
+                result = subprocess.run(['sh', '-c', f'. "$1"; {scriptlet} 0.6.0-2 0.5.1-1', 'sh',
+                                         str(ROOT / 'packaging/arch/hid-razer-barracuda-dkms.install')],
+                                        env={'PATH': f'{root}:/usr/bin:/bin'}, check=True,
+                                        capture_output=True, text=True)
+                self.assertIn('Reboot to load', result.stdout)
+                self.assertIn('barracuda-headset doctor', result.stdout)
                 self.assertEqual((root / 'calls').read_text().splitlines(),
                                  ['remove -m hid-razer-barracuda -v 0.4.0 --all',
                                   'remove -m hid-razer-barracuda -v 0.5.1.local1 --all'])
+
+    def test_scriptlets_print_next_steps_only(self):
+        for name, expected in [('barracuda-pair', 'Reconnect the dongle'),
+                               ('plasma6-applets-barracuda', 'next Plasma login')]:
+            script = ROOT / f'packaging/arch/{name}.install'
+            self.assertIn(f'install={name}.install', PKGBUILD.read_text())
+            result = subprocess.run(['sh', '-c', '. "$1"; post_install 0.6.0-1', 'sh', str(script)],
+                                    env={'PATH': '/usr/bin:/bin'}, check=True,
+                                    capture_output=True, text=True)
+            self.assertIn(expected, result.stdout)
+            # Messages only: no commands that change the system.
+            self.assertNotRegex(script.read_text(), r'\b(systemctl|modprobe|udevadm|kquitapp|plasmashell)\b')
 
     def test_versions_agree(self):
         pkgver = field(PKGBUILD, r'^pkgver=(\S+)')
