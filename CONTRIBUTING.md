@@ -1,10 +1,10 @@
 # Contributing
 
-Use English for documentation, source comments and source UI strings. Provide a
-Spanish entry in `barracuda_pair/i18n.py` for every new CLI message. For widget
+Use English for documentation, source comments and source UI strings. The
+command-line tools are English only and ignore the host locale. For widget
 text, update the English/Spanish strings in QML and the translated metadata.
-The CLI defaults to English regardless of the host locale. The plasmoid follows
-the desktop locale, with English fallback; test both English and Spanish.
+The plasmoid follows the desktop locale, with English fallback; test both
+English and Spanish.
 
 Keep changes focused. Run:
 

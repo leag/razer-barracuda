@@ -8,7 +8,6 @@ write access to the matching USB dongle and aborts on unexpected replies.
 ```bash
 barracuda-pair --scan
 barracuda-pair
-barracuda-pair --language es
 barracuda-pair --address AA:BB:CC:DD:EE:FF --yes
 ```
 
@@ -286,7 +285,6 @@ The CLI equivalent is:
 
 ```bash
 barracuda-power --off
-barracuda-power --off --language es
 ```
 
 `--yes` skips the interactive prompt for callers that already confirmed the

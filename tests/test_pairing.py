@@ -101,9 +101,6 @@ def run(dongle, **options):
 
 
 class PairingTests(unittest.TestCase):
-    def setUp(self):
-        pairing.set_language("en")
-
     def test_reassembles_captured_inquiry_layout(self):
         reassembler = pairing.Reassembler()
         first = bytes.fromhex("01 80 12 50 49 0e cf 00 00 00 00 39 00 f0") + HEADSET + b"\0"

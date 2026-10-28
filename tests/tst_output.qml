@@ -204,13 +204,9 @@ TestCase {
             verify(!Output.adapterMissing(status));
     }
     function test_pairing_command_after_ui_confirmation() {
-        compare(Output.powerOffCommand("es_CL"), "barracuda-power --off --yes --language es");
-        compare(Output.powerOffCommand("en_US; echo unsafe"), "barracuda-power --off --yes --language en");
-        compare(Output.pairingCommand("es_CL"),
-                "barracuda-pair --yes --timeout 60 --language es");
-        compare(Output.pairingCommand("en_US"),
-                "barracuda-pair --yes --timeout 60 --language en");
-        compare(Output.pairingCommand("de_DE; echo unsafe"), Output.pairingCommand("en_US"));
+        // The helpers are English-only; nothing from the locale reaches the command.
+        compare(Output.powerOffCommand(), "barracuda-power --off --yes");
+        compare(Output.pairingCommand(), "barracuda-pair --yes --timeout 60");
     }
     function test_pairing_and_power_outcomes() {
         compare(Output.pairingOutcome({"exit code": 0, stdout: "ok"}, "en_US"),

@@ -10,7 +10,6 @@ import sys
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--language', choices=('en', 'es'), default='en')
     parser.add_argument('--audio-controls', action='store_true',
                         help='also install the optional barracuda-audio tuning helper; changes no audio settings')
     args = parser.parse_args()
@@ -19,20 +18,22 @@ def main():
     target = data / 'barracuda-pair'
     package = target / 'barracuda_pair'
     package.mkdir(parents=True, exist_ok=True)
-    for name in ('__init__.py', '__main__.py', 'pairing.py', 'i18n.py', 'control.py', 'headset.py', 'bluetooth.py'):
+    for name in ('__init__.py', '__main__.py', 'pairing.py', 'control.py', 'headset.py', 'bluetooth.py'):
         shutil.copy2(root / 'barracuda_pair' / name, package / name)
+    # Left by installers from before the CLIs became English-only.
+    (package / 'i18n.py').unlink(missing_ok=True)
     binary = Path.home() / '.local/bin/barracuda-pair'
     binary.parent.mkdir(parents=True, exist_ok=True)
     code = ('import sys; sys.path.insert(0, ' + repr(str(target)) +
             '); from barracuda_pair.pairing import main; raise SystemExit(main())')
     binary.write_text('#!/bin/sh\nexec ' + shlex.quote(sys.executable) + ' -c ' +
-                      shlex.quote(code) + ' --language ' + args.language + ' "$@"\n')
+                      shlex.quote(code) + ' "$@"\n')
     binary.chmod(0o755)
     power_binary = binary.with_name('barracuda-power')
     power_code = ('import sys; sys.path.insert(0, ' + repr(str(target)) +
                   '); from barracuda_pair.control import main; raise SystemExit(main())')
     power_binary.write_text('#!/bin/sh\nexec ' + shlex.quote(sys.executable) + ' -c ' +
-                            shlex.quote(power_code) + ' --language ' + args.language + ' "$@"\n')
+                            shlex.quote(power_code) + ' "$@"\n')
     power_binary.chmod(0o755)
     headset_binary = binary.with_name('barracuda-headset')
     headset_code = ('import sys; sys.path.insert(0, ' + repr(str(target)) +

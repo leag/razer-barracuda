@@ -82,14 +82,14 @@ PlasmoidItem {
         pairingError = "";
         pairingResult = "";
         pairingBusy = true;
-        pairingLauncher.connectSource(Output.pairingCommand(Qt.locale().name));
+        pairingLauncher.connectSource(Output.pairingCommand());
     }
     function turnOffHeadset() {
         if (!commandsEnabled)
             return;
         powerError = "";
         powerBusy = true;
-        powerLauncher.connectSource(Output.powerOffCommand(Qt.locale().name));
+        powerLauncher.connectSource(Output.powerOffCommand());
     }
     Plasma5Support.DataSource {
         id: powerLauncher

@@ -8,13 +8,10 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from barracuda_pair import control, i18n
+from barracuda_pair import control
 
 
 class PowerControlTests(unittest.TestCase):
-    def tearDown(self):
-        i18n.set_language('en')
-
     def adapter(self, root, name='adapter', identity=control.IDENTITY, interface='03'):
         parent = root / (name + '-interface')
         parent.mkdir()
@@ -68,25 +65,21 @@ class PowerControlTests(unittest.TestCase):
                         self.fail('Concurrent operation acquired the lock')
             self.assertTrue((Path(temporary) / 'barracuda-pair/control.lock').exists())
 
-    def test_explicit_confirmation_and_both_languages(self):
-        for language, expected in [('en', 'Power-off request sent'), ('es', 'Solicitud de apagado enviada')]:
+    def test_explicit_confirmation(self):
+        for answer in ('n', 's', 'sí'):
             with patch.object(control, 'request_poweroff') as request, \
-                    patch('builtins.input', return_value='n'), patch('sys.stdout', new_callable=io.StringIO):
-                self.assertEqual(control.main(['--off', '--language', language]), 1)
+                    patch('builtins.input', return_value=answer), patch('sys.stdout', new_callable=io.StringIO):
+                self.assertEqual(control.main(['--off']), 1)
                 request.assert_not_called()
-            with patch.object(control, 'request_poweroff') as request, \
-                    patch('sys.stdout', new_callable=io.StringIO) as output:
-                self.assertEqual(control.main(['--off', '--yes', '--language', language]), 0)
-                request.assert_called_once()
-                self.assertIn(expected, output.getvalue())
+        with patch.object(control, 'request_poweroff') as request, \
+                patch('sys.stdout', new_callable=io.StringIO) as output:
+            self.assertEqual(control.main(['--off', '--yes']), 0)
+            request.assert_called_once()
+            self.assertIn('Power-off request sent', output.getvalue())
 
-    def test_errors_preserve_unknown_state_and_localize(self):
+    def test_errors_preserve_unknown_state(self):
         for number in (errno.EACCES, errno.EBUSY, errno.ENOTCONN, errno.ETIMEDOUT, errno.EIO):
-            messages = []
-            for language in ('en', 'es'):
-                i18n.set_language(language)
-                messages.append(control.error_text(OSError(number, 'test')))
-            self.assertNotEqual(*messages)
+            self.assertNotEqual(control.error_text(OSError(number, 'test')), 'test')
         with patch.object(control, 'request_poweroff', side_effect=OSError(errno.ETIMEDOUT, 'test')), \
                 patch('sys.stderr', new_callable=io.StringIO) as output:
             self.assertEqual(control.main(['--off', '--yes']), 1)

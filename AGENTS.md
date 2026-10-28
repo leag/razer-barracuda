@@ -4,8 +4,8 @@
 
 This provides a pairing CLI, kernel driver and Plasma output widget for
 Barracuda X (2022), USB `1532:0552`. WirePlumber handles audio routing. Documentation and code comments are English.
-The CLI supports English (default) and Spanish via `--language es`.
-The plasmoid follows the desktop locale with English fallback. Respond to the
+The CLI tools are English only. The plasmoid follows the desktop locale
+(English and Spanish) with English fallback. Respond to the
 user in their conversation language. Read README.md and docs/PROTOCOL.md first.
 
 ## Layout
@@ -36,7 +36,6 @@ user in their conversation language. Read README.md and docs/PROTOCOL.md first.
   the theme's symbolic glyph; the popup loads detailed Breeze headset
   artwork.
 - barracuda_pair/pairing.py: pairing sequence, `barracuda-pair` CLI and hidraw lookup.
-- barracuda_pair/i18n.py: explicit UI translations.
 - tests/: hardware-independent unittest suite.
 - scripts/install.py and packaging/: CLI user installation, udev rules and
   the ALSA card profile set for the jack quirk.
@@ -125,8 +124,8 @@ private files. Distinguish unit tests, compiled builds, live routing and physica
 Never force-add ignored files. Keep build artifacts, captures and vendor-derived
 files out of the tree. Do not bundle theme icons: the plasmoid uses the
 `breeze-icons` dependency and its detailed `audio-headset.svg`/`audio-speakers.svg`.
-Keep all public docs in English, and ensure default English and Spanish strings
-are tested. Do not introduce personal absolute paths into tracked files.
+Keep all public docs and CLI output in English, and ensure the widget's English
+and Spanish strings are tested. Do not introduce personal absolute paths into tracked files.
 
 Repository edits do not update an installed copy automatically. The user installer
 copies only the pairing modules and creates the CLI launcher. It does not create

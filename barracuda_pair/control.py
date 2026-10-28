@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import sys
 
-from .i18n import set_language, tr
 
 IDENTITY = 'HID_ID=0003:00001532:00000552'
 
@@ -41,12 +40,12 @@ def adapters(sysfs=Path('/sys/bus/hid/devices')):
 def power_attribute(sysfs=Path('/sys/bus/hid/devices')):
     devices = adapters(sysfs)
     if not devices:
-        raise OSError(errno.ENODEV, tr('Adapter not detected'))
+        raise OSError(errno.ENODEV, 'Adapter not detected')
     if len(devices) != 1:
-        raise OSError(errno.EINVAL, tr('More than one Barracuda adapter is connected'))
+        raise OSError(errno.EINVAL, 'More than one Barracuda adapter is connected')
     attribute = devices[0] / 'headset_poweroff'
     if not attribute.exists():
-        raise OSError(errno.ENOSYS, tr('Update the Barracuda driver to enable headset power-off'))
+        raise OSError(errno.ENOSYS, 'Update the Barracuda driver to enable headset power-off')
     return attribute
 
 
@@ -68,7 +67,7 @@ def error_text(exc):
         errno.ETIMEDOUT: 'The adapter did not answer; headset state is unknown',
         errno.EIO: 'Power control failed; inspect the headset and reconnect the dongle if needed',
     }
-    return tr(messages[exc.errno]) if exc.errno in messages else str(exc)
+    return messages[exc.errno] if exc.errno in messages else str(exc)
 
 
 def main(argv=None):
@@ -76,16 +75,14 @@ def main(argv=None):
     parser.add_argument('--off', action='store_true', required=True,
                         help='request headset power-off; physical button required to power on')
     parser.add_argument('--yes', action='store_true', help='skip the interactive confirmation')
-    parser.add_argument('--language', choices=('en', 'es'), default='en')
     args = parser.parse_args(argv)
-    set_language(args.language)
     if not args.yes:
         try:
-            answer = input(tr('Turn off the Barracuda headset? Use its button to turn it on again. [y/N] '))
+            answer = input('Turn off the Barracuda headset? Use its button to turn it on again. [y/N] ')
         except (EOFError, KeyboardInterrupt):
             return 1
-        if answer.strip().lower() not in ('y', 'yes', 's', 'si', 'sí'):
-            print(tr('Power-off cancelled'))
+        if answer.strip().lower() not in ('y', 'yes'):
+            print('Power-off cancelled')
             return 1
     try:
         request_poweroff()
@@ -93,9 +90,9 @@ def main(argv=None):
         print(error_text(exc), file=sys.stderr)
         return 1
     except KeyboardInterrupt:
-        print(tr('Power control interrupted; check the headset state before trying again'), file=sys.stderr)
+        print('Power control interrupted; check the headset state before trying again', file=sys.stderr)
         return 1
-    print(tr('Power-off request sent. Use the headset button to turn it on again.'))
+    print('Power-off request sent. Use the headset button to turn it on again.')
     return 0
 
 

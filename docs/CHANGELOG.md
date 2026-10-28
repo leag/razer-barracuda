@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The command-line tools are English only: `barracuda-pair` and
+  `barracuda-power` lose `--language`, `scripts/install.py` loses it too and
+  removes the old translation module from a user installation, and the widget
+  no longer passes it. The widget still follows the desktop locale (English and
+  Spanish) for everything it shows; helper output only reaches the journal.
 - Show the **Bluetooth gaming mode** row only when the settings are read over
   Bluetooth. Through the USB dongle it could not be changed, and the headset
   firmware keeps it in RAM only, so it is off after every power cycle. Its

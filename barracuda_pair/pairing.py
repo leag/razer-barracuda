@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 import time
 
-from .i18n import set_language, tr
 
 VID_PID = "0003:00001532:00000552"
 
@@ -133,7 +132,7 @@ class HidrawTransport:
 
     def write(self, report):
         if os.write(self.fd, report) != len(report):
-            raise PairingError(tr("Short write to the adapter"))
+            raise PairingError("Short write to the adapter")
 
     def read(self, timeout):
         if not select.select([self.fd], [], [], max(timeout, 0))[0]:
@@ -176,9 +175,8 @@ class PairingSession:
         headset = parse_headset(message.data) if message.data[0] == CMD_SCAN else None
         if headset is not None:
             if headset.address not in self.headsets:
-                self.log(tr("Found {name} {address} (class 0x{device_class:06X}, {rssi} dBm)",
-                            name=headset.name or "?", address=headset.label,
-                            device_class=headset.device_class, rssi=headset.rssi))
+                self.log(f"Found {headset.name or '?'} {headset.label} "
+                         f"(class 0x{headset.device_class:06X}, {headset.rssi} dBm)")
             self.headsets[headset.address] = headset
         elif message.data[0] == 0xE3 and len(message.data) >= 2 and message.data[1] in (0, 1):
             self.link_status = bool(message.data[1])
@@ -191,10 +189,9 @@ class PairingSession:
             report = self.transport.read(deadline - self.clock())
             if report is not None and report[:2] == HANDSHAKE[:2]:
                 if report[:4] != HANDSHAKE_REPLY:
-                    raise PairingError(tr("Unexpected handshake reply: {reply}",
-                                          reply=report[:4].hex(" ")))
+                    raise PairingError(f"Unexpected handshake reply: {report[:4].hex(' ')}")
                 return
-        raise PairingError(tr("The adapter did not answer the handshake"))
+        raise PairingError("The adapter did not answer the handshake")
 
     def request(self, klass, seq, frame, reply_command=None):
         """Send a frame, check its acknowledgment and optionally wait for a reply."""
@@ -208,8 +205,7 @@ class PairingSession:
             if (message.klass == CLASS_ACK and len(message.data) >= 3
                     and message.data[0] == klass and message.data[1] == seq | 0x80):
                 if message.data[2] != 0:
-                    raise PairingError(tr("The adapter rejected command {frame}",
-                                          frame=frame.hex(" ")))
+                    raise PairingError(f"The adapter rejected command {frame.hex(' ')}")
                 ack = message.data[3:]
             elif (ack is not None and reply_command is not None
                   and message.klass == CLASS_LINK
@@ -219,7 +215,7 @@ class PairingSession:
                 return ack
             if reply is not None:
                 return reply
-        raise PairingError(tr("No response to command {frame}", frame=frame.hex(" ")))
+        raise PairingError(f"No response to command {frame.hex(' ')}")
 
     def link_command(self, command, *args, reply=False):
         seq = self.next_seq()
@@ -236,14 +232,13 @@ class PairingSession:
         mode = self.link_command(CMD_GET_MODE, reply=True)
         if mode[:1] != b"\x00":
             # The captured session ran in local mode; remote mode is unverified.
-            raise PairingError(tr("The adapter is not in local mode ({mode}); aborting",
-                                  mode=mode.hex(" ")))
+            raise PairingError(f"The adapter is not in local mode ({mode.hex(' ')}); aborting")
         model = self.ota_command(READ_MODEL_ID)
-        self.log(tr("Adapter model data: {model}", model=model.hex(" ") or "-"))
+        self.log(f"Adapter model data: {model.hex(' ') or '-'}")
 
     def check_cancelled(self):
         if self.cancelled():
-            raise PairingError(tr("Pairing cancelled"))
+            raise PairingError("Pairing cancelled")
 
     def set_scan(self, enabled):
         self.link_command(CMD_SCAN, int(enabled))
@@ -273,7 +268,7 @@ class PairingSession:
     def connected(self):
         status = self.link_command(CMD_STATUS, reply=True)
         if status[:1] and status[0] & 0x1F:
-            self.log(tr("Connection status: 0x{status:02X}", status=status[0]))
+            self.log(f"Connection status: 0x{status[0]:02X}")
             return True
         return False
 
@@ -302,27 +297,26 @@ def run(session, *, scan_only, address, timeout):
         if scan_only:
             session.scan(timeout)
             if not session.headsets:
-                session.log(tr("No Bluetooth devices were found"))
+                session.log("No Bluetooth devices were found")
             return 0
         if address is None:
-            session.log(tr("Put the headset in pairing mode now"))
+            session.log("Put the headset in pairing mode now")
         want = ((lambda h: h.address == address) if address is not None
                 else (lambda h: h.eligible))
         headset = session.scan(timeout, want)
         if headset is None:
-            session.log(tr("No Barracuda headset in pairing mode was found"))
+            session.log("No Barracuda headset in pairing mode was found")
             return 1
-        session.log(tr("Pairing with {name} {address}…", name=headset.name or "?",
-                       address=headset.label))
+        session.log(f"Pairing with {headset.name or '?'} {headset.label}…")
         if session.connect(headset):
             # Finish like the vendor utility: stop the inquiry, then REMOTE_SET_MODE
             # back to local mode.
             session.set_scan(False)
             scanning = False
             session.link_command(CMD_SET_MODE, 0x00)
-            session.log(tr("Paired. Turn the headset off and on to start the link"))
+            session.log("Paired. Turn the headset off and on to start the link")
             return 0
-        session.log(tr("The headset did not connect"))
+        session.log("The headset did not connect")
         return 1
     finally:
         if scanning:
@@ -340,26 +334,23 @@ def main(argv=None):
                         help="seconds to scan (default: 60)")
     parser.add_argument("--device", help="hidraw node (default: auto-detect 1532:0552)")
     parser.add_argument("--yes", action="store_true", help="do not ask for confirmation")
-    parser.add_argument("--language", choices=("en", "es"), default="en",
-                        help="Interface language (default: en)")
     args = parser.parse_args(argv)
-    set_language(args.language)
     try:
         address = parse_address(args.address) if args.address else None
     except ValueError:
         parser.error(f"invalid address: {args.address}")
     device = args.device or find_hidraw()
     if device is None:
-        print(tr("Adapter not detected"), file=sys.stderr)
+        print("Adapter not detected", file=sys.stderr)
         return 1
     if not args.scan and not args.yes:
-        answer = input(tr("Pair the dongle with a headset? This replaces its current pairing. [y/N] "))
-        if answer.strip().lower() not in ("y", "yes", "s", "si", "sí"):
+        answer = input("Pair the dongle with a headset? This replaces its current pairing. [y/N] ")
+        if answer.strip().lower() not in ("y", "yes"):
             return 1
     try:
         transport = HidrawTransport(device)
     except PermissionError:
-        print(tr("HID permission denied"), file=sys.stderr)
+        print("HID permission denied", file=sys.stderr)
         return 1
     try:
         from .control import control_lock
@@ -367,7 +358,7 @@ def main(argv=None):
             return run(PairingSession(transport), scan_only=args.scan,
                        address=address, timeout=args.timeout)
     except (PairingError, OSError) as exc:
-        print(tr("Pairing failed: {error}", error=exc), file=sys.stderr)
+        print(f"Pairing failed: {exc}", file=sys.stderr)
         return 1
     finally:
         transport.close()

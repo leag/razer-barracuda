@@ -18,8 +18,8 @@ select outputs, change volume, or control the microphone.
 - **Headset settings:** native EQ, gaming mode, Do Not Disturb, idle shutdown
   and Bluetooth Quick Connect, through USB or the paired Bluetooth headset.
 - **Power-off:** explicitly turn off the headset from the CLI or widget.
-- **English and Spanish:** CLIs default to English and support `--language es`;
-  the widget follows the desktop locale with English fallback.
+- **English and Spanish widget:** the widget follows the desktop locale with
+  English fallback; the command-line tools are English only.
 
 Pairing, settings changes and power-off run only on user request. The widget is
 a native Plasma applet that can live in the system tray; there is no separate
@@ -107,7 +107,6 @@ Put the headset in pairing mode, then run:
 ```bash
 barracuda-pair --scan          # List nearby devices without replacing pairing.
 barracuda-pair                 # Confirm and pair with a Barracuda headset.
-barracuda-pair --language es   # Use Spanish prompts.
 ```
 
 Pairing replaces the dongle's existing headset pairing and asks for confirmation.

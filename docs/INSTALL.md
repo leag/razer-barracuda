@@ -79,8 +79,7 @@ sudo udevadm control --reload-rules
 Reconnect the dongle. The user installer copies the Python helper modules under
 `$XDG_DATA_HOME/barracuda-pair` (default `~/.local/share/barracuda-pair`) and
 creates `barracuda-pair`, `barracuda-power` and `barracuda-headset` in
-`~/.local/bin`. Keep its Python interpreter available.
-Use `--language es` when installing to default to Spanish. No desktop entries,
+`~/.local/bin`. Keep its Python interpreter available. No desktop entries,
 autostart, audio configuration or running processes are changed.
 
 Alternatively use `uv run barracuda-pair` from the checkout, or build a wheel

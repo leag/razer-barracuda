@@ -240,10 +240,10 @@ function actionText(value) {
     return String(value || "").replace(/&(?!&)/g, "");
 }
 
-function pairingCommand(locale) {
-    // Called only after explicit confirmation in the native UI.
-    return "barracuda-pair --yes --timeout 60 --language "
-        + (/^es([_-]|$)/i.test(locale) ? "es" : "en");
+// Called only after explicit confirmation in the native UI. The helpers
+// speak English; the popup shows its own translated outcome.
+function pairingCommand() {
+    return "barracuda-pair --yes --timeout 60";
 }
 
 // Changes when a Barracuda battery appears or disappears, not on every reading.
@@ -318,8 +318,8 @@ function artwork(iconName) {
     return iconName;
 }
 
-function powerOffCommand(locale) {
-    return "barracuda-power --off --yes --language " + (String(locale).toLowerCase().startsWith("es") ? "es" : "en");
+function powerOffCommand() {
+    return "barracuda-power --off --yes";
 }
 
 // A percentage as each language writes it: "80%" in English, "80 %" with a
