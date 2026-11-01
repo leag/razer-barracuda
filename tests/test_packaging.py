@@ -59,17 +59,34 @@ class PackagingTests(unittest.TestCase):
                             f'[ "$1" = status ] && exec cat "{root}/status"\n'
                             f'echo "$*" >> "{root}/calls"\n')
             dkms.chmod(0o755)
+            # Only the 0.3.3 tree belongs to a package.
+            pacman = root / 'pacman'
+            pacman.write_text('#!/bin/sh\ncase "$2" in *-0.3.3) exit 0;; esac\nexit 1\n')
+            pacman.chmod(0o755)
+            src = root / 'src'
             for scriptlet in ('post_install', 'post_upgrade'):
                 (root / 'calls').unlink(missing_ok=True)
+                # The dkms hook re-adds unregistered trees, as 0.5.0 here.
+                for version in ('0.3.3', '0.5.0', '0.5.1.local1', '0.6.0'):
+                    (src / f'hid-razer-barracuda-{version}').mkdir(parents=True, exist_ok=True)
+                    (src / f'hid-razer-barracuda-{version}/dkms.conf').touch()
+                (src / 'hid-razer-barracuda-0.5.0.old').mkdir(exist_ok=True)
                 result = subprocess.run(['sh', '-c', f'. "$1"; {scriptlet} 0.6.0-2 0.5.1-1', 'sh',
                                          str(ROOT / 'packaging/arch/hid-razer-barracuda-dkms.install')],
-                                        env={'PATH': f'{root}:/usr/bin:/bin'}, check=True,
+                                        env={'PATH': f'{root}:/usr/bin:/bin',
+                                             'DKMS_SOURCE_TREE': str(src)}, check=True,
                                         capture_output=True, text=True)
                 self.assertIn('Reboot to load', result.stdout)
                 self.assertIn('barracuda-headset doctor', result.stdout)
+                self.assertIn('Removed hid-razer-barracuda 0.5.1.local1', result.stdout)
                 self.assertEqual((root / 'calls').read_text().splitlines(),
-                                 ['remove -m hid-razer-barracuda -v 0.4.0 --all',
+                                 ['remove -m hid-razer-barracuda -v 0.3.3 --all',
+                                  'remove -m hid-razer-barracuda -v 0.4.0 --all',
+                                  'remove -m hid-razer-barracuda -v 0.5.0 --all',
                                   'remove -m hid-razer-barracuda -v 0.5.1.local1 --all'])
+                self.assertEqual(sorted(path.name for path in src.iterdir()),
+                                 ['hid-razer-barracuda-0.3.3', 'hid-razer-barracuda-0.5.0.old',
+                                  'hid-razer-barracuda-0.6.0'])
 
     def test_scriptlets_print_next_steps_only(self):
         for name, expected in [('barracuda-pair', 'Reconnect the dongle'),

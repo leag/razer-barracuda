@@ -1,10 +1,22 @@
-# Other registered versions install the same module path, so DKMS refuses to
-# install the packaged one for new kernels. Unregister them; sources stay.
+# Other versions install the same module path, so DKMS refuses to install the
+# packaged one for new kernels. Unregister them and delete their sources unless
+# a package owns them: the dkms hook re-adds every /usr/src tree on each kernel
+# install, so unregistering alone lasts only until the next kernel upgrade.
 remove_other_versions() {
-  dkms status -m hid-razer-barracuda 2>/dev/null |
-    sed -n 's|^hid-razer-barracuda/\([^,:]*\)[,:].*|\1|p' | sort -u |
+  src="${DKMS_SOURCE_TREE:-/usr/src}"
+  { dkms status -m hid-razer-barracuda 2>/dev/null |
+      sed -n 's|^hid-razer-barracuda/\([^,:]*\)[,:].*|\1|p'
+    for tree in "$src"/hid-razer-barracuda-*/; do
+      [ -f "$tree/dkms.conf" ] && basename "$tree" | sed 's|^hid-razer-barracuda-||'
+    done; } | sort -u |
     while read -r version; do
-      [ "$version" = "$1" ] || dkms remove -m hid-razer-barracuda -v "$version" --all
+      [ "$version" = "$1" ] && continue
+      dkms remove -m hid-razer-barracuda -v "$version" --all 2>/dev/null
+      tree="$src/hid-razer-barracuda-$version"
+      if [ -d "$tree" ] && [ ! -L "$tree" ] && ! pacman -Qqo "$tree" >/dev/null 2>&1; then
+        rm -rf "$tree" &&
+          echo "==> Removed hid-razer-barracuda $version, which a manual install left in /usr/src."
+      fi
     done
 }
 
