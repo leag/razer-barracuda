@@ -18,6 +18,9 @@
   left by `scripts/install_dkms.py`. Unregistering them was not enough: the
   Arch dkms hook re-adds every `/usr/src` tree when a kernel is installed, and
   the old version again made DKMS abort the packaged one for the new kernel.
+- `barracuda-snd-usb-audio-quirk --kernel RELEASE --remove` no longer fails
+  on a jack quirk build that DKMS dropped together with its kernel: it deletes
+  the `/usr/src` tree without asking DKMS to unregister it.
 - `scripts/install.py` gains `--system`, which installs the udev rules, the
   DKMS driver and the jack quirk with one `pkexec` prompt, and `--widget`,
   which installs or upgrades the Plasma widget. Without `--system` it prints

@@ -185,7 +185,8 @@ def remove_build(target):
     version = target.name[len(NAME) + 1:]
     if dkms_status(version):
         run('dkms', 'remove', '-m', NAME, '-v', version, '--all')
-    shutil.rmtree(target)
+    if target.exists():
+        shutil.rmtree(target)
 
 
 def prune_removed_kernels(modules, source_root):
@@ -290,8 +291,8 @@ def main():
     version = package_version(args.kernel)
     target = Path('/usr/src') / f'{NAME}-{version}'
     if args.remove:
-        run('dkms', 'remove', '-m', NAME, '-v', version, '--all')
-        shutil.rmtree(target, ignore_errors=True)
+        # A build the dkms hook dropped with its kernel is no longer registered.
+        remove_build(target)
         if not args.no_profile_set:
             remove_profile_set()
         print(f'Removed {NAME} {version}. Reboot or reload snd-usb-audio to use the official module.')

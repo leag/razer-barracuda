@@ -56,6 +56,18 @@ class SndUsbAudioQuirkTests(unittest.TestCase):
                                         '-v', 'test', '--all')
             self.assertFalse(target.exists())
 
+    def test_remove_build_skips_unregistered_and_missing_builds(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(installer, 'dkms_status', return_value=''), \
+                mock.patch.object(installer, 'run') as run:
+            # The dkms hook unregisters a build when its kernel is removed.
+            target = Path(directory) / f'{installer.NAME}-test'
+            target.mkdir()
+            installer.remove_build(target)
+            installer.remove_build(target)
+            run.assert_not_called()
+            self.assertFalse(target.exists())
+
     def test_upstream_version(self):
         self.assertEqual(installer.upstream_version('7.2.6-1-cachyos'), 'v7.2.6')
         self.assertEqual(installer.upstream_version('6.12.10'), 'v6.12.10')
