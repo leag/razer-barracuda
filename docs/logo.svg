@@ -1,0 +1,221 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="62 38 364 436" role="img" aria-labelledby="title">
+  <title id="title">Barracuda Linux</title>
+  <style>
+    .sheen { animation: sheen 7s ease-in-out infinite; }
+    @keyframes sheen {
+      0%, 55% { transform: translateX(0); }
+      100% { transform: translateX(700px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .sheen { animation: none; }
+    }
+  </style>
+  <defs>
+    <!-- moving sheen, masked to the headset -->
+    <linearGradient id="sheenGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#eaf1f8" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="white">
+      <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0"/>
+    </filter>
+    <mask id="headsetMask" maskUnits="userSpaceOnUse" x="62" y="38" width="364" height="436">
+      <use href="#headset" filter="url(#white)"/>
+    </mask>
+
+    <filter id="blur3" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3"/>
+    </filter>
+    <filter id="blur7" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <filter id="grain" x="0" y="0" width="1" height="1">
+      <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="2" seed="7"/>
+      <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  2.2 0 0 0 -1"/>
+      <feComposite in2="SourceGraphic" operator="in"/>
+    </filter>
+
+    <!-- headband -->
+    <linearGradient id="shell" x1="0" y1="36" x2="0" y2="385" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7a8591"/>
+      <stop offset="0.1" stop-color="#616b77"/>
+      <stop offset="0.45" stop-color="#525b66"/>
+      <stop offset="1" stop-color="#434a54"/>
+    </linearGradient>
+    <linearGradient id="shellside" x1="153" y1="0" x2="853" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.22"/>
+      <stop offset="0.07" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#000" stop-opacity="0.18"/>
+      <stop offset="0.93" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0.22"/>
+    </linearGradient>
+    <radialGradient id="pad" cx="502.5" cy="385" r="320" gradientUnits="userSpaceOnUse">
+      <stop offset="0.895" stop-color="#6b7480"/>
+      <stop offset="0.915" stop-color="#3a4048"/>
+      <stop offset="0.96" stop-color="#1e2125"/>
+      <stop offset="1" stop-color="#111316"/>
+    </radialGradient>
+
+    <!-- ear cup -->
+    <linearGradient id="outer" x1="150" y1="500" x2="350" y2="815" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5b6470"/>
+      <stop offset="0.3" stop-color="#3b414a"/>
+      <stop offset="0.75" stop-color="#2d3239"/>
+      <stop offset="0.93" stop-color="#4d5560"/>
+      <stop offset="1" stop-color="#7d8794"/>
+    </linearGradient>
+    <linearGradient id="second" x1="250" y1="600" x2="410" y2="810" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#17191d"/>
+      <stop offset="0.5" stop-color="#262a30"/>
+      <stop offset="1" stop-color="#3b4149"/>
+    </linearGradient>
+    <linearGradient id="arm" x1="165" y1="500" x2="290" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5a636e"/>
+      <stop offset="1" stop-color="#4a525c"/>
+    </linearGradient>
+
+    <!-- cushion -->
+    <path id="hex" d="M0-5.5 4.76-2.75V2.75L0 5.5-4.76 2.75V-2.75z"/>
+    <pattern id="mesh" width="11.43" height="19.8" patternUnits="userSpaceOnUse"
+             patternTransform="rotate(-34)">
+      <rect width="11.43" height="19.8" fill="#1c1f23"/>
+      <g fill="#5b626c">
+        <use href="#hex" x="5.715" y="6.6"/>
+        <use href="#hex" x="0" y="16.5"/>
+        <use href="#hex" x="11.43" y="16.5"/>
+        <use href="#hex" x="0" y="-3.3"/>
+        <use href="#hex" x="11.43" y="-3.3"/>
+      </g>
+    </pattern>
+    <linearGradient id="cushAcross" x1="332" y1="621.5" x2="409" y2="568" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#000" stop-opacity="0.45"/>
+      <stop offset="0.16" stop-color="#000" stop-opacity="0.08"/>
+      <stop offset="0.45" stop-color="#000" stop-opacity="0"/>
+      <stop offset="0.75" stop-color="#000" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.7"/>
+    </linearGradient>
+    <linearGradient id="cushAlong" x1="262" y1="408" x2="482" y2="772" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#cfd8e3" stop-opacity="0.2"/>
+      <stop offset="0.22" stop-color="#cfd8e3" stop-opacity="0.04"/>
+      <stop offset="0.5" stop-color="#000" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.55"/>
+    </linearGradient>
+
+    <!-- microphone -->
+    <radialGradient id="foam" cx="0.38" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#4d535b"/>
+      <stop offset="0.55" stop-color="#2b2e33"/>
+      <stop offset="1" stop-color="#121316"/>
+    </radialGradient>
+    <linearGradient id="socket" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#15171a"/>
+      <stop offset="0.5" stop-color="#4a515b"/>
+      <stop offset="1" stop-color="#1b1d21"/>
+    </linearGradient>
+
+    <clipPath id="armClip">
+      <path d="M153.5 385 157 455C158 470 160 480 163 488L265 621 296 606 222 462C210 438 200 410 196 385Z"/>
+    </clipPath>
+    <clipPath id="cushClip">
+      <path id="cushPath" d="M214 452C218 428 240 408 266 407 290 406 308 420 320 440L495 708C503 722 504 742 497 756 489 772 472 786 450 791Z"/>
+    </clipPath>
+
+    <!-- one side: yoke, ear cup and cushion; mirrored for the other -->
+    <g id="side">
+      <!-- slider seen inside the band -->
+      <path d="M196 385C200 410 208 436 217 455L221 446 220 385Z" fill="#1b1e22"/>
+
+      <!-- cup housing: inner wall, then the lit outer face -->
+      <path d="M159 468C162 495 160 530 150 556L316 800Q352 800 385 824L445 791 214 452Z" fill="url(#second)"/>
+      <path d="M159 468C162 495 160 530 150 556L316 800Q352 800 385 824L265 621 161 485Z" fill="url(#outer)"/>
+      <path d="M150 556 316 800" stroke="#b9c2cd" stroke-width="2.2" stroke-linecap="round" opacity="0.75"/>
+      <path d="M159 470C162 495 160 530 150 556" fill="none" stroke="#aeb7c2" stroke-width="1.8" opacity="0.6"/>
+      <path d="M316 800Q352 800 385 824" fill="none" stroke="#dde3ea" stroke-width="2.4" stroke-linecap="round" opacity="0.8"/>
+      <path d="M320 797Q352 797 383 819" fill="none" stroke="#c5ced9" stroke-width="9" opacity="0.35" filter="url(#blur3)"/>
+      <path d="M265 621 385 824" stroke="#8e98a5" stroke-width="1.6" opacity="0.5"/>
+      <path d="M385 824 445 791" stroke="#8e98a5" stroke-width="1.6" opacity="0.45"/>
+
+      <!-- baffle rim next to the cushion -->
+      <path d="M203 459 439 797 450 791 214 452Z" fill="#2a2e35"/>
+      <path d="M203 459 439 797" stroke="#7d8793" stroke-width="1.5" opacity="0.6"/>
+
+      <!-- cushion -->
+      <use href="#cushPath" fill="url(#mesh)"/>
+      <use href="#cushPath" fill="url(#cushAcross)"/>
+      <use href="#cushPath" fill="url(#cushAlong)"/>
+      <g clip-path="url(#cushClip)">
+        <path d="M214 452 450 791" stroke="#000" stroke-width="14" opacity="0.5" filter="url(#blur3)"/>
+        <path d="M222 440C230 420 250 411 268 411 288 411 304 424 316 442" fill="none" stroke="#c9d2dd"
+              stroke-width="6" opacity="0.22" filter="url(#blur3)"/>
+      </g>
+      <path d="M214 452 450 791" stroke="#a3adb9" stroke-width="1.6" opacity="0.6"/>
+
+      <!-- yoke arm over the housing -->
+      <path d="M262 628 302 609 312 628 276 648Z" fill="#000" opacity="0.6" filter="url(#blur3)"/>
+      <path d="M268 625 299 610" stroke="#060708" stroke-width="7" stroke-linecap="round"/>
+      <path d="M153.5 385 157 455C158 470 160 480 163 488L265 621 296 606 222 462C210 438 200 410 196 385Z"
+            fill="url(#arm)"/>
+      <g clip-path="url(#armClip)">
+        <path d="M180 380C181 430 190 480 222 535" fill="none" stroke="#b4bec9" stroke-width="13"
+              opacity="0.55" filter="url(#blur7)"/>
+        <path d="M222 462 296 606" stroke="#0b0c0e" stroke-width="5" opacity="0.7" filter="url(#blur3)"/>
+        <path d="M153.5 385 157 455C158 470 160 480 163 488" fill="none" stroke="#c3ccd7" stroke-width="3" opacity="0.7"/>
+      </g>
+      <path d="M163 488 265 621" stroke="#8a94a1" stroke-width="1.5" opacity="0.55"/>
+      <path d="M196 385C200 410 210 438 222 462L296 606" fill="none" stroke="#0a0b0d" stroke-width="2"/>
+
+      <!-- slider seams -->
+      <g fill="none" stroke-linecap="round">
+        <path d="M156 346.5 193 335 220 327M154 410.5 190 391 218 376" stroke="#0b0c0e" stroke-width="1.8"/>
+        <path d="M156 349 193 337.5M154 413 190 393.5" stroke="#aab4bf" stroke-width="1" opacity="0.45"/>
+      </g>
+    </g>
+  </defs>
+
+  <g id="headset" transform="translate(34 32) scale(0.44)">
+    <!-- headband: inner structure, padding, outer shell -->
+    <path d="M198 385A304.5 320 0 0 1 807 385L785 385A282.5 289 0 0 0 220 385Z" fill="#1b1e22"/>
+    <path d="M220.2 265.1A304.5 320 0 0 1 784.8 265.1L764.4 276.7A282.5 289 0 0 0 240.6 276.7Z" fill="url(#pad)"/>
+    <path d="M153.5 385A349 349 0 0 1 851.5 385L807 385A304.5 320 0 0 0 198 385Z" fill="url(#shell)"/>
+    <path d="M153.5 385A349 349 0 0 1 851.5 385L807 385A304.5 320 0 0 0 198 385Z" fill="url(#shellside)"/>
+    <path d="M161.5 385A341 341 0 0 1 843.5 385" fill="none" stroke="#14161a" stroke-width="1.4" opacity="0.6"/>
+    <path d="M154.5 385A348 348 0 0 1 850.5 385" fill="none" stroke="#c9d2dc" stroke-width="2.2" opacity="0.7"/>
+    <path d="M300 106A349 349 0 0 1 705 106" fill="none" stroke="#e3e9f0" stroke-width="5" opacity="0.35"
+          filter="url(#blur3)"/>
+    <path d="M198 385A304.5 320 0 0 1 807 385" fill="none" stroke="#08090a" stroke-width="2.4"/>
+
+    <use href="#side"/>
+    <use href="#side" transform="matrix(-1 0 0 1 1005 0)"/>
+
+    <!-- boom microphone -->
+    <rect x="627" y="719" width="26" height="46" rx="13" transform="rotate(35 640 742)"
+          fill="url(#socket)" stroke="#0b0c0e" stroke-width="1.5"/>
+    <g fill="none" stroke-linecap="round">
+      <path d="M625 764C585 821 520 890 420 906 380 912 340 918 296 921" stroke="#0b0c0e" stroke-width="12"/>
+      <path d="M625 764C585 821 520 890 420 906 380 912 340 918 296 921" stroke="#3f464f" stroke-width="8.5"/>
+      <path d="M625 764C585 821 520 890 420 906 380 912 340 918 296 921" stroke="#c2cbd6" stroke-width="2.4"
+            opacity="0.75" transform="translate(-1.2 -2.6)"/>
+      <path d="M625 764C613 781.1 598.75 799.3 582 816.8" stroke="#0b0c0e" stroke-width="13.5" stroke-linecap="butt"/>
+      <path d="M625 764C613 781.1 598.75 799.3 582 816.8" stroke="#3f464f" stroke-width="10.5" stroke-linecap="butt"/>
+      <path d="M625 764C613 781.1 598.75 799.3 582 816.8" stroke="#0b0c0e" stroke-width="10.5"
+            stroke-linecap="butt" stroke-dasharray="1.2 3" opacity="0.28"/>
+      <path d="M625 764C613 781.1 598.75 799.3 582 816.8" stroke="#c2cbd6" stroke-width="2.6"
+            opacity="0.7" transform="translate(-1.6 -3)"/>
+    </g>
+    <ellipse cx="626" cy="762.5" rx="9.5" ry="5" transform="rotate(35 626 762.5)" fill="#aeb7c2" stroke="#0b0c0e" stroke-width="1.5"/>
+    <path d="M302 921 244 925" stroke="#2c3037" stroke-width="18"/>
+    <path d="M302 914.5 244 918.5" stroke="#8b95a2" stroke-width="2" opacity="0.7"/>
+    <g transform="rotate(-5 173 927)">
+      <ellipse cx="173" cy="927" rx="75" ry="51" fill="url(#foam)"/>
+      <ellipse cx="173" cy="927" rx="75" ry="51" fill="#fff" opacity="0.16" filter="url(#grain)"/>
+      <ellipse cx="173" cy="927" rx="74.5" ry="50.5" fill="none" stroke="#8d97a3" stroke-width="1.5" opacity="0.45"/>
+    </g>
+  </g>
+
+  <g mask="url(#headsetMask)">
+    <g transform="skewX(-20)">
+      <rect class="sheen" x="-70" y="38" width="130" height="436" fill="url(#sheenGrad)"/>
+    </g>
+  </g>
+</svg>

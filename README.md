@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo.svg" alt="Barracuda Linux logo" width="160">
+</p>
+
 # Barracuda Linux
 
 Linux support for the **Razer Barracuda X (2022)** and its USB dongle
