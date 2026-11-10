@@ -8,7 +8,7 @@ import "../code/output.js" as Output
 // The headset with a confirmed link: the popup's subject, so it gets the
 // largest picture and the largest words in the body.
 //
-// One 64 px band: the detailed artwork (its drawing starts on the same
+// One 64 px band: the headset logo (its drawing starts on the same
 // column as the device icons below), the transport glyphs beside it, then a
 // text column with the state and the percentage as level-2 headings, the
 // battery bar across the column and the transport line in the small font.

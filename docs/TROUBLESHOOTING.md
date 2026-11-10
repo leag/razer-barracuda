@@ -153,15 +153,16 @@ Do not reload the kernel module to refresh widget artwork.
 ## Icon missing or too small
 
 Panel and tray icons use the theme's `audio-headset-symbolic`; the popup uses
-the detailed artwork. Check that both are installed:
+the widget's own drawings of the headset and the dongle. Check that the theme
+glyph and the widget's drawings are installed:
 
 ```bash
-ls /usr/share/icons/breeze/devices/64/audio-headset.svg
+ls ~/.local/share/plasma/plasmoids/org.razer.barracuda.output/contents/images/
 ls /usr/share/icons/breeze/devices/22/audio-headset-symbolic.svg
 journalctl --user -u plasma-plasmashell.service -b --since "5 minutes ago"
 ```
 
-On Arch/CachyOS these files belong to `breeze-icons`. The published v0.4.0
+On Arch/CachyOS the theme glyph belongs to `breeze-icons`. The published v0.4.0
 widget uses `audio-headphones.svg`; the headset artwork is a newer checkout
 change. Icons scale with the panel's available size. Unexpectedly tiny or absent
 icons can also be caused by a QML binding loop; inspect recent log entries rather

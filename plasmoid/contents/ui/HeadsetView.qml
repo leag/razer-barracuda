@@ -433,7 +433,7 @@ PlasmaExtras.Representation {
                     details: Output.detailRows(view.linkStatus, view.localeName)
                     localeName: view.localeName
                     // The drawing, not its square, starts on the device icons' column.
-                    artworkX: view.iconColumn + view.deviceIconInset - Math.round(Kirigami.Units.iconSizes.huge * 7 / 64)
+                    artworkX: view.iconColumn + view.deviceIconInset - Math.round(Kirigami.Units.iconSizes.huge * 29 / 256)
                     Keys.onDownPressed: event => view.stepFocus(hero, 1, event)
                     Keys.onUpPressed: event => view.stepFocus(hero, -1, event)
                     Connections {

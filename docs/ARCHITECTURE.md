@@ -46,9 +46,10 @@
   action. One `Kirigami.InlineMessage` holds outcomes and problems. Help is one
   contextual help button per tab at most. The powermanagement data engine supplies the
   Barracuda battery published by the driver through UPower/Solid, without HID
-  reads. The popup loads KDE's detailed headset SVG through `Kirigami.Icon`;
-  panel and system tray icons use the theme's symbolic glyph. The package
-  depends on `breeze-icons` rather than bundling artwork. The widget declares
+  reads. The popup draws the headset as the project's logo
+  (`contents/images/logo.svg`) through `Kirigami.Icon`; panel and system tray
+  icons use the theme's symbolic glyph. The package depends on `breeze-icons`
+  rather than bundling theme artwork. The widget declares
   itself a system tray entry (category Hardware, enabled by default) and sets
   its tray status from the link state and battery.
 - `packaging/`: hidraw and battery udev rules, ALSA profile/path and

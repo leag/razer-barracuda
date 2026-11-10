@@ -76,7 +76,7 @@ heading and the popup's controls.
 
 ### With a confirmed link
 
-- The **headset card**: Breeze's detailed headset artwork with a USB or
+- The **headset card**: the project's headset logo with the dongle or a
   Bluetooth glyph beside it (both when both links are confirmed), the state and
   battery percentage, a battery bar, and a line with the transport and the
   charge state when it adds something (**Charging**, **Fully charged**, **Low
@@ -126,10 +126,10 @@ The default output is not link evidence. It only selects the native-control
 transport when both or neither link is confirmed; otherwise headset settings
 follow the confirmed USB or Bluetooth link.
 
-The popup's detailed artwork is read from
-`/usr/share/icons/breeze/devices/64/audio-headset.svg` (and
-`drive-removable-media-usb.svg` for a missing dongle), supplied by
-`breeze-icons`; no icons are bundled or copied. The tray sizes its own icons; a
+The popup draws the headset as the project's logo and the missing dongle as the
+project's drawing of it, both installed with the widget
+(`contents/images/logo.svg` and `dongle.svg`). The symbolic glyphs come from the
+icon theme; no theme icons are bundled or copied. The tray sizes its own icons; a
 panel icon outside the tray is centered and capped at KDE's small-medium icon
 size, shrinking to fit smaller panels.
 

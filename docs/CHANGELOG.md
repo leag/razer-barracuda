@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- The popup's headset card and state messages, the widget's About page and
+  the widget list show the project's headset logo
+  (`plasmoid/contents/images/logo.svg`, a copy of `docs/logo.svg`) instead of
+  Breeze's headset artwork. Panel and tray icons still use the theme's glyph.
+- The **USB dongle not detected** message and the headset card's USB mark draw
+  the 2022 dongle (`plasmoid/contents/images/dongle.svg`, a copy of
+  `docs/dongle-2022.svg`) instead of Breeze's USB drive, and the README shows the 2021 and 2022
+  dongles side by side to tell them apart.
+- `docs/logo.svg` is drawn the same by Qt's SVG renderer as by browsers: the
+  cushion mesh is dashed lines instead of a rotated pattern, the clip paths are
+  masks and the microphone foam's grain is dashed rows instead of a turbulence
+  filter.
 - The command-line tools are English only: `barracuda-pair` and
   `barracuda-power` lose `--language`, `scripts/install.py` loses it too and
   removes the old translation module from a user installation, and the widget

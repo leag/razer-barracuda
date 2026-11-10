@@ -33,8 +33,15 @@ user in their conversation language. Read README.md and docs/PROTOCOL.md first.
   one placeholder and no tabs; Disconnected offers the pairing action. One
   closable message slot holds outcomes and problems. Help uses at most one
   contextual help button per tab, not a help page. Panel and tray icons use
-  the theme's symbolic glyph; the popup loads detailed Breeze headset
-  artwork.
+  the theme's symbolic glyph; the popup draws the headset as the project's
+  logo and the missing dongle as the project's drawing of it. The logo, also
+  the metadata icon that Plasma shows in its About page and widget list, is
+  `contents/images/logo.svg`, a copy of `docs/logo.svg`; the dongle is
+  `contents/images/dongle.svg`, a copy of `docs/dongle-2022.svg`. The copies
+  differ only in a square `viewBox`, because `Kirigami.Icon` stretches a
+  drawing to its square. Keep each pair in step and within what Qt's SVG
+  renderer draws: no pattern, clip path or
+  turbulence filter, and no gradient fill passed through `<use>`.
 - barracuda_pair/pairing.py: pairing sequence, `barracuda-pair` CLI and hidraw lookup.
 - barracuda_pair/doctor.py: read-only installation check (`barracuda-headset doctor`).
 - tests/: hardware-independent unittest suite.
@@ -124,7 +131,8 @@ private files. Distinguish unit tests, compiled builds, live routing and physica
 
 Never force-add ignored files. Keep build artifacts, captures and vendor-derived
 files out of the tree. Do not bundle theme icons: the plasmoid uses the
-`breeze-icons` dependency and its detailed `audio-headset.svg`/`audio-speakers.svg`.
+`breeze-icons` dependency for its symbolic glyphs; the headset and the dongle in
+the popup are the project's own drawings.
 Keep all public docs and CLI output in English, and ensure the widget's English
 and Spanish strings are tested. Do not introduce personal absolute paths into tracked files.
 

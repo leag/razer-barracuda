@@ -115,8 +115,8 @@ HID permissions remain separate.
 
 ## Plasma widget from a checkout
 
-Requires Plasma 6.7 or later, `plasma-pa`, and Breeze icons installed under
-`/usr/share/icons/breeze/devices/64/` (Arch package `breeze-icons`).
+Requires Plasma 6.7 or later, `plasma-pa`, and the Breeze icon theme (Arch package
+`breeze-icons`) for the symbolic glyphs.
 `scripts/install.py --widget` installs it, or directly:
 
 ```bash

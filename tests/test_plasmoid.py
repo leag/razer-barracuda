@@ -59,6 +59,30 @@ class PlasmoidTests(unittest.TestCase):
         srcinfo = (ROOT / 'packaging/arch/.SRCINFO').read_text()
         applet = srcinfo.split('pkgname = plasma6-applets-barracuda', 1)[1]
         self.assertIn('\tdepends = plasma-workspace>=6.7\n', applet)
+        # Plasma's About page and widget list load the package's own logo: a
+        # leading slash names a file under contents/, which the package installs.
+        icon = metadata['KPlugin']['Icon']
+        self.assertEqual(icon, '/images/logo.svg')
+        self.assertTrue((ROOT / 'plasmoid/contents' / icon.lstrip('/')).is_file())
+        self.assertIn(f'install -Dm644 plasmoid/contents{icon} ', package)
+        # The widget's copy is the README's logo, which sticks to what Qt's SVG
+        # renderer draws: no pattern, clip path or turbulence filter.
+        # Only the viewBox differs: Kirigami.Icon stretches a drawing to its
+        # square, so the widget's copies are padded to one.
+        logo = (ROOT / 'docs/logo.svg').read_text()
+        self.assertEqual((ROOT / 'plasmoid/contents' / icon.lstrip('/')).read_text(),
+                         logo.replace('viewBox="62 38 364 436"', 'viewBox="26 38 436 436"'))
+        # So is the missing dongle: the README's drawing of the 2022 dongle.
+        dongle = (ROOT / 'docs/dongle-2022.svg').read_text()
+        self.assertEqual((ROOT / 'plasmoid/contents/images/dongle.svg').read_text(),
+                         dongle.replace('viewBox="0 0 320 200"', 'viewBox="0 -60 320 320"'))
+        self.assertIn('install -Dm644 plasmoid/contents/images/dongle.svg ', package)
+        for drawing in (logo, dongle, (ROOT / 'docs/dongle-2021.svg').read_text()):
+            for unsupported in ('<pattern', 'clip-path=', '<clipPath', '<feTurbulence'):
+                self.assertNotIn(unsupported, drawing)
+        readme = (ROOT / 'README.md').read_text()
+        for drawing in ('docs/logo.svg', 'docs/dongle-2021.svg', 'docs/dongle-2022.svg'):
+            self.assertIn(f'src="{drawing}"', readme)
         source = '\n'.join(path.read_text() for path in (ROOT / 'plasmoid/contents/ui').glob('*.qml'))
         self.assertIn('PlasmaExtras.ContextualHelpButton', source)
 

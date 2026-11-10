@@ -6,7 +6,7 @@
         "Name[es]": "Auricular Barracuda",
         "Description": "Show the Razer Barracuda X connection status, battery and headset controls",
         "Description[es]": "Muestra el estado de la conexión, la batería y los controles del Razer Barracuda X",
-        "Icon": "audio-headset",
+        "Icon": "/images/logo.svg",
         "Category": "Multimedia",
         "License": "MIT",
         "Version": "0.6.0",

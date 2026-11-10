@@ -8,6 +8,14 @@ Linux support for the **Razer Barracuda X (2022)** and its USB dongle
 (`1532:0552`): pairing, native battery and wireless-link reporting, headset
 settings, and a Plasma 6 widget.
 
+<p align="center">
+  <img src="docs/dongle-2022.svg" alt="Barracuda X (2022) dongle: USB-C plug at one end" width="200">
+  <img src="docs/dongle-2021.svg" alt="Barracuda X (2021) dongle: USB-C plug in the middle" width="200">
+  <br>
+  <sub>Supported: the 2022 dongle (left), with the plug at one end. The 2021
+  dongle (right) has the plug in the middle.</sub>
+</p>
+
 This is an independent project, not an official Razer application.
 **WirePlumber manages audio routing**; the project's tools and widget do not
 select outputs, change volume, or control the microphone.
@@ -43,7 +51,8 @@ The supported USB device is `1532:0552`. Support for other Barracuda models or
 USB IDs is not established. Bluetooth headset controls are documented
 [separately](docs/BLUETOOTH_CONTROLS.md).
 
-The widget uses artwork from the installed KDE Breeze theme. It is a separate
+The widget draws the headset as the project logo and takes its other icons
+from the installed KDE Breeze theme. It is a separate
 widget; keep KDE's volume applet for volume and output selection.
 
 ## Installation

@@ -306,15 +306,17 @@ function macAddress(address) {
     return hex.toUpperCase().match(/../g).join(":");
 }
 
-// Select KDE Breeze's detailed variants, not its small monochrome variants.
-// Files remain owned by breeze-icons; no theme artwork is copied into this package.
+// The headset and its USB dongle are the project's own drawings, paths
+// relative to contents/ui that the caller resolves. Everything else is KDE
+// Breeze's detailed variant, not its small monochrome one: those files remain
+// owned by breeze-icons and no theme artwork is copied into this package.
 function artwork(iconName) {
     if (/^audio-(headphones|headset)(-|$)/.test(iconName))
-        return "file:///usr/share/icons/breeze/devices/64/audio-headset.svg";
+        return "../images/logo.svg";
     if (/^audio-speakers(-|$)/.test(iconName))
         return "file:///usr/share/icons/breeze/devices/64/audio-speakers.svg";
     if (iconName === "drive-removable-media-usb")
-        return "file:///usr/share/icons/breeze/devices/64/drive-removable-media-usb.svg";
+        return "../images/dongle.svg";
     return iconName;
 }
 
@@ -380,14 +382,16 @@ function hero(value, battery, turningOff, locale) {
     };
 }
 
-// Transport glyphs drawn beside the card's artwork, bottom first: the USB
-// dongle, then Bluetooth above it when both links are confirmed.
+// Transport marks drawn beside the card's artwork, bottom first: the USB
+// dongle (the project's drawing, as artwork() names it), then the Bluetooth
+// glyph above it when both links are confirmed.
 function transportEmblems(value) {
+    const dongle = artwork("drive-removable-media-usb");
     if (value.state !== "connected")
         return [];
     if (value.transport === "both")
-        return ["drive-removable-media-usb-symbolic", "network-bluetooth-symbolic"];
-    return [value.transport === "bluetooth" ? "network-bluetooth-symbolic" : "drive-removable-media-usb-symbolic"];
+        return [dongle, "network-bluetooth-symbolic"];
+    return [value.transport === "bluetooth" ? "network-bluetooth-symbolic" : dongle];
 }
 
 // The whole-view message for every state without a confirmed link, and for

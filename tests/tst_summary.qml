@@ -699,12 +699,15 @@ Item {
             compare(bar.value, 80)
             compare(line.text, "USB dongle")
             compare(hero.Accessible.name, "Connected, 80% battery, USB dongle")
-            // The detailed artwork, with the transport glyph beside it.
+            // The logo, with the transport glyph beside it.
             compare(String(findChild(hero, "artworkIcon").source),
-                    "file:///usr/share/icons/breeze/devices/64/audio-headset.svg")
+                    Qt.resolvedUrl("../plasmoid/contents/images/logo.svg").toString())
             verify(!findChild(hero, "artworkEmblem").visible)
             tryCompare(glyphs(), "length", 1)
-            compare(glyphs()[0].source, "drive-removable-media-usb-symbolic")
+            // The dongle's drawing, wider than a glyph and as tall.
+            compare(glyphs()[0].source, "../images/dongle.svg")
+            verify(glyphs()[0].width > glyphs()[0].height)
+            compare(glyphs()[0].height, Kirigami.Units.iconSizes.small)
             const artwork = findChild(hero, "heroArtwork")
             verify(glyphs()[0].mapToItem(artwork, 0, 0).x >= artwork.drawingRight)
             host.localeName = "es_CL"
@@ -721,7 +724,7 @@ Item {
             host.status = linked("connected", {state: "connected", address: "A1:B2:C3:D4:E5:F6"})
             compare(line.text, "USB dongle and Bluetooth")
             tryCompare(glyphs(), "length", 2)
-            const usbGlyph = glyphs().find(glyph => glyph.source === "drive-removable-media-usb-symbolic")
+            const usbGlyph = glyphs().find(glyph => glyph.source === "../images/dongle.svg")
             const btGlyph = glyphs().find(glyph => glyph.source === "network-bluetooth-symbolic")
             tryVerify(() => usbGlyph.mapToItem(hero, 0, 0).y > btGlyph.mapToItem(hero, 0, 0).y)
             host.localeName = "es_CL"
@@ -884,7 +887,7 @@ Item {
             // The missing dongle is drawn as the dongle.
             host.status = noDongle
             compare(String(findChild(placeholder(), "artworkIcon").source),
-                    "file:///usr/share/icons/breeze/devices/64/drive-removable-media-usb.svg")
+                    Qt.resolvedUrl("../plasmoid/contents/images/dongle.svg").toString())
             // Centred in the body.
             const message = placeholder()
             const scroll = findChild(view, "bodyScroll")

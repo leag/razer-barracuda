@@ -85,7 +85,7 @@ the current output when both readings exist. Charge state remains unknown for
 that Bluetooth sample; the headset card shows its percentage without claiming
 charging or full-charge status. Source removal drops the reading.
 
-With a Bluetooth link the headset card uses the detailed headset artwork with a
+With a Bluetooth link the headset card uses the headset logo with a
 Bluetooth glyph beside it and a Bluetooth transport line. The heading's
 **Pair Headset…** (**+**) and **Turn Off Headset…** remain available for a
 Bluetooth output; both always use the dongle transport and are disabled while

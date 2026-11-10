@@ -331,15 +331,14 @@ TestCase {
         compare(Output.text("Muted", "Silenciado", "en_US"), "Muted");
         compare(Output.text("Muted", "Silenciado", "de_DE"), "Muted");
     }
-    function test_kde_detailed_artwork() {
-        compare(Output.artwork("audio-headset"),
-                "file:///usr/share/icons/breeze/devices/64/audio-headset.svg");
+    function test_detailed_artwork() {
+        // The headset is the package's own logo, relative to contents/ui.
+        compare(Output.artwork("audio-headset"), "../images/logo.svg");
         compare(Output.artwork("audio-headset-usb"), Output.artwork("audio-headset"));
         compare(Output.artwork("audio-speakers"),
                 "file:///usr/share/icons/breeze/devices/64/audio-speakers.svg");
         // The missing USB dongle is drawn as the dongle.
-        compare(Output.artwork("drive-removable-media-usb"),
-                "file:///usr/share/icons/breeze/devices/64/drive-removable-media-usb.svg");
+        compare(Output.artwork("drive-removable-media-usb"), "../images/dongle.svg");
         compare(Output.artwork("video-display"), "video-display");
         compare(Output.artwork("audio-card"), "audio-card");
     }
@@ -399,11 +398,11 @@ TestCase {
         compare(Output.hero(usb, discharging, true, "es_CL").accessible, "Apagando…, 80" + nbsp + "% de batería, dongle USB");
     }
     function test_transport_glyphs_beside_the_artwork() {
-        compare(Output.transportEmblems({state: "connected", transport: "usb"}), ["drive-removable-media-usb-symbolic"]);
+        compare(Output.transportEmblems({state: "connected", transport: "usb"}), ["../images/dongle.svg"]);
         compare(Output.transportEmblems({state: "connected", transport: "bluetooth"}), ["network-bluetooth-symbolic"]);
         // Bottom first: the dongle, then Bluetooth above it.
         compare(Output.transportEmblems({state: "connected", transport: "both"}),
-                ["drive-removable-media-usb-symbolic", "network-bluetooth-symbolic"]);
+                ["../images/dongle.svg", "network-bluetooth-symbolic"]);
         for (const state of ["disconnected", "unknown", "no-adapter", "unavailable", "checking"])
             compare(Output.transportEmblems({state: state, transport: "usb"}), []);
     }
