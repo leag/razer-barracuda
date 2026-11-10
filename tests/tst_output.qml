@@ -108,21 +108,49 @@ TestCase {
         compare(Output.connectionText({state: "checking"}, "es_CL"), "Comprobando…");
         compare(Output.connectionText({state: "checking"}, "en_US"), "Checking…");
     }
-    function test_connection_detail_rows() {
-        compare(Output.detailRows({ok: true, usb: {adapter: "missing"}, bluetooth: null}, "en_US"),
-                [["USB dongle", "Not detected"]]);
-        compare(Output.detailRows({ok: true, usb: {adapter: "multiple"}, bluetooth: null}, "es_CL"),
-                [["Dongle USB", "Más de uno"]]);
-        compare(Output.detailRows(linked("disconnected", {state: "disconnected", address: "x"}), "es_CL"),
-                [["Dongle USB", "Detectado"], ["Enlace 2,4 GHz", "Desconectado"], ["Bluetooth", "No conectado"]]);
-        compare(Output.detailRows({ok: true, usb: {adapter: "present", driver: false, link: "unknown"},
-                                   bluetooth: {state: "unknown"}}, "en_US"),
-                [["USB dongle", "Detected"], ["2.4 GHz link", "Driver required"], ["Bluetooth", "Unknown"]]);
-        compare(Output.detailRows(linked("unknown"), "es_CL")[1], ["Enlace 2,4 GHz", "No confirmado"]);
-        // The card names the connection only; the battery is on the Power tab.
+    function test_connection_rows() {
+        const rows = (status, locale) => Output.connectionRows(status, locale)
+            .map(row => [row.key, row.artwork, row.title, row.state, row.dimmed]);
+        const spoken = (status, locale) => Output.connectionRows(status, locale).map(row => row.spoken);
+        const phone = {state: "connected", address: "A1:B2:C3:D4:E5:F6"};
+        compare(Output.connectionRows(null, "en_US"), []);
+        compare(Output.connectionRows({ok: false}, "en_US"), []);
+        // A working link does not say "Connected": the dongle names its radio
+        // and Bluetooth the headset's address. Bluetooth has a row only when
+        // BlueZ reports the headset.
+        compare(rows(linked("connected"), "en_US"),
+                [["dongle", "../images/dongle.svg", "USB dongle", "2.4 GHz", false]]);
+        compare(rows(linked("connected"), "es_CL"),
+                [["dongle", "../images/dongle.svg", "Dongle USB", "2,4 GHz", false]]);
+        compare(rows(linked("connected", phone), "en_US")[1],
+                ["bluetooth", "preferences-system-bluetooth", "Bluetooth", "A1:B2:C3:D4:E5:F6", false]);
+        compare(rows(linked("connected", {state: "connected"}), "en_US")[1][3], "");
+        // A screen reader still hears the state.
+        compare(spoken(linked("connected", phone), "en_US"), ["USB dongle, 2.4 GHz, connected", "Bluetooth, connected"]);
+        compare(spoken(linked("connected", phone), "es_CL"), ["Dongle USB, 2,4 GHz, conectado", "Bluetooth, conectado"]);
+        // Only a problem adds a word; a link known to be down dims its row,
+        // an unconfirmed one does not.
+        compare(rows(linked("disconnected", phone), "en_US"),
+                [["dongle", "../images/dongle.svg", "USB dongle", "2.4 GHz · Disconnected", true],
+                 ["bluetooth", "preferences-system-bluetooth", "Bluetooth", "A1:B2:C3:D4:E5:F6", false]]);
+        compare(rows(linked("disconnected", {state: "disconnected", address: "x"}), "es_CL"),
+                [["dongle", "../images/dongle.svg", "Dongle USB", "2,4 GHz · Desconectado", true],
+                 ["bluetooth", "preferences-system-bluetooth", "Bluetooth", "No conectado", true]]);
+        compare(spoken(linked("disconnected", {state: "disconnected", address: "x"}), "en_US"),
+                ["USB dongle, 2.4 GHz · Disconnected", "Bluetooth, Not connected"]);
+        compare(rows(linked("unknown"), "es_CL")[0][3], "2,4 GHz · No confirmado");
+        compare(rows(linked("unknown"), "es_CL")[0][4], false);
+        compare(rows({ok: true, usb: {adapter: "present", driver: false, link: "unknown"},
+                      bluetooth: {state: "unknown"}}, "en_US"),
+                [["dongle", "../images/dongle.svg", "USB dongle", "2.4 GHz · Driver required", false],
+                 ["bluetooth", "preferences-system-bluetooth", "Bluetooth", "Unknown", false]]);
+        compare(rows({ok: true, usb: {adapter: "missing"}, bluetooth: phone}, "en_US")[0],
+                ["dongle", "../images/dongle.svg", "USB dongle", "Not detected", true]);
+        compare(rows({ok: true, usb: {adapter: "multiple"}, bluetooth: null}, "es_CL"),
+                [["dongle", "../images/dongle.svg", "Dongle USB", "Más de uno detectado", false]]);
+        // The rows name the links only; the battery is on the Power tab.
         const battery = {percent: 65, status: "Charging", cable: true, voltage_mv: 4123};
-        compare(Output.detailRows(linked("connected", null, battery), "en_US"),
-                [["USB dongle", "Detected"], ["2.4 GHz link", "Connected"]]);
+        compare(Output.connectionRows(linked("connected", null, battery), "en_US").length, 1);
     }
     function test_power_rows() {
         compare(Output.powerRows(null, null, "en_US"), []);
@@ -373,38 +401,33 @@ TestCase {
     function test_headset_card_lines() {
         const usb = {state: "connected", transport: "usb"};
         const discharging = {percent: 80, state: "Discharging"};
+        // The card exists only with a confirmed link and does not say so: the
+        // name, then the battery labelled with its charge state.
         compare(Output.hero(usb, discharging, false, "en_US"),
-                {headline: "Connected", percent: "80%", line: "USB dongle",
+                {title: "Barracuda X", status: "", percent: "80%", line: "Battery",
                  accessible: "Connected, 80% battery, USB dongle"});
         compare(Output.hero(usb, discharging, false, "es_CL"),
-                {headline: "Conectado", percent: "80" + nbsp + "%", line: "Dongle USB",
+                {title: "Barracuda X", status: "", percent: "80" + nbsp + "%", line: "Batería",
                  accessible: "Conectado, 80" + nbsp + "% de batería, dongle USB"});
         compare(Output.hero({state: "connected", transport: "bluetooth"}, {percent: 65, state: "Charging"}, false, "en_US"),
-                {headline: "Connected", percent: "65%", line: "Bluetooth · Charging",
+                {title: "Barracuda X", status: "", percent: "65%", line: "Battery · Charging",
                  accessible: "Connected, 65% battery, Bluetooth, charging"});
         compare(Output.hero({state: "connected", transport: "both"}, {percent: 8, state: "Discharging"}, false, "es_CL"),
-                {headline: "Conectado", percent: "8" + nbsp + "%", line: "Dongle USB y Bluetooth · Batería baja",
+                {title: "Barracuda X", status: "", percent: "8" + nbsp + "%", line: "Batería · Baja",
                  accessible: "Conectado, 8" + nbsp + "% de batería, dongle USB y Bluetooth, batería baja"});
-        compare(Output.hero({state: "connected", transport: "both"}, {percent: 100, state: "FullyCharged"}, false, "en_US").line,
-                "USB dongle and Bluetooth · Fully charged");
+        compare(Output.hero(usb, {percent: 8, state: "Discharging"}, false, "en_US").line, "Battery · Low");
+        compare(Output.hero(usb, {percent: 100, state: "FullyCharged"}, false, "en_US").line, "Battery · Fully charged");
+        compare(Output.hero(usb, {percent: 100, state: "FullyCharged"}, false, "es_CL").line, "Batería · Carga completa");
+        compare(Output.hero(usb, {percent: 65, state: "Charging"}, false, "es_CL").line, "Batería · Cargando");
         // Without a reading the line says so and there is no percentage.
         compare(Output.hero(usb, null, false, "en_US"),
-                {headline: "Connected", percent: "", line: "USB dongle · Battery unavailable",
+                {title: "Barracuda X", status: "", percent: "", line: "Battery unavailable",
                  accessible: "Connected, USB dongle, battery unavailable"});
-        compare(Output.hero(usb, null, false, "es_CL").line, "Dongle USB · Batería no disponible");
-        // A command running on the headset replaces the state.
-        compare(Output.hero(usb, discharging, true, "en_US").headline, "Turning off…");
-        compare(Output.hero(usb, discharging, true, "es_CL").headline, "Apagando…");
+        compare(Output.hero(usb, null, false, "es_CL").line, "Batería no disponible");
+        // Only a command running on the headset adds a status.
+        compare(Output.hero(usb, discharging, true, "en_US").status, "Turning off…");
+        compare(Output.hero(usb, discharging, true, "es_CL").status, "Apagando…");
         compare(Output.hero(usb, discharging, true, "es_CL").accessible, "Apagando…, 80" + nbsp + "% de batería, dongle USB");
-    }
-    function test_transport_glyphs_beside_the_artwork() {
-        compare(Output.transportEmblems({state: "connected", transport: "usb"}), ["../images/dongle.svg"]);
-        compare(Output.transportEmblems({state: "connected", transport: "bluetooth"}), ["network-bluetooth-symbolic"]);
-        // Bottom first: the dongle, then Bluetooth above it.
-        compare(Output.transportEmblems({state: "connected", transport: "both"}),
-                ["../images/dongle.svg", "network-bluetooth-symbolic"]);
-        for (const state of ["disconnected", "unknown", "no-adapter", "unavailable", "checking"])
-            compare(Output.transportEmblems({state: state, transport: "usb"}), []);
     }
     // Each state without a confirmed link has its own words and artwork.
     function test_placeholders_keep_states_distinct() {
@@ -477,14 +500,6 @@ TestCase {
         // Pairing and power-off never run together; pairing would win.
         compare(Output.placeholder(linked("unknown"), Output.connection(linked("unknown")), null, true, true,
                                    "en_US").state, "pairing");
-    }
-    function test_detail_rows() {
-        compare(Output.detailRows(null, "en_US"), []);
-        compare(Output.detailRows({ok: false}, "en_US"), []);
-        compare(Output.detailRows(linked("connected", {state: "disconnected"}), "es_CL"),
-                [["Dongle USB", "Detectado"], ["Enlace 2,4 GHz", "Conectado"], ["Bluetooth", "No conectado"]]);
-        compare(Output.detailRows({ok: true, usb: {adapter: "missing"}, bluetooth: {state: "connected"}}, "en_US"),
-                [["USB dongle", "Not detected"], ["Bluetooth", "Connected"]]);
     }
     function test_tooltip_is_one_line() {
         const usb = Output.connection(linked("connected"));

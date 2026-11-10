@@ -224,7 +224,6 @@ Item {
                 target.activeView = true
                 target.dismissedNotice = ""
                 target.pendingAddress = ""
-                findChild(target, "hero").expanded = false
                 target.header.currentTab = 0
                 const sound = findChild(target, "soundPage")
                 sound.dragging = 0
@@ -326,8 +325,9 @@ Item {
             verify(!findChild(trayView.header, "titleRow").visible)
             for (const locale of ["en_US", "es_CL"]) {
                 host.localeName = locale
-                compare([0, 1, 2].map(index => tab(view, index).text),
-                        locale === "en_US" ? ["Headset", "Sound", "Power"] : ["Auricular", "Sonido", "Energía"])
+                compare([0, 1, 2, 3].map(index => tab(view, index).text),
+                        locale === "en_US" ? ["Headset", "Connections", "Sound", "Power"]
+                                           : ["Auricular", "Conexiones", "Sonido", "Energía"])
             }
             host.localeName = "en_US"
             // Each showing opens on Headset.
@@ -335,12 +335,21 @@ Item {
             verify(findChild(view, "bodyScroll").visible)
             verify(!findChild(view, "soundPage").visible)
             verify(!findChild(view, "powerPage").visible)
+            // Connections shares the Headset tab's list.
             mouseClick(tab(view, 1))
             compare(view.currentTab, 1)
-            verify(!findChild(view, "bodyScroll").visible)
-            verify(findChild(view, "soundPage").visible)
+            verify(findChild(view, "bodyScroll").visible)
+            verify(!findChild(view, "hero").visible)
+            verify(findChild(view, "connection-dongle").visible)
             mouseClick(tab(view, 2))
             compare(view.currentTab, 2)
+            verify(!findChild(view, "bodyScroll").visible)
+            verify(findChild(view, "soundPage").visible)
+            // Four tabs share the heading's width, the last one inside it.
+            const last = tab(view, 3)
+            tryVerify(() => last.mapToItem(view, last.width, 0).x <= view.width + 0.5)
+            mouseClick(last)
+            compare(view.currentTab, 3)
             verify(findChild(view, "powerPage").visible)
             verify(!findChild(view, "soundPage").visible)
             view.activeView = false
@@ -349,7 +358,7 @@ Item {
             compare(tabBar.currentIndex, 0)
             verify(findChild(view, "bodyScroll").visible)
             // A lost link closes the tabs; it comes back on Headset.
-            mouseClick(tab(view, 2))
+            mouseClick(tab(view, 3))
             host.status = linked("unknown")
             verify(!tabBar.visible)
             verify(placeholder().visible)
@@ -365,7 +374,7 @@ Item {
         function test_sound_profile_is_sent_when_chosen() {
             host.status = linked("connected")
             read({preset: 8, bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], standby: 15})
-            view.header.currentTab = 1
+            view.header.currentTab = 2
             const page = findChild(view, "soundPage")
             const row = findChild(page, "profile")
             const profile = row.control
@@ -457,7 +466,7 @@ Item {
         function test_sound_tab_help() {
             host.status = linked("connected")
             read({preset: 7, standby: 15, dnd: false, gaming: false, devices: []})
-            view.header.currentTab = 1
+            view.header.currentTab = 2
             // One help on this tab, in the Equalizer heading.
             const helps = findAll(view, item => item.toolTipText !== undefined && item.visible)
             compare(helps.length, 1)
@@ -470,14 +479,14 @@ Item {
                     + "cambio se envía al momento. Con Personalizado, cada banda es relativa y 0 es neutro. El perfil "
                     + "Juegos no es el modo gaming Bluetooth.")
             host.localeName = "en_US"
-            view.header.currentTab = 2
+            view.header.currentTab = 3
             compare(findAll(view, item => item.toolTipText !== undefined && item.visible).length, 0)
         }
         function test_custom_bands_are_sent_once_they_rest() {
             const curve = [2, 1, 0, -1, 0, 1, 2, 3, 1, 0]
             host.status = linked("connected")
             read({preset: 255, bands: curve.slice(), standby: 15})
-            view.header.currentTab = 1
+            view.header.currentTab = 2
             const page = findChild(view, "soundPage")
             const bands = findChild(page, "customBands")
             const reset = findChild(page, "resetBands")
@@ -587,7 +596,7 @@ Item {
             host.status = linked("connected", null, {percent: 65, status: "Discharging", cable: false, voltage_mv: 3920})
             host.battery = {percent: 65, state: "Discharging"}
             read({preset: 7, standby: 15})
-            view.header.currentTab = 2
+            view.header.currentTab = 3
             const page = findChild(view, "powerPage")
             const keys = () => findAll(page, item => item.objectName === "valueLabel" && item.visible).map(item => item.text)
             const values = () => findAll(page, item => item.objectName === "valueText" && item.visible).map(item => item.text)
@@ -683,140 +692,122 @@ Item {
             host.status = linked("connected")
             host.battery = {percent: 80, state: "Discharging"}
             const hero = findChild(view, "hero")
-            const headline = findChild(hero, "heroHeadline")
+            const title = findChild(hero, "heroTitle")
+            const status = findChild(hero, "heroStatus")
             const percent = findChild(hero, "heroPercent")
             const bar = findChild(hero, "heroBattery")
             const line = findChild(hero, "heroLine")
-            const glyphs = () => findAll(hero, item => item.objectName === "artworkGlyph")
             verify(hero.visible)
             verify(!view.showPlaceholder)
             verify(!findChild(view, "placeholderLoader").active)
-            compare(headline.text, "Connected")
-            compare(headline.level, 2)
+            // The name, not the state: the card exists only with a confirmed link.
+            compare(title.text, "Barracuda X")
+            compare(title.level, 2)
+            verify(!status.visible)
+            compare(line.text, "Battery")
             compare(percent.text, "80%")
-            compare(percent.level, 2)
             verify(bar.visible)
             compare(bar.value, 80)
-            compare(line.text, "USB dongle")
+            // The percentage sits on the bar's label row, at its end.
+            tryVerify(() => yOf(bar) > yOf(percent))
+            tryVerify(() => percent.mapToItem(hero, percent.width, 0).x >= bar.mapToItem(hero, bar.width, 0).x - 1)
             compare(hero.Accessible.name, "Connected, 80% battery, USB dongle")
-            // The logo, with the transport glyph beside it.
             compare(String(findChild(hero, "artworkIcon").source),
                     Qt.resolvedUrl("../plasmoid/contents/images/logo.svg").toString())
             verify(!findChild(hero, "artworkEmblem").visible)
-            tryCompare(glyphs(), "length", 1)
-            // The dongle's drawing, wider than a glyph and as tall.
-            compare(glyphs()[0].source, "../images/dongle.svg")
-            verify(glyphs()[0].width > glyphs()[0].height)
-            compare(glyphs()[0].height, Kirigami.Units.iconSizes.small)
-            const artwork = findChild(hero, "heroArtwork")
-            verify(glyphs()[0].mapToItem(artwork, 0, 0).x >= artwork.drawingRight)
             host.localeName = "es_CL"
-            compare(headline.text, "Conectado")
+            compare(title.text, "Barracuda X")
+            compare(line.text, "Batería")
             compare(percent.text, "80" + nbsp + "%")
-            compare(line.text, "Dongle USB")
             compare(hero.Accessible.name, "Conectado, 80" + nbsp + "% de batería, dongle USB")
             host.localeName = "en_US"
-            // Bluetooth, and both links with two glyphs, the dongle at the bottom.
-            host.status = bluetoothOnly("connected")
-            compare(line.text, "Bluetooth")
-            tryCompare(glyphs(), "length", 1)
-            compare(glyphs()[0].source, "network-bluetooth-symbolic")
-            host.status = linked("connected", {state: "connected", address: "A1:B2:C3:D4:E5:F6"})
-            compare(line.text, "USB dongle and Bluetooth")
-            tryCompare(glyphs(), "length", 2)
-            const usbGlyph = glyphs().find(glyph => glyph.source === "../images/dongle.svg")
-            const btGlyph = glyphs().find(glyph => glyph.source === "network-bluetooth-symbolic")
-            tryVerify(() => usbGlyph.mapToItem(hero, 0, 0).y > btGlyph.mapToItem(hero, 0, 0).y)
-            host.localeName = "es_CL"
-            compare(line.text, "Dongle USB y Bluetooth")
-            host.localeName = "en_US"
-            // The charge state follows the transport.
-            host.status = linked("connected")
+            // The charge state labels the bar.
             host.battery = {percent: 60, state: "Charging"}
-            compare(line.text, "USB dongle · Charging")
+            compare(line.text, "Battery · Charging")
             host.battery = {percent: 100, state: "FullyCharged"}
-            compare(line.text, "USB dongle · Fully charged")
+            compare(line.text, "Battery · Fully charged")
             host.battery = {percent: 8, state: "Discharging"}
-            compare(line.text, "USB dongle · Low battery")
+            compare(line.text, "Battery · Low")
             compare(percent.text, "8%")
             host.localeName = "es_CL"
-            compare(line.text, "Dongle USB · Batería baja")
+            compare(line.text, "Batería · Baja")
             host.localeName = "en_US"
             // Without a reading there is no percentage or bar, and the line says so.
             host.battery = null
             verify(!percent.visible)
             verify(!bar.visible)
-            compare(line.text, "USB dongle · Battery unavailable")
-        }
-        function test_headset_card_details() {
-            host.status = linked("connected", null, {percent: 65, status: "Charging", cable: true, voltage_mv: 4123})
-            host.battery = {percent: 65, state: "Charging"}
-            const hero = findChild(view, "hero")
-            const details = findChild(hero, "heroDetails")
-            const expand = findChild(hero, "heroExpand")
-            const keys = () => findAll(details, item => item.objectName === "detailKey").map(item => item.text)
-            const values = () => findAll(details, item => item.objectName === "detailValue").map(item => item.text)
-            verify(hero.expandable)
-            verify(!details.visible)
-            verify(expand.visible)
-            compare(expand.icon.name, "expand")
-            compare(expand.text, "Expand")
-            compare(hero.Accessible.description, "Collapsed")
-            // A click anywhere on the card opens the details.
-            mouseClick(hero, hero.width * 0.4, hero.height / 2)
-            verify(hero.expanded)
-            verify(details.visible)
-            compare(expand.icon.name, "collapse")
-            compare(expand.text, "Collapse")
-            compare(hero.Accessible.description, "Expanded")
-            // The connection only; the battery readings are on the Power tab.
-            tryCompare(keys(), "length", 2)
-            compare(keys(), ["USB dongle:", "2.4 GHz link:"])
-            compare(values(), ["Detected", "Connected"])
-            host.localeName = "es_CL"
-            compare(expand.text, "Contraer")
-            compare(hero.Accessible.description, "Expandido")
-            tryCompare(values(), "length", 2)
-            compare(keys(), ["Dongle USB:", "Enlace 2,4 GHz:"])
-            compare(values(), ["Detectado", "Conectado"])
-            host.localeName = "en_US"
-            // The expand button toggles too.
-            mouseClick(expand)
-            verify(!hero.expanded)
-            compare(hero.Accessible.description, "Collapsed")
-            host.localeName = "es_CL"
-            compare(expand.text, "Expandir")
-            compare(hero.Accessible.description, "Contraído")
-            host.localeName = "en_US"
-            mouseClick(expand)
-            verify(hero.expanded)
-            // Nor does a discharging battery add a row here.
-            host.battery = {percent: 65, state: "Discharging"}
-            wait(20)
-            compare(keys().length, 2)
-            // Closing the popup folds them again.
-            view.activeView = false
-            verify(!hero.expanded)
-            view.activeView = true
+            compare(line.text, "Battery unavailable")
+            // The card only reports.
+            compare(view.bodyControls.indexOf(hero), -1)
             // While the headset turns off, the card says so and waits.
-            mouseClick(expand)
-            verify(hero.expanded)
+            host.battery = {percent: 80, state: "Discharging"}
             host.powerBusy = true
-            compare(findChild(hero, "heroHeadline").text, "Turning off…")
+            verify(status.visible)
+            compare(status.text, "Turning off…")
+            compare(title.text, "Barracuda X")
             verify(findChild(hero, "heroBusy").visible)
             verify(findChild(hero, "heroBusy").running)
-            verify(!expand.visible)
-            verify(!hero.expanded)
-            verify(!details.visible)
-            verify(!hero.expandable)
-            mouseClick(hero, hero.width * 0.4, hero.height / 2)
-            verify(!hero.expanded)
             host.localeName = "es_CL"
-            compare(findChild(hero, "heroHeadline").text, "Apagando…")
+            compare(status.text, "Apagando…")
             host.localeName = "en_US"
             host.powerBusy = false
+            verify(!status.visible)
             verify(!findChild(hero, "heroBusy").visible)
-            compare(findChild(hero, "heroHeadline").text, "Connected")
+        }
+        function test_connection_rows() {
+            const row = key => findChild(view, "connection-" + key)
+            const shown = () => findAll(view, item => String(item.objectName).startsWith("connection-") && item.visible)
+            host.status = linked("connected")
+            host.battery = {percent: 80, state: "Discharging"}
+            // On the Connections tab, off the Headset tab, under their heading.
+            const header = findChild(view, "linksHeader")
+            compare(shown().length, 0)
+            verify(!header.visible)
+            view.header.currentTab = 1
+            verify(header.visible)
+            compare(header.text, "Links")
+            tryVerify(() => yOf(row("dongle")) > yOf(header))
+            tryCompare(shown(), "length", 1)
+            compare(findChild(row("dongle"), "connectionTitle").text, "USB dongle")
+            compare(findChild(row("dongle"), "connectionState").text, "2.4 GHz")
+            verify(findChild(row("dongle"), "connectionState").visible)
+            compare(String(findChild(row("dongle"), "connectionArtwork").source),
+                    Qt.resolvedUrl("../plasmoid/contents/images/dongle.svg").toString())
+            compare(findChild(row("dongle"), "connectionArtwork").width, Kirigami.Units.iconSizes.large)
+            compare(findChild(row("dongle"), "connectionArtwork").opacity, 1)
+            compare(row("dongle").Accessible.name, "USB dongle, 2.4 GHz, connected")
+            host.localeName = "es_CL"
+            compare(header.text, "Enlaces")
+            compare(findChild(row("dongle"), "connectionTitle").text, "Dongle USB")
+            compare(findChild(row("dongle"), "connectionState").text, "2,4 GHz")
+            compare(row("dongle").Accessible.name, "Dongle USB, 2,4 GHz, conectado")
+            host.localeName = "en_US"
+            // Bluetooth gets its row; the dongle's link down dims the drawing.
+            host.status = linked("disconnected", {state: "connected", address: "A1:B2:C3:D4:E5:F6"})
+            tryCompare(shown(), "length", 2)
+            compare(findChild(row("bluetooth"), "connectionTitle").text, "Bluetooth")
+            // A working Bluetooth link shows the headset's address, not a state.
+            compare(findChild(row("bluetooth"), "connectionState").text, "A1:B2:C3:D4:E5:F6")
+            verify(findChild(row("bluetooth"), "connectionState").visible)
+            // Without an address the row is its title alone.
+            host.status = linked("disconnected", {state: "connected"})
+            verify(!findChild(row("bluetooth"), "connectionState").visible)
+            host.status = linked("disconnected", {state: "connected", address: "A1:B2:C3:D4:E5:F6"})
+            compare(row("bluetooth").Accessible.name, "Bluetooth, connected")
+            compare(findChild(row("bluetooth"), "connectionArtwork").source, "preferences-system-bluetooth")
+            tryVerify(() => yOf(row("bluetooth")) > yOf(row("dongle")))
+            compare(findChild(row("dongle"), "connectionState").text, "2.4 GHz · Disconnected")
+            tryCompare(findChild(row("dongle"), "connectionArtwork"), "opacity", 0.5)
+            // An unconfirmed link is not a disconnection.
+            host.status = linked("unknown", {state: "connected", address: "A1:B2:C3:D4:E5:F6"})
+            compare(findChild(row("dongle"), "connectionState").text, "2.4 GHz · Not confirmed")
+            tryCompare(findChild(row("dongle"), "connectionArtwork"), "opacity", 1)
+            // Without a confirmed link there are no tabs and no rows.
+            host.status = linked("disconnected")
+            verify(view.showPlaceholder)
+            compare(shown().length, 0)
+            verify(!header.visible)
+            compare(view.connectionRows.length, 0)
         }
         function test_placeholder_for_every_state_without_a_link() {
             const loader = findChild(view, "placeholderLoader")
@@ -944,7 +935,7 @@ Item {
             host.status = linked("connected")
             host.powerBusy = true
             verify(!view.showPlaceholder)
-            compare(findChild(findChild(view, "hero"), "heroHeadline").text, "Turning off…")
+            compare(findChild(findChild(view, "hero"), "heroStatus").text, "Turning off…")
             host.powerBusy = false
         }
         function test_disconnected_placeholder_offers_pairing() {
@@ -1317,6 +1308,8 @@ Item {
                           {address: "0a0b0c0d0e02", name: "marduk", active: false},
                           {address: "0a0b0c0d0e03", name: "caladan", active: false}]
             read({dnd: false, gaming: false, devices: idle})
+            view.header.currentTab = 1
+            trayView.header.currentTab = 1
             tryCompare(rows(trayView), "length", 3)
             const list = findChild(trayView, "deviceList")
             const devices = rows(trayView)
@@ -1339,6 +1332,8 @@ Item {
         function test_bluetooth_devices() {
             host.status = linked("connected")
             read({dnd: false, gaming: false, devices: [phone, laptop]})
+            // The devices are on the Connections tab.
+            view.header.currentTab = 1
             const header = findChild(view, "devicesHeader")
             const note = findChild(view, "devicesNote")
             verify(header.visible)
@@ -1411,9 +1406,8 @@ Item {
             compare(note.text, "Switching devices needs Bluetooth gaming mode to be read first.")
             verify(!rows()[1].defaultActionButtonAction.enabled)
             // The note sits on the device titles' column.
-            compare(note.mapToItem(findChild(view, "deviceList").contentItem, 0, 0).x
-                    - findChild(view, "modesHeader").mapToItem(findChild(view, "deviceList").contentItem, 0, 0).x,
-                    view.titleColumn)
+            const content = findChild(view, "deviceList").contentItem
+            tryVerify(() => note.mapToItem(content, 0, 0).x - header.mapToItem(content, 0, 0).x === view.titleColumn)
             // An empty list explains itself.
             read({dnd: false, gaming: false, devices: []})
             tryCompare(rows(), "length", 0)
@@ -1657,95 +1651,108 @@ Item {
             verify(view.noticeShown)
         }
         function test_sections_in_dependency_order() {
-            host.status = linked("connected")
+            host.status = linked("connected", {state: "connected", address: "A1:B2:C3:D4:E5:F6"})
             host.battery = {percent: 80, state: "Discharging"}
             host.powerError = "Couldn't turn off the headset."
-            read({dnd: false, gaming: false, devices: [phone, laptop]})
-            tryCompare(rows(), "length", 2)
-            const order = [findChild(view, "hero"), feedback(), findChild(view, "modesHeader"), findChild(view, "dnd"),
-                           findChild(view, "gaming"), findChild(view, "devicesHeader"), rows()[0], rows()[1]]
-            for (let index = 1; index < order.length; ++index)
-                tryVerify(() => yOf(order[index]) > yOf(order[index - 1]), 5000, order[index].objectName)
+            // Read over Bluetooth, so that the gaming row is laid out too.
+            read({dnd: false, gaming: false, devices: [phone, laptop]}, "bluetooth")
+            const helps = () => findAll(view, item => item.toolTipText !== undefined && item.visible)
+            const inOrder = order => {
+                for (let index = 1; index < order.length; ++index)
+                    tryVerify(() => yOf(order[index]) > yOf(order[index - 1]), 5000, order[index].objectName)
+            }
+            // Headset: the card, the feedback slot and what can be switched.
+            inOrder([findChild(view, "hero"), feedback(), findChild(view, "modesHeader"), findChild(view, "dnd"),
+                     findChild(view, "gaming")])
+            compare(rows().length, 0)
+            verify(!findChild(view, "devicesHeader").visible)
             compare(findChild(view, "modesHeader").text, "Modes")
             host.localeName = "es_CL"
             compare(findChild(view, "modesHeader").text, "Modos")
             host.localeName = "en_US"
-            // One contextual help in the popup, in the Modes heading.
-            const helps = findAll(view, item => item.toolTipText !== undefined && item.visible)
-            compare(helps.length, 1)
-            compare(helps[0].objectName, "modesHelp")
-            compare(helps[0].toolTipText, "Do not disturb keeps calls from a phone connected over Bluetooth from "
+            // One contextual help per tab; on Headset, in the Modes heading.
+            compare(helps().length, 1)
+            compare(helps()[0].objectName, "modesHelp")
+            compare(helps()[0].toolTipText, "Do not disturb keeps calls from a phone connected over Bluetooth from "
                     + "interrupting the dongle's audio; desktop notifications are not affected. Bluetooth gaming mode "
                     + "lowers Bluetooth audio delay; it is not the Game sound profile, is shown and changed only over "
-                    + "Bluetooth, and turns off when the headset does. "
-                    + "Bluetooth Devices (Razer Quick Connect) moves the headset's Bluetooth link to a device it already "
-                    + "knows, while gaming mode is off.")
+                    + "Bluetooth, and turns off when the headset does.")
             host.localeName = "es_CL"
-            compare(helps[0].toolTipText, "No molestar evita que las llamadas de un teléfono conectado por Bluetooth "
+            compare(helps()[0].toolTipText, "No molestar evita que las llamadas de un teléfono conectado por Bluetooth "
                     + "interrumpan el audio del dongle; no afecta a las notificaciones del escritorio. El modo gaming "
                     + "Bluetooth reduce el retraso del audio Bluetooth; no es el perfil de sonido Juegos, solo se muestra "
-                    + "y se cambia por Bluetooth, y se desactiva al apagar el auricular. Dispositivos Bluetooth (Quick Connect de Razer) mueve la conexión Bluetooth del "
-                    + "auricular a un dispositivo que ya conoce, con el modo gaming desactivado.")
+                    + "y se cambia por Bluetooth, y se desactiva al apagar el auricular.")
+            host.localeName = "en_US"
+            // Connections: the feedback slot, the links, then the devices.
+            view.header.currentTab = 1
+            tryCompare(rows(), "length", 2)
+            verify(!findChild(view, "hero").visible)
+            verify(!findChild(view, "modesHeader").visible)
+            inOrder([feedback(), findChild(view, "linksHeader"), findChild(view, "connection-dongle"),
+                     findChild(view, "connection-bluetooth"), findChild(view, "devicesHeader"), rows()[0], rows()[1]])
+            compare(helps().length, 1)
+            compare(helps()[0].objectName, "devicesHelp")
+            compare(helps()[0].toolTipText, "Razer Quick Connect moves the headset's Bluetooth link to a device it "
+                    + "already knows, while Bluetooth gaming mode is off.")
+            host.localeName = "es_CL"
+            compare(helps()[0].toolTipText, "Quick Connect de Razer mueve la conexión Bluetooth del auricular a un "
+                    + "dispositivo que ya conoce, con el modo gaming Bluetooth desactivado.")
             host.localeName = "en_US"
         }
         function test_keyboard_moves_through_the_body() {
             host.status = linked("connected", {state: "connected", address: "A1:B2:C3:D4:E5:F6"})
             host.battery = {percent: 80, state: "Discharging"}
             read({dnd: false, gaming: false, devices: [phone, laptop]}, "bluetooth")
-            tryCompare(rows(), "length", 2)
-            const hero = findChild(view, "hero")
             const dnd = findChild(view, "dnd").control
             const gaming = findChild(view, "gaming").control
             const list = findChild(view, "deviceList")
             const plus = findChild(view.header, "primaryAction")
+            const tabs = findChild(view.header, "tabBar")
             plus.forceActiveFocus(Qt.TabFocusReason)
-            // Down from the heading enters the body at the headset card,
-            // highlighted.
-            keyClick(Qt.Key_Down)
-            tryVerify(() => hero.activeFocus)
-            verify(hero.visualFocus)
-            verify(hero.background.children[0].visible)
+            // Down from the heading enters the body at its first control: the
+            // headset card only reports.
             keyClick(Qt.Key_Down)
             tryVerify(() => dnd.activeFocus)
             keyClick(Qt.Key_Down)
             tryVerify(() => gaming.activeFocus)
+            // Down past the last control does not wrap to the top.
             keyClick(Qt.Key_Down)
-            tryVerify(() => list.currentIndex === 0 && list.currentItem.activeFocus)
+            wait(50)
+            verify(gaming.activeFocus)
             // Up walks back to the heading.
             keyClick(Qt.Key_Up)
-            tryVerify(() => gaming.activeFocus)
-            keyClick(Qt.Key_Up)
             tryVerify(() => dnd.activeFocus)
-            keyClick(Qt.Key_Up)
-            tryVerify(() => hero.activeFocus)
             // Above the body are the tabs, the heading's row nearest to it.
             keyClick(Qt.Key_Up)
-            tryVerify(() => findChild(view.header, "tabBar").currentItem.activeFocus)
+            tryVerify(() => tabs.currentItem.activeFocus)
             // A control that cannot be used is skipped.
             read({dnd: false, gaming: false, devices: [phone, laptop]}, "usb")
             plus.forceActiveFocus(Qt.TabFocusReason)
             keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
             tryVerify(() => dnd.activeFocus)
             keyClick(Qt.Key_Down)
-            tryVerify(() => list.currentIndex === 0 && list.currentItem.activeFocus)
-            // Down past the last control does not wrap to the top.
-            read({dnd: false, gaming: false, devices: []}, "usb")
-            dnd.forceActiveFocus(Qt.TabFocusReason)
-            keyClick(Qt.Key_Down)
             wait(50)
-            verify(!hero.activeFocus)
-            // In the tray, which draws the title row, Up from the card goes to
-            // the tabs, all the view's own heading holds there.
-            const trayHero = findChild(trayView, "hero")
-            trayHero.forceActiveFocus(Qt.TabFocusReason)
+            verify(dnd.activeFocus)
+            // On Connections the link rows only report: Down enters the
+            // devices, and Up from the first returns to the tabs.
+            view.header.currentTab = 1
+            tryCompare(rows(), "length", 2)
+            plus.forceActiveFocus(Qt.TabFocusReason)
+            keyClick(Qt.Key_Down)
+            tryVerify(() => list.currentIndex === 0 && list.currentItem.activeFocus)
+            keyClick(Qt.Key_Down)
+            tryVerify(() => list.currentIndex === 1 && list.currentItem.activeFocus)
+            keyClick(Qt.Key_Up)
+            tryVerify(() => list.currentIndex === 0)
+            keyClick(Qt.Key_Up)
+            tryVerify(() => tabs.currentItem.activeFocus)
+            view.header.currentTab = 0
+            // In the tray, which draws the title row, Up from the first
+            // control goes to the tabs, all the view's own heading holds there.
+            const trayDnd = findChild(trayView, "dnd").control
+            trayDnd.forceActiveFocus(Qt.TabFocusReason)
             keyClick(Qt.Key_Up)
             tryVerify(() => findChild(trayView.header, "tabBar").currentItem.activeFocus)
-            // While the headset turns off, the card takes no focus.
-            host.powerBusy = true
-            plus.forceActiveFocus(Qt.TabFocusReason)
-            compare(view.bodyControls.indexOf(hero), -1)
-            host.powerBusy = false
         }
         function test_tray_body_scrolls_without_covering_rows() {
             // The tray gives every applet the same popup size; with more rows
@@ -1755,6 +1762,7 @@ Item {
             host.battery = {percent: 80, state: "Discharging"}
             read({dnd: true, gaming: true, devices: [phone, laptop, tablet,
                   {address: "112233445566", name: "Desk", active: false}]}, "bluetooth")
+            trayView.header.currentTab = 1
             const scroll = findChild(trayView, "bodyScroll")
             const list = findChild(trayView, "deviceList")
             for (const height of [Kirigami.Units.gridUnit * 14, Kirigami.Units.gridUnit * 40]) {
@@ -1763,7 +1771,8 @@ Item {
                 tryCompare(scroll.PC3.ScrollBar.vertical, "visible", scrolling)
                 // Rows far below a short view are not created yet.
                 tryVerify(() => scrolling ? rows(trayView).length > 0 : rows(trayView).length === 4)
-                for (const row of rows(trayView).concat([findChild(trayView, "dnd"), findChild(trayView, "hero")]))
+                for (const row of rows(trayView).concat([findChild(trayView, "connection-dongle"),
+                                                         findChild(trayView, "devicesHeader")]))
                     tryVerify(() => row.mapToItem(list, row.width, 0).x <= list.width - list.rightMargin + 0.5,
                               5000, row.objectName)
                 verify(list.contentWidth <= list.width)
@@ -1781,16 +1790,23 @@ Item {
             compare(list.contentY, list.originY - list.topMargin)
         }
         function test_fixed_popup_size() {
-            // 24 by 24 grid units in a panel and in the tray, in every state.
+            // 24 by 21 grid units in a panel and in the tray, in every state.
             for (const state of [null, linked("connected"), linked("disconnected")]) {
                 host.status = state
                 for (const target of [view, trayView]) {
                     compare(target.implicitWidth, Kirigami.Units.gridUnit * 24)
-                    compare(target.implicitHeight, Kirigami.Units.gridUnit * 24)
+                    compare(target.implicitHeight, Kirigami.Units.gridUnit * 21)
                     compare(target.Layout.minimumWidth, Kirigami.Units.gridUnit * 24)
-                    compare(target.Layout.minimumHeight, Kirigami.Units.gridUnit * 24)
+                    compare(target.Layout.minimumHeight, Kirigami.Units.gridUnit * 21)
                 }
             }
+            // The tallest tab, Sound with its ten bands, fits without scrolling.
+            host.status = linked("connected")
+            read({preset: 255, bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], standby: 15})
+            view.header.currentTab = 2
+            const sound = findChild(view, "soundPage")
+            tryVerify(() => sound.contentHeight > 0)
+            verify(sound.contentHeight <= sound.height)
         }
         function test_no_configuration_window() {
             // The popup's tabs replace the configuration window's page.

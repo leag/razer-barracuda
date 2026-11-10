@@ -16,15 +16,19 @@ user in their conversation language. Read README.md and docs/PROTOCOL.md first.
   high-priority action) and More actions holds Turn Off Headset…, a separator
   and Configure Audio Devices…. There is no configuration window and no gear.
   Pair Headset… and Turn Off Headset… ask first in a Kirigami.PromptDialog
-  with focus on Cancel. With a confirmed link the heading has three tabs, as
+  with focus on Cancel. With a confirmed link the heading has four tabs, as
   the volume applet's Devices and Applications, and each showing opens on the
-  first: Headset (a headset card with artwork, state, battery, transport and
-  expandable connection details; Modes with Do Not Disturb and Bluetooth
-  gaming mode switch rows, the gaming row shown only when the settings are
-  read over Bluetooth, since it is set only there and the headset clears it
-  at power-off; and
+  first: Headset (a headset card with artwork, the headset's name and the
+  battery bar labelled with its charge state, which only reports and takes no
+  focus; and Modes with Do Not Disturb and Bluetooth gaming mode switch rows,
+  the gaming row shown only when the settings are read over Bluetooth, since
+  it is set only there and the headset clears it at power-off), Connections
+  (Links, one row per link with its artwork, the dongle and Bluetooth when
+  BlueZ reports the headset, where a working link is not labelled "Connected",
+  only a problem adds a word and a link known to be down dims its row; then
   Bluetooth Devices with Quick Connect rows), Sound (sound profile and, with
-  Custom, the ten bands) and Power (battery readings and idle shutdown). One
+  Custom, the ten bands) and Power (battery readings and idle shutdown).
+  Headset and Connections share one ListView. One
   settings read each time the full view is shown with a confirmed link serves
   every tab. Every change is sent at once, with no Apply; the bands go once
   the pointer lets go and the levels rest, latest levels only, and a change

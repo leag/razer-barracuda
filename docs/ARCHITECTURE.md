@@ -31,15 +31,17 @@
   a `Kirigami.PromptDialog` (`HeadsetPrompt`) in the popup and run the
   existing CLI with `--yes` only after that confirmation; **Configure Audio
   Devices…** opens KDE's audio settings directly. The popup (`HeadsetView`, a
-  `PlasmaExtras.Representation`) has, with a confirmed link, three tabs in its
+  `PlasmaExtras.Representation`) has, with a confirmed link, four tabs in its
   heading's `TabBar`, which in the tray is all the view's own heading holds:
-  **Headset**, one `ListView` with the headset card (`HeroCard`,
-  `DetailsGrid`), the Modes switch rows (`ModeSwitch`) and the Bluetooth
-  Devices as `ExpandableListItem` rows; **Sound** (`SoundPage`), the sound
-  profile (`ChoiceRow`) and the custom bands; and **Power** (`PowerPage`), the
+  **Headset** and **Connections**, which share one `ListView`: on Headset its
+  header holds the headset card (`HeroCard`) and the Modes switch rows
+  (`ModeSwitch`); on Connections it holds the Links heading, one `ConnectionRow`
+  per link and the Bluetooth Devices heading, and the list rows are the devices as
+  `ExpandableListItem` rows; **Sound** (`SoundPage`), the sound profile
+  (`ChoiceRow`) and the custom bands; and **Power** (`PowerPage`), the
   battery readings (`ValueRow`) and idle shutdown. One `barracuda-headset`
-  status read each time the full view is shown with a confirmed link feeds all
-  three, and each change is one request sent at once; band edits wait for the
+  status read each time the full view is shown with a confirmed link feeds every
+  tab, and each change is one request sent at once; band edits wait for the
   pointer to let go and for any running request, latest levels only. Every
   other state, pairing and a power-off without a confirmed link show one
   `StatePlaceholder` and no tabs; its Disconnected state offers the pairing

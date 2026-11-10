@@ -88,28 +88,50 @@ function voltageText(millivolts, locale) {
     return (/^es([_-]|$)/i.test(locale) ? volts.replace(".", ",") : volts) + " V";
 }
 
-// Key/value rows of the headset card's details, empty until a status has been
-// read: the dongle, its 2.4 GHz link and Bluetooth. What the battery reports
-// is on the Power tab (powerRows).
-function detailRows(status, locale) {
+// The Connections section under the headset card, empty until a status has
+// been read: the dongle with its 2.4 GHz link, then Bluetooth when BlueZ
+// reports the headset, drawn with the colour Bluetooth icon KDE's settings
+// use. Each row names its artwork (as artwork() resolves it), title, the
+// line under it and the sentence a screen reader says. A working link does
+// not say "Connected": the dongle's line names its radio and Bluetooth's the
+// headset's address. Only a problem adds a word, and a link known to be down
+// dims the artwork. An unconfirmed link stays distinct from a disconnected
+// one. What the battery reports is on the Power tab (powerRows).
+function connectionRows(status, locale) {
     if (!status || !status.ok)
         return [];
     const usb = status.usb;
-    const rows = [[text("USB dongle", "Dongle USB", locale),
-        usb.adapter === "present" ? text("Detected", "Detectado", locale)
-            : usb.adapter === "multiple" ? text("More than one", "Más de uno", locale)
-            : text("Not detected", "No detectado", locale)]];
-    if (usb.adapter === "present")
-        rows.push([text("2.4 GHz link", "Enlace 2,4 GHz", locale),
-            !usb.driver ? text("Driver required", "Requiere driver", locale)
-                : usb.link === "connected" ? text("Connected", "Conectado", locale)
-                : usb.link === "disconnected" ? text("Disconnected", "Desconectado", locale)
-                : text("Not confirmed", "No confirmado", locale)]);
+    const connected = text("Connected", "Conectado", locale);
+    const radio = text("2.4 GHz", "2,4 GHz", locale);
+    const problem = word => radio + " · " + word;
+    const dongle = {key: "dongle", artwork: artwork("drive-removable-media-usb"),
+                    title: text("USB dongle", "Dongle USB", locale), dimmed: false};
+    if (usb.adapter === "multiple")
+        dongle.state = text("More than one detected", "Más de uno detectado", locale);
+    else if (usb.adapter !== "present") {
+        dongle.state = text("Not detected", "No detectado", locale);
+        dongle.dimmed = true;
+    } else if (!usb.driver)
+        dongle.state = problem(text("Driver required", "Requiere driver", locale));
+    else if (usb.link === "connected")
+        dongle.state = radio;
+    else if (usb.link === "disconnected") {
+        dongle.state = problem(text("Disconnected", "Desconectado", locale));
+        dongle.dimmed = true;
+    } else
+        dongle.state = problem(text("Not confirmed", "No confirmado", locale));
+    dongle.spoken = dongle.title + ", " + (usb.adapter === "present" && usb.driver && usb.link === "connected"
+        ? radio + ", " + connected.toLowerCase() : dongle.state);
+    const rows = [dongle];
     const bt = status.bluetooth;
-    if (bt)
-        rows.push(["Bluetooth", bt.state === "connected" ? text("Connected", "Conectado", locale)
+    if (bt) {
+        const state = bt.state === "connected" ? (bt.address || "")
             : bt.state === "disconnected" ? text("Not connected", "No conectado", locale)
-            : text("Unknown", "Desconocido", locale)]);
+            : text("Unknown", "Desconocido", locale);
+        rows.push({key: "bluetooth", artwork: "preferences-system-bluetooth", title: "Bluetooth", state: state,
+                   spoken: "Bluetooth, " + (bt.state === "connected" ? connected.toLowerCase() : state),
+                   dimmed: bt.state === "disconnected"});
+    }
     return rows;
 }
 
@@ -362,36 +384,31 @@ function transportPhrase(transport, locale) {
     }
 }
 
-// The headset card's words for a confirmed link: the state (or the command
-// running on the headset), the percentage beside it, the line under the
-// battery bar and one sentence for screen readers.
+// The headset card's words for a confirmed link. The card exists only with a
+// confirmed link, so it does not say "Connected": the headline is the
+// headset's name, the status beside it appears only while a command runs on
+// the headset, and the battery bar is labelled with its charge state. The
+// spoken sentence still names the state and the transport.
 function hero(value, battery, turningOff, locale) {
     const note = chargeNote(battery, locale);
-    const headline = turningOff ? text("Turning off…", "Apagando…", locale) : text("Connected", "Conectado", locale);
-    const spoken = [headline];
+    const state = turningOff ? text("Turning off…", "Apagando…", locale) : text("Connected", "Conectado", locale);
+    const spoken = [state];
     if (battery)
         spoken.push(text("%1 battery", "%1 de batería", locale).replace("%1", percentText(battery.percent, locale)));
     spoken.push(transportPhrase(value.transport, locale));
     if (note)
         spoken.push(note.toLowerCase());
+    const label = text("Battery", "Batería", locale);
     return {
-        headline: headline,
+        title: "Barracuda X",
+        status: turningOff ? state : "",
         percent: battery ? percentText(battery.percent, locale) : "",
-        line: transportText(value.transport, locale) + (note ? " · " + note : ""),
+        line: !battery ? note
+            : battery.state === "Charging" || battery.state === "FullyCharged" ? label + " · " + note
+            : lowBattery(battery) ? label + " · " + text("Low", "Baja", locale)
+            : label,
         accessible: spoken.join(", ")
     };
-}
-
-// Transport marks drawn beside the card's artwork, bottom first: the USB
-// dongle (the project's drawing, as artwork() names it), then the Bluetooth
-// glyph above it when both links are confirmed.
-function transportEmblems(value) {
-    const dongle = artwork("drive-removable-media-usb");
-    if (value.state !== "connected")
-        return [];
-    if (value.transport === "both")
-        return [dongle, "network-bluetooth-symbolic"];
-    return [value.transport === "bluetooth" ? "network-bluetooth-symbolic" : dongle];
 }
 
 // The whole-view message for every state without a confirmed link, and for

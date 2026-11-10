@@ -6,10 +6,25 @@
   the widget list show the project's headset logo
   (`plasmoid/contents/images/logo.svg`, a copy of `docs/logo.svg`) instead of
   Breeze's headset artwork. Panel and tray icons still use the theme's glyph.
-- The **USB dongle not detected** message and the headset card's USB mark draw
-  the 2022 dongle (`plasmoid/contents/images/dongle.svg`, a copy of
-  `docs/dongle-2022.svg`) instead of Breeze's USB drive, and the README shows the 2021 and 2022
+- The **USB dongle not detected** message draws the 2022 dongle
+  (`plasmoid/contents/images/dongle.svg`, a copy of `docs/dongle-2022.svg`)
+  instead of Breeze's USB drive, and the README shows the 2021 and 2022
   dongles side by side to tell them apart.
+- A second tab, **Connections**, has under **Links** one row for the USB
+  dongle, in its drawing, and one for Bluetooth when BlueZ reports the
+  headset, then the
+  **Bluetooth Devices** moved from the **Headset** tab, with the Quick Connect
+  help in their heading. The rows replace the headset card's transport marks,
+  transport line and expandable details, so the card only reports and no
+  longer takes focus. The tabs are **Headset**, **Connections**, **Sound** and
+  **Power**.
+- The popup is 21 grid units tall instead of 24, as much as the **Sound** tab
+  with its ten bands needs; longer device lists scroll.
+- The popup no longer repeats **Connected**: the card, shown only with a
+  confirmed link, is headed **Barracuda X** with the battery bar labelled by
+  its charge state, and a working link's row shows only **2.4 GHz** or the
+  headset's Bluetooth address. Only a problem adds a word, and a link known to
+  be down dims its row; screen readers still hear the state.
 - `docs/logo.svg` is drawn the same by Qt's SVG renderer as by browsers: the
   cushion mesh is dashed lines instead of a rotated pattern, the clip paths are
   masks and the microphone foam's grain is dashed rows instead of a turbulence

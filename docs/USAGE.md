@@ -43,10 +43,12 @@ battery or less while not charging. The tooltip is one line, for example
 (English/Spanish). The icon has no button frame on pointer hover; keyboard
 navigation retains the theme's focus indicator.
 
-Click opens the popup, 24 by 24 grid units in a panel and in the tray. Every
+Click opens the popup, 24 grid units wide and 21 tall, as tall as the **Sound**
+tab with its ten bands needs; in the tray, the tray sets the size of every
+applet's popup. Every
 function has one place and one visual form, taken from Plasma's own applets:
-the commands in the heading, and the headset, how it sounds and its battery on
-three tabs under it. No colour is added; states are told apart by their words,
+the commands in the heading, and the headset, how it sounds, its battery and its
+links on four tabs under it. No colour is added; states are told apart by their words,
 artwork, opacity and emblems.
 
 ### Heading and commands
@@ -60,9 +62,9 @@ settings. The right-click menu shows the same commands together with Plasma's
 own. There is no configuration window: everything the headset stores is in the
 popup.
 
-With a confirmed link, three tabs sit under that row, as **Devices** and
-**Applications** do in KDE's volume applet: **Headset**, **Sound** and
-**Power**. The popup always opens on **Headset**. Without a confirmed link, and
+With a confirmed link, four tabs sit under that row, as **Devices** and
+**Applications** do in KDE's volume applet: **Headset**, **Connections**,
+**Sound** and **Power**. The popup always opens on **Headset**. Without a confirmed link, and
 while pairing, there are no tabs and one message fills the popup.
 
 **Pair Headset…** and **Turn Off Headset…** each ask first in a dialog over the
@@ -76,17 +78,23 @@ heading and the popup's controls.
 
 ### With a confirmed link
 
-- The **headset card**: the project's headset logo with the dongle or a
-  Bluetooth glyph beside it (both when both links are confirmed), the state and
-  battery percentage, a battery bar, and a line with the transport and the
-  charge state when it adds something (**Charging**, **Fully charged**, **Low
-  battery**). Click the card for its connection details: whether the USB dongle
-  is detected, the 2.4 GHz link and the paired Bluetooth connection; the
-  battery readings are on the **Power** tab. While the headset turns off, the
-  card reads **Turning off…**.
+- The **headset card**: the project's headset logo, **Barracuda X**, and the
+  battery bar labelled **Battery** with the charge state when it adds
+  something (**Charging**, **Fully charged**, **Low**) and the percentage. The
+  card appears only with a confirmed link, so it does not say **Connected**;
+  while the headset turns off it reads **Turning off…** beside the name. The
+  battery readings are on the **Power** tab.
 - **Modes**: the **Do not disturb** and **Bluetooth gaming mode** switches (see
   [below](#modes-and-bluetooth-devices)).
-- **Bluetooth Devices**: the Bluetooth sources the headset knows.
+
+The **Connections** tab has, under **Links**, one row for the **USB dongle**,
+drawn as the 2022 dongle, and one for **Bluetooth** when BlueZ reports the
+headset. A working
+link shows only **2.4 GHz** for the dongle and the headset's address for
+Bluetooth; a problem adds its word (**Disconnected**, **Not confirmed**,
+**Driver required**, **Not detected**, **Not connected**), and a link known to
+be down dims its row. Under them, **Bluetooth Devices** lists the Bluetooth
+sources the headset knows (see [below](#modes-and-bluetooth-devices)).
 
 One message slot under the card holds the outcome or problem of the last
 command or reading, in plain words, with **Try Again** where it helps; it can be
@@ -180,14 +188,16 @@ session, not a widget option.
 
 Help follows KDE's standard pattern: an **ⓘ** button explains on hover or
 click, with at most one per tab. On **Headset** it sits in the **Modes** heading
-and covers Do not disturb, Bluetooth gaming mode and Bluetooth Devices; on
-**Sound** it sits in the **Equalizer** heading and explains the profiles and
+and covers Do not disturb and Bluetooth gaming mode; on **Connections** it sits
+in the **Bluetooth Devices** heading and explains Quick Connect; on **Sound** it
+sits in the **Equalizer** heading and explains the profiles and
 bands. The text follows the desktop language (English or Spanish). Opening Help
 does not query or change headset settings.
 
 ## Modes and Bluetooth devices
 
-These are on the **Headset** tab. Each time the popup is shown with a confirmed
+The modes are on the **Headset** tab and the devices on the **Connections**
+tab. Each time the popup is shown with a confirmed
 link, including the desktop's inline view, it reads the headset settings once;
 the same status read also returns the Bluetooth devices and what the **Sound**
 and **Power** tabs show, so no extra query is made. It reads them again if

@@ -293,7 +293,6 @@ Item {
             compare(symbol.source, "audio-headset-symbolic")
             compare(artwork.iconSize, artwork.width)
             compare(symbol.width, artwork.width)
-            compare(findChild(artwork, "artworkTransport").visible, false)
             for (const state of [{connected: true, emblem: ""},
                                  {connected: false, emblem: ""},
                                  {connected: false, emblem: "emblem-question"},

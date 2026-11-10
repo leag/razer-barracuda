@@ -11,14 +11,15 @@ import "../code/output.js" as Output
 // Representation whose header is the applet's heading and whose body is a
 // ScrollView with one ListView.
 //
-// With a confirmed link the heading has three tabs, as the volume applet has
-// Devices and Applications; the view always opens on the first. Headset: the
-// list's header holds, in dependency order, the headset (HeroCard), the
-// single feedback slot, the Modes section and the Bluetooth Devices section
-// heading, and the list rows are the devices the headset knows. Sound
-// (SoundPage): the sound profile and its custom bands. Power (PowerPage):
-// the battery readings and idle shutdown. One settings read serves all three,
-// and every change is sent at once. Without a confirmed link, and while
+// With a confirmed link the heading has four tabs, as the volume applet has
+// Devices and Applications; the view always opens on the first. Headset and
+// Connections share the ListView. Headset: its header holds the headset
+// (HeroCard), the single feedback slot and the Modes section. Connections:
+// its header holds the feedback slot, one row per link (ConnectionRow) and
+// the Bluetooth Devices section heading, and the list rows are the devices
+// the headset knows. Sound (SoundPage): the sound profile and its custom
+// bands. Power (PowerPage): the battery readings and idle shutdown. One
+// settings read serves every tab, and every change is sent at once. Without a confirmed link, and while
 // pairing, there are no tabs and one placeholder replaces the body, with the
 // feedback slot under it; it also waits for a power-off started without a
 // confirmed link. The Disconnected placeholder offers the heading's pairing
@@ -105,6 +106,8 @@ PlasmaExtras.Representation {
 
     // --- link -----------------------------------------------------------
     readonly property var connection: Output.connection(linkStatus)
+    // The Connections tab's link rows, with a confirmed link only.
+    readonly property var connectionRows: connected ? Output.connectionRows(linkStatus, localeName) : []
     readonly property bool connected: connection.state === "connected"
     readonly property bool adapterMissing: Output.adapterMissing(linkStatus)
     // Pairing and power-off wait only for a confirmed missing dongle or a
@@ -153,6 +156,9 @@ PlasmaExtras.Representation {
     // --- tabs: only with a confirmed link, and each showing starts on Headset.
     readonly property bool tabsShown: !showPlaceholder
     readonly property int currentTab: tabsShown ? header.currentTab : 0
+    // The tabs, in the heading's order.
+    readonly property bool headsetTab: currentTab === 0
+    readonly property bool connectionsTab: currentTab === 1
     onTabsShownChanged: header.currentTab = 0
     readonly property bool sectionsShown: connected && !readFailed
     // A list that failed to read is left out; the feedback slot says so.
@@ -212,10 +218,13 @@ PlasmaExtras.Representation {
         }
     }
 
+    // As wide as the volume applet; as tall as the tallest tab needs, the
+    // Sound tab with its ten bands, so that the shorter tabs leave little
+    // empty space. Longer device lists scroll.
     implicitWidth: Kirigami.Units.gridUnit * 24
-    implicitHeight: Kirigami.Units.gridUnit * 24
+    implicitHeight: Kirigami.Units.gridUnit * 21
     Layout.minimumWidth: Kirigami.Units.gridUnit * 24
-    Layout.minimumHeight: Kirigami.Units.gridUnit * 24
+    Layout.minimumHeight: Kirigami.Units.gridUnit * 21
     collapseMarginsHint: true
     focus: true
 
@@ -223,17 +232,18 @@ PlasmaExtras.Representation {
     // control returns to the heading, as in the Bluetooth applet.
     // The body's focusable items, published by the list header and the
     // placeholder themselves.
-    property Item heroItem: null
     property Item dndControl: null
     property Item gamingControl: null
     property Item placeholderButton: null
-    // The card takes focus only when it can expand. Tab moves through the
+    // The headset card and the link rows only report and take no focus; on
+    // Connections the device rows follow the controls. Tab moves through the
     // Sound and Power controls; arrows enter and leave them.
     readonly property var bodyControls: (showPlaceholder ? [placeholderButton]
-        : currentTab === 1 ? [soundPage.profileControl]
-        : currentTab === 2 ? [powerPage.standbyControl]
-        : [heroItem, dndControl, gamingControl])
-        .filter(item => item !== null && item.visible && item.enabled && item.expandable !== false)
+        : currentTab === 2 ? [soundPage.profileControl]
+        : currentTab === 3 ? [powerPage.standbyControl]
+        : connectionsTab ? []
+        : [dndControl, gamingControl])
+        .filter(item => item !== null && item.visible && item.enabled)
     function focusBody(index, reason) {
         const controls = bodyControls;
         if (index >= 0 && index < controls.length) {
@@ -241,7 +251,7 @@ PlasmaExtras.Representation {
             controls[index].forceActiveFocus(reason);
             return true;
         }
-        if (index >= controls.length && currentTab === 0 && list.count > 0) {
+        if (index >= controls.length && connectionsTab && list.count > 0) {
             list.currentIndex = 0;
             list.currentItem.forceActiveFocus(reason);
             return true;
@@ -271,8 +281,8 @@ PlasmaExtras.Representation {
         title: view.title
         actions: view.actions
         moreActionsText: view.label("More actions", "Más acciones")
-        tabs: view.tabsShown ? [view.label("Headset", "Auricular"), view.label("Sound", "Sonido"),
-                                view.label("Power", "Energía")] : []
+        tabs: view.tabsShown ? [view.label("Headset", "Auricular"), view.label("Connections", "Conexiones"),
+                                view.label("Sound", "Sonido"), view.label("Power", "Energía")] : []
     }
 
     HeadsetPrompt {
@@ -352,14 +362,14 @@ PlasmaExtras.Representation {
     SoundPage {
         id: soundPage
         anchors.fill: parent
-        visible: view.currentTab === 1
+        visible: view.currentTab === 2
         view: view
         feedback: feedbackComponent
     }
     PowerPage {
         id: powerPage
         anchors.fill: parent
-        visible: view.currentTab === 2
+        visible: view.currentTab === 3
         view: view
         feedback: feedbackComponent
     }
@@ -368,7 +378,7 @@ PlasmaExtras.Representation {
         id: scroll
         objectName: "bodyScroll"
         anchors.fill: parent
-        visible: view.currentTab === 0
+        visible: view.headsetTab || view.connectionsTab
         PC3.ScrollBar.horizontal.policy: PC3.ScrollBar.AlwaysOff
         contentWidth: availableWidth - contentItem.leftMargin - contentItem.rightMargin
 
@@ -388,7 +398,7 @@ PlasmaExtras.Representation {
             highlightMoveDuration: Kirigami.Units.shortDuration
             highlightResizeDuration: Kirigami.Units.shortDuration
             interactive: !view.showPlaceholder
-            model: !view.devicesShown || view.devices === null ? [] : view.devices
+            model: !view.connectionsTab || !view.devicesShown || view.devices === null ? [] : view.devices
             // A new reading replaces the model; no row is current until hovered.
             onModelChanged: currentIndex = -1
             Keys.onUpPressed: event => {
@@ -418,7 +428,6 @@ PlasmaExtras.Representation {
                 height: visible ? implicitHeight + list.spacing : 0
                 spacing: 0
                 Component.onCompleted: {
-                    view.heroItem = hero;
                     view.dndControl = dndRow.control;
                     view.gamingControl = gamingRow.control;
                 }
@@ -427,27 +436,20 @@ PlasmaExtras.Representation {
                     id: hero
                     objectName: "hero"
                     Layout.fillWidth: true
+                    visible: view.headsetTab
                     connection: view.connection
                     battery: view.battery
                     turningOff: view.powerBusy
-                    details: Output.detailRows(view.linkStatus, view.localeName)
                     localeName: view.localeName
                     // The drawing, not its square, starts on the device icons' column.
                     artworkX: view.iconColumn + view.deviceIconInset - Math.round(Kirigami.Units.iconSizes.huge * 29 / 256)
-                    Keys.onDownPressed: event => view.stepFocus(hero, 1, event)
-                    Keys.onUpPressed: event => view.stepFocus(hero, -1, event)
-                    Connections {
-                        target: view
-                        function onActiveViewChanged() {
-                            if (!view.activeView)
-                                hero.expanded = false;
-                        }
-                    }
                 }
                 Loader {
                     Layout.fillWidth: true
-                    Layout.topMargin: Kirigami.Units.smallSpacing
-                    active: view.noticeShown && !view.showPlaceholder && view.currentTab === 0
+                    // Under the card, or at the top of Connections.
+                    Layout.topMargin: view.headsetTab ? Kirigami.Units.smallSpacing : 0
+                    Layout.bottomMargin: view.connectionsTab ? Kirigami.Units.smallSpacing : 0
+                    active: view.noticeShown && !view.showPlaceholder && (view.headsetTab || view.connectionsTab)
                     visible: active
                     sourceComponent: feedbackComponent
                 }
@@ -456,7 +458,7 @@ PlasmaExtras.Representation {
                     id: modesHeader
                     objectName: "modesHeader"
                     Layout.fillWidth: true
-                    visible: view.sectionsShown
+                    visible: view.sectionsShown && view.headsetTab
                     text: view.label("Modes", "Modos")
                     // This tab's only help.
                     PlasmaExtras.ContextualHelpButton {
@@ -464,15 +466,15 @@ PlasmaExtras.Representation {
                         // Its default caps it at the header row's text height.
                         Layout.maximumHeight: -1
                         toolTipText: view.label(
-                            "Do not disturb keeps calls from a phone connected over Bluetooth from interrupting the dongle's audio; desktop notifications are not affected. Bluetooth gaming mode lowers Bluetooth audio delay; it is not the Game sound profile, is shown and changed only over Bluetooth, and turns off when the headset does. Bluetooth Devices (Razer Quick Connect) moves the headset's Bluetooth link to a device it already knows, while gaming mode is off.",
-                            "No molestar evita que las llamadas de un teléfono conectado por Bluetooth interrumpan el audio del dongle; no afecta a las notificaciones del escritorio. El modo gaming Bluetooth reduce el retraso del audio Bluetooth; no es el perfil de sonido Juegos, solo se muestra y se cambia por Bluetooth, y se desactiva al apagar el auricular. Dispositivos Bluetooth (Quick Connect de Razer) mueve la conexión Bluetooth del auricular a un dispositivo que ya conoce, con el modo gaming desactivado.")
+                            "Do not disturb keeps calls from a phone connected over Bluetooth from interrupting the dongle's audio; desktop notifications are not affected. Bluetooth gaming mode lowers Bluetooth audio delay; it is not the Game sound profile, is shown and changed only over Bluetooth, and turns off when the headset does.",
+                            "No molestar evita que las llamadas de un teléfono conectado por Bluetooth interrumpan el audio del dongle; no afecta a las notificaciones del escritorio. El modo gaming Bluetooth reduce el retraso del audio Bluetooth; no es el perfil de sonido Juegos, solo se muestra y se cambia por Bluetooth, y se desactiva al apagar el auricular.")
                     }
                 }
                 ModeSwitch {
                     id: dndRow
                     objectName: "dnd"
                     Layout.fillWidth: true
-                    visible: view.sectionsShown
+                    visible: view.sectionsShown && view.headsetTab
                     iconName: "notifications-disabled-symbolic"
                     indicatorX: view.iconColumn
                     labelX: view.titleColumn
@@ -493,7 +495,7 @@ PlasmaExtras.Representation {
                     Layout.fillWidth: true
                     // The list's own row spacing.
                     Layout.topMargin: list.spacing
-                    visible: view.gamingShown
+                    visible: view.gamingShown && view.headsetTab
                     iconName: "input-gamepad-symbolic"
                     indicatorX: view.iconColumn
                     labelX: view.titleColumn
@@ -509,12 +511,44 @@ PlasmaExtras.Representation {
                     Keys.onUpPressed: event => view.stepFocus(control, -1, event)
                 }
 
+                // Connections: one row per link, the dongle with its 2.4 GHz
+                // link, then Bluetooth when BlueZ reports the headset, under
+                // their own heading as the devices are under theirs.
+                PlasmaExtras.ListSectionHeader {
+                    objectName: "linksHeader"
+                    Layout.fillWidth: true
+                    visible: view.connectionsTab && view.connectionRows.length > 0
+                    text: view.label("Links", "Enlaces")
+                }
+                Repeater {
+                    model: view.connectionsTab ? view.connectionRows : []
+                    ConnectionRow {
+                        required property var modelData
+                        objectName: "connection-" + modelData.key
+                        Layout.fillWidth: true
+                        artwork: modelData.artwork
+                        title: modelData.title
+                        subtitle: modelData.state
+                        spoken: modelData.spoken
+                        dimmed: modelData.dimmed
+                        iconX: view.iconColumn
+                    }
+                }
                 PlasmaExtras.ListSectionHeader {
                     id: devicesHeader
                     objectName: "devicesHeader"
                     Layout.fillWidth: true
-                    visible: view.devicesShown
+                    Layout.topMargin: Kirigami.Units.smallSpacing
+                    visible: view.devicesShown && view.connectionsTab
                     text: view.label("Bluetooth Devices", "Dispositivos Bluetooth")
+                    // This tab's only help.
+                    PlasmaExtras.ContextualHelpButton {
+                        objectName: "devicesHelp"
+                        Layout.maximumHeight: -1
+                        toolTipText: view.label(
+                            "Razer Quick Connect moves the headset's Bluetooth link to a device it already knows, while Bluetooth gaming mode is off.",
+                            "Quick Connect de Razer mueve la conexión Bluetooth del auricular a un dispositivo que ya conoce, con el modo gaming Bluetooth desactivado.")
+                    }
                 }
                 PlasmaExtras.DescriptiveLabel {
                     objectName: "devicesNote"
@@ -523,7 +557,7 @@ PlasmaExtras.Representation {
                     Layout.leftMargin: view.titleColumn
                     Layout.rightMargin: view.trailingInset
                     Layout.bottomMargin: Kirigami.Units.smallSpacing
-                    visible: view.devicesShown && text.length > 0
+                    visible: view.devicesShown && view.connectionsTab && text.length > 0
                     wrapMode: Text.Wrap
                     textFormat: Text.PlainText
                     text: Output.devicesNote(view.devices, view.reading, view.gamingState, view.gamingSettable,

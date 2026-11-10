@@ -2,179 +2,122 @@ import QtQuick
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PC3
-import org.kde.plasma.extras as PlasmaExtras
 import "../code/output.js" as Output
 
 // The headset with a confirmed link: the popup's subject, so it gets the
 // largest picture and the largest words in the body.
 //
-// One 64 px band: the headset logo (its drawing starts on the same
-// column as the device icons below), the transport glyphs beside it, then a
-// text column with the state and the percentage as level-2 headings, the
-// battery bar across the column and the transport line in the small font.
-// The expand toggle, or a busy indicator while a command runs on the headset,
-// is centred on the band at the trailing edge, where every list row has it.
-// The whole card is one row: hover and keyboard focus draw the list highlight
-// over it and a click anywhere expands the details, as an ExpandableListItem.
-PC3.ItemDelegate {
+// One 64 px band: the headset logo (its drawing starts on the same column as
+// the device icons below), then a text column with the headset's name as a
+// level-2 heading, the battery bar labelled with its charge state and
+// percentage, as Power and Battery lists a device. The card exists only with
+// a confirmed link and does not repeat it: a status beside the name, and a
+// busy indicator at the trailing edge, appear only while a command runs on
+// the headset. The card shows and does nothing else: the Connections rows
+// under it name each link.
+Item {
     id: card
     property var connection: ({state: "connected", transport: "usb"})
     property var battery: null
-    // [[key, value], …] for the expanded details.
-    property var details: []
     property string localeName: Qt.locale().name
-    property bool expanded: false
     // A command is running on the headset (turning it off).
     property bool turningOff: false
     // x of the artwork square in the card, so that the drawing starts on the
     // list's icon column.
     property real artworkX: 0
     readonly property var lines: Output.hero(connection, battery, turningOff, localeName)
-    readonly property bool expandable: details.length > 0 && !turningOff
 
-    hoverEnabled: true
-    leftPadding: 0
-    rightPadding: Kirigami.Units.smallSpacing
-    topPadding: Kirigami.Units.smallSpacing
-    bottomPadding: Kirigami.Units.smallSpacing
-    // Highlight sizes itself from ListView.view, which only delegates have,
-    // so here it fills a plain item.
-    background: Item {
-        PlasmaExtras.Highlight {
-            anchors.fill: parent
-            hovered: true
-            pressed: card.pressed
-            visible: card.expandable && (card.hovered || card.visualFocus)
-        }
-    }
-    Accessible.role: Accessible.Button
+    implicitHeight: artwork.iconSize + 2 * Kirigami.Units.smallSpacing
+    Accessible.role: Accessible.StaticText
     Accessible.name: lines.accessible
-    Accessible.description: expandable ? (expanded ? Output.text("Expanded", "Expandido", localeName)
-                                                   : Output.text("Collapsed", "Contraído", localeName)) : ""
-    onClicked: {
-        if (expandable)
-            expanded = !expanded;
-    }
-    onTurningOffChanged: {
-        if (turningOff)
-            expanded = false;
+
+    HeadsetArtwork {
+        id: artwork
+        objectName: "heroArtwork"
+        x: card.artworkX
+        anchors.verticalCenter: parent.verticalCenter
+        width: iconSize
+        height: iconSize
+        iconSize: Kirigami.Units.iconSizes.huge
     }
 
-    contentItem: ColumnLayout {
-        spacing: 0
+    ColumnLayout {
+        anchors {
+            left: artwork.right
+            leftMargin: Kirigami.Units.gridUnit
+            right: busy.left
+            rightMargin: Kirigami.Units.smallSpacing
+            verticalCenter: parent.verticalCenter
+        }
+        spacing: Kirigami.Units.smallSpacing
 
-        Item {
-            id: band
-            objectName: "heroBand"
+        RowLayout {
             Layout.fillWidth: true
-            implicitHeight: artwork.iconSize
-
-            HeadsetArtwork {
-                id: artwork
-                objectName: "heroArtwork"
-                x: card.artworkX
-                width: implicitWidth
-                height: implicitHeight
-                iconSize: Kirigami.Units.iconSizes.huge
-                emblemPlacement: "beside"
-                emblems: Output.transportEmblems(card.connection)
-                emblemSize: Kirigami.Units.iconSizes.small
+            spacing: Kirigami.Units.smallSpacing
+            Kirigami.Heading {
+                objectName: "heroTitle"
+                Layout.fillWidth: true
+                level: 2
+                text: card.lines.title
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
+                Accessible.ignored: true
             }
-
-            ColumnLayout {
-                id: textColumn
-                anchors {
-                    left: artwork.right
-                    leftMargin: Kirigami.Units.gridUnit
-                    right: trailing.left
-                    rightMargin: Kirigami.Units.smallSpacing
-                    verticalCenter: parent.verticalCenter
-                }
-                spacing: Kirigami.Units.smallSpacing
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
-                    Kirigami.Heading {
-                        objectName: "heroHeadline"
-                        Layout.fillWidth: true
-                        level: 2
-                        text: card.lines.headline
-                        textFormat: Text.PlainText
-                        elide: Text.ElideRight
-                        Accessible.ignored: true
-                    }
-                    Kirigami.Heading {
-                        objectName: "heroPercent"
-                        visible: text.length > 0
-                        level: 2
-                        text: card.lines.percent
-                        textFormat: Text.PlainText
-                        Accessible.ignored: true
-                    }
-                }
-                // Never coloured: a low battery is a word and the tray's
-                // attention state.
-                PC3.ProgressBar {
-                    objectName: "heroBattery"
-                    Layout.fillWidth: true
-                    visible: card.battery !== null
-                    from: 0
-                    to: 100
-                    value: card.battery ? card.battery.percent : 0
-                    Accessible.ignored: true
-                }
-                PC3.Label {
-                    objectName: "heroLine"
-                    Layout.fillWidth: true
-                    text: card.lines.line
-                    textFormat: Text.PlainText
-                    elide: Text.ElideRight
-                    font: Kirigami.Theme.smallFont
-                    opacity: 0.75
-                    Accessible.ignored: true
-                }
-            }
-
-            // One trailing slot, centred on the band: expand, or busy.
-            Item {
-                id: trailing
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                implicitWidth: expandButton.implicitWidth
-                implicitHeight: expandButton.implicitHeight
-                width: implicitWidth
-                height: implicitHeight
-
-                PC3.ToolButton {
-                    id: expandButton
-                    objectName: "heroExpand"
-                    anchors.fill: parent
-                    visible: card.expandable
-                    display: PC3.AbstractButton.IconOnly
-                    icon.name: card.expanded ? "collapse" : "expand"
-                    text: card.expanded ? Output.text("Collapse", "Contraer", card.localeName)
-                                        : Output.text("Expand", "Expandir", card.localeName)
-                    // The card itself takes keyboard focus; this is for the pointer.
-                    focusPolicy: Qt.NoFocus
-                    onClicked: card.expanded = !card.expanded
-                    PC3.ToolTip { text: expandButton.text }
-                }
-                PC3.BusyIndicator {
-                    objectName: "heroBusy"
-                    anchors.fill: parent
-                    visible: card.turningOff
-                    running: visible
-                }
+            PC3.Label {
+                objectName: "heroStatus"
+                visible: text.length > 0
+                text: card.lines.status
+                textFormat: Text.PlainText
+                opacity: 0.75
+                Accessible.ignored: true
             }
         }
-
-        DetailsGrid {
-            objectName: "heroDetails"
+        RowLayout {
             Layout.fillWidth: true
-            Layout.topMargin: Kirigami.Units.smallSpacing
-            visible: card.expanded && card.expandable
-            rows: card.details
+            spacing: Kirigami.Units.smallSpacing
+            PC3.Label {
+                objectName: "heroLine"
+                Layout.fillWidth: true
+                text: card.lines.line
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
+                font: Kirigami.Theme.smallFont
+                opacity: 0.75
+                Accessible.ignored: true
+            }
+            PC3.Label {
+                objectName: "heroPercent"
+                visible: text.length > 0
+                text: card.lines.percent
+                textFormat: Text.PlainText
+                font: Kirigami.Theme.smallFont
+                Accessible.ignored: true
+            }
         }
+        // Never coloured: a low battery is a word and the tray's attention
+        // state.
+        PC3.ProgressBar {
+            objectName: "heroBattery"
+            Layout.fillWidth: true
+            visible: card.battery !== null
+            from: 0
+            to: 100
+            value: card.battery ? card.battery.percent : 0
+            Accessible.ignored: true
+        }
+    }
+
+    // The trailing slot, centred on the band, where every list row has its
+    // busy indicator.
+    PC3.BusyIndicator {
+        id: busy
+        objectName: "heroBusy"
+        anchors.right: parent.right
+        anchors.rightMargin: Kirigami.Units.smallSpacing
+        anchors.verticalCenter: parent.verticalCenter
+        width: visible ? Kirigami.Units.iconSizes.medium : 0
+        height: Kirigami.Units.iconSizes.medium
+        visible: card.turningOff
+        running: visible
     }
 }

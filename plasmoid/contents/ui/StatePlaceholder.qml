@@ -35,7 +35,6 @@ ColumnLayout {
         Layout.preferredHeight: iconSize
         // PlaceholderMessage's icon size.
         iconSize: Math.round(Kirigami.Units.iconSizes.huge * 1.5)
-        emblemPlacement: "corner"
         iconName: message.artwork
         dimmed: message.dimmed
         emblems: message.emblem ? [message.emblem] : []
