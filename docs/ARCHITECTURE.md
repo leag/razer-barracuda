@@ -36,7 +36,8 @@
   **Headset** and **Connections**, which share one `ListView`: on Headset its
   header holds the headset card (`HeroCard`) and the Modes switch rows
   (`ModeSwitch`); on Connections it holds the Links heading, one `ConnectionRow`
-  per link and the Bluetooth Devices heading, and the list rows are the devices as
+  per link (two columns in a `GridLayout` when both links are shown and the
+  view is wide enough) and the Bluetooth Devices heading, and the list rows are the devices as
   `ExpandableListItem` rows; **Sound** (`SoundPage`), the sound profile
   (`ChoiceRow`) and the custom bands; and **Power** (`PowerPage`), the
   battery readings (`ValueRow`) and idle shutdown. One `barracuda-headset`

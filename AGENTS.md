@@ -23,7 +23,7 @@ user in their conversation language. Read README.md and docs/PROTOCOL.md first.
   focus; and Modes with Do Not Disturb and Bluetooth gaming mode switch rows,
   the gaming row shown only when the settings are read over Bluetooth, since
   it is set only there and the headset clears it at power-off), Connections
-  (Links, one row per link with its artwork, the dongle and Bluetooth when
+  (Links, one cell per link with its artwork, side by side when both show, the dongle and Bluetooth when
   BlueZ reports the headset, where a working link is not labelled "Connected",
   only a problem adds a word and a link known to be down dims its row; then
   Bluetooth Devices with Quick Connect rows), Sound (sound profile and, with

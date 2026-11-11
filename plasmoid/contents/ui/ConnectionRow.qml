@@ -2,9 +2,9 @@ import QtQuick
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PC3
 
-// One link under the headset card: the device's artwork in a large square,
+// One link in the Connections tab: the device's artwork in a large square,
 // then its name and, when there is one, the line under it, as a list row's
-// title and subtitle. A link known to be down dims the artwork, as
+// title and subtitle; the line takes two lines rather than eliding. A link known to be down dims the artwork, as
 // HeadsetArtwork does. The row only reports; it takes no focus and has no
 // action.
 Item {
@@ -59,6 +59,9 @@ Item {
             width: parent.width
             text: row.subtitle
             textFormat: Text.PlainText
+            // A problem stays readable in a half-width cell.
+            wrapMode: Text.Wrap
+            maximumLineCount: 2
             elide: Text.ElideRight
             font: Kirigami.Theme.smallFont
             opacity: 0.75

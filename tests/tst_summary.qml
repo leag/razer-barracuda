@@ -195,6 +195,9 @@ Item {
         function yOf(item) {
             return item.mapToItem(view, 0, 0).y
         }
+        function xOf(item) {
+            return item.mapToItem(view, 0, 0).x
+        }
         function closePrompt() {
             if (view.openPrompt !== null)
                 view.openPrompt.reject()
@@ -795,13 +798,46 @@ Item {
             host.status = linked("disconnected", {state: "connected", address: "A1:B2:C3:D4:E5:F6"})
             compare(row("bluetooth").Accessible.name, "Bluetooth, connected")
             compare(findChild(row("bluetooth"), "connectionArtwork").source, "preferences-system-bluetooth")
-            tryVerify(() => yOf(row("bluetooth")) > yOf(row("dongle")))
+            // Side by side in two equal columns, the dongle first.
+            const links = findChild(view, "links")
+            verify(links.sideBySide)
+            tryVerify(() => yOf(row("bluetooth")) === yOf(row("dongle")))
+            tryVerify(() => xOf(row("bluetooth")) > xOf(row("dongle")))
+            compare(row("bluetooth").width, row("dongle").width)
+            verify(xOf(row("bluetooth")) + row("bluetooth").width <= xOf(links) + links.width + 0.5)
             compare(findChild(row("dongle"), "connectionState").text, "2.4 GHz · Disconnected")
             tryCompare(findChild(row("dongle"), "connectionArtwork"), "opacity", 0.5)
             // An unconfirmed link is not a disconnection.
             host.status = linked("unknown", {state: "connected", address: "A1:B2:C3:D4:E5:F6"})
             compare(findChild(row("dongle"), "connectionState").text, "2.4 GHz · Not confirmed")
             tryCompare(findChild(row("dongle"), "connectionArtwork"), "opacity", 1)
+            // A long state wraps to a second line in its half-width cell
+            // rather than eliding, in both languages.
+            for (const locale of ["en_US", "es_CL"]) {
+                host.localeName = locale
+                host.status = {ok: true, usb: {adapter: "present", driver: false, link: "connected"},
+                               bluetooth: {state: "connected", address: "A1:B2:C3:D4:E5:F6"}}
+                verify(!view.showPlaceholder)
+                verify(links.sideBySide)
+                const line = findChild(row("dongle"), "connectionState")
+                compare(line.text, locale === "en_US" ? "2.4 GHz · Driver required" : "2,4 GHz · Requiere driver")
+                tryVerify(() => line.width > 0 && !line.truncated)
+                verify(line.y + line.height <= row("dongle").height)
+            }
+            host.localeName = "en_US"
+            host.status = linked("connected", {state: "connected", address: "A1:B2:C3:D4:E5:F6"})
+            // Too narrow for two readable columns: one link per row.
+            view.width = Kirigami.Units.gridUnit * 18
+            tryVerify(() => !links.sideBySide)
+            tryVerify(() => yOf(row("bluetooth")) > yOf(row("dongle")))
+            compare(xOf(row("bluetooth")), xOf(row("dongle")))
+            view.width = Qt.binding(() => view.implicitWidth)
+            tryVerify(() => links.sideBySide)
+            // A single link takes the full width.
+            host.status = linked("connected")
+            tryCompare(shown(), "length", 1)
+            verify(!links.sideBySide)
+            tryCompare(row("dongle"), "width", links.width)
             // Without a confirmed link there are no tabs and no rows.
             host.status = linked("disconnected")
             verify(view.showPlaceholder)
@@ -1688,8 +1724,10 @@ Item {
             tryCompare(rows(), "length", 2)
             verify(!findChild(view, "hero").visible)
             verify(!findChild(view, "modesHeader").visible)
+            // The two links share one row.
             inOrder([feedback(), findChild(view, "linksHeader"), findChild(view, "connection-dongle"),
-                     findChild(view, "connection-bluetooth"), findChild(view, "devicesHeader"), rows()[0], rows()[1]])
+                     findChild(view, "devicesHeader"), rows()[0], rows()[1]])
+            tryVerify(() => yOf(findChild(view, "connection-bluetooth")) === yOf(findChild(view, "connection-dongle")))
             compare(helps().length, 1)
             compare(helps()[0].objectName, "devicesHelp")
             compare(helps()[0].toolTipText, "Razer Quick Connect moves the headset's Bluetooth link to a device it "

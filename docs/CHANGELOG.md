@@ -12,7 +12,7 @@
   dongles side by side to tell them apart.
 - A second tab, **Connections**, has under **Links** one row for the USB
   dongle, in its drawing, and one for Bluetooth when BlueZ reports the
-  headset, then the
+  headset, side by side, then the
   **Bluetooth Devices** moved from the **Headset** tab, with the Quick Connect
   help in their heading. The rows replace the headset card's transport marks,
   transport line and expandable details, so the card only reports and no

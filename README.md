@@ -146,8 +146,8 @@ connection and battery. Click it to open the popup:
     (low-latency Bluetooth audio) switches, where gaming mode is shown only
     over Bluetooth, the one place it can be changed, and turns off with the
     headset.
-  - **Connections**: **Links**, one row for the USB dongle and one for
-    Bluetooth, which say something only when a link has a problem, and
+  - **Connections**: **Links**, the USB dongle and Bluetooth side by side,
+    which say something only when a link has a problem, and
     **Bluetooth Devices**,
     the sources the headset knows (Razer Quick Connect), with **Connect** for
     each inactive one.

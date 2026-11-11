@@ -103,6 +103,9 @@ PlasmaExtras.Representation {
     // The default-action button's text ends this far from the row's edge.
     readonly property real trailingInset: Kirigami.Units.smallSpacing + buttonProbe.rightPadding
     readonly property real rowBusySize: buttonProbe.implicitHeight
+    // The narrowest column a link cell keeps beside another one: its artwork
+    // and room for about ten characters of its name.
+    readonly property real linkColumnMinimum: 11 * Kirigami.Units.gridUnit
 
     // --- link -----------------------------------------------------------
     readonly property var connection: Output.connection(linkStatus)
@@ -511,27 +514,46 @@ PlasmaExtras.Representation {
                     Keys.onUpPressed: event => view.stepFocus(control, -1, event)
                 }
 
-                // Connections: one row per link, the dongle with its 2.4 GHz
+                // Connections: one cell per link, the dongle with its 2.4 GHz
                 // link, then Bluetooth when BlueZ reports the headset, under
-                // their own heading as the devices are under theirs.
+                // their own heading as the devices are under theirs. The two
+                // links share one row in two equal columns, the dongle first;
+                // a single link, or a view too narrow for two readable
+                // columns, takes the full width.
                 PlasmaExtras.ListSectionHeader {
                     objectName: "linksHeader"
                     Layout.fillWidth: true
-                    visible: view.connectionsTab && view.connectionRows.length > 0
+                    visible: links.visible
                     text: view.label("Links", "Enlaces")
                 }
-                Repeater {
-                    model: view.connectionsTab ? view.connectionRows : []
-                    ConnectionRow {
-                        required property var modelData
-                        objectName: "connection-" + modelData.key
-                        Layout.fillWidth: true
-                        artwork: modelData.artwork
-                        title: modelData.title
-                        subtitle: modelData.state
-                        spoken: modelData.spoken
-                        dimmed: modelData.dimmed
-                        iconX: view.iconColumn
+                GridLayout {
+                    id: links
+                    objectName: "links"
+                    Layout.fillWidth: true
+                    visible: view.connectionsTab && view.connectionRows.length > 0
+                    // From the list's width, not the grid's own, so that the
+                    // column count never feeds back into the layout.
+                    readonly property bool sideBySide: view.connectionRows.length > 1
+                        && list.rowWidth >= 2 * view.linkColumnMinimum
+                    columns: sideBySide ? 2 : 1
+                    columnSpacing: 0
+                    rowSpacing: 0
+                    uniformCellWidths: true
+                    Repeater {
+                        model: view.connectionsTab ? view.connectionRows : []
+                        ConnectionRow {
+                            required property var modelData
+                            objectName: "connection-" + modelData.key
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 1
+                            Layout.alignment: Qt.AlignTop
+                            artwork: modelData.artwork
+                            title: modelData.title
+                            subtitle: modelData.state
+                            spoken: modelData.spoken
+                            dimmed: modelData.dimmed
+                            iconX: view.iconColumn
+                        }
                     }
                 }
                 PlasmaExtras.ListSectionHeader {

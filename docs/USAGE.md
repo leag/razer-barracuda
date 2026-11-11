@@ -93,7 +93,9 @@ headset. A working
 link shows only **2.4 GHz** for the dongle and the headset's address for
 Bluetooth; a problem adds its word (**Disconnected**, **Not confirmed**,
 **Driver required**, **Not detected**, **Not connected**), and a link known to
-be down dims its row. Under them, **Bluetooth Devices** lists the Bluetooth
+be down dims its row. The two links sit side by side, the dongle
+first; a single link, or a popup too narrow for two columns, takes the full
+width, and a problem's words wrap to a second line. Under them, **Bluetooth Devices** lists the Bluetooth
 sources the headset knows (see [below](#modes-and-bluetooth-devices)).
 
 One message slot under the card holds the outcome or problem of the last
