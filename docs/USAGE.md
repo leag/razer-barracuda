@@ -79,8 +79,8 @@ heading and the popup's controls.
 ### With a confirmed link
 
 - The **headset card**: the project's headset logo, **Barracuda X**, a line
-  naming the link in use (**Via USB dongle**, **Via Bluetooth**, or **Via USB
-  dongle and Bluetooth**) with the charge state when it adds something
+  naming the link in use (**Via 2.4 GHz USB dongle**, **Via Bluetooth**, or
+  **Via 2.4 GHz and Bluetooth**) with the charge state when it adds something
   (**Charging**, **Fully charged**, **Low battery**), the percentage and the
   battery bar. The card appears only with a confirmed link, so it does not say
   **Connected**; while the headset turns off it reads **Turning off…** beside

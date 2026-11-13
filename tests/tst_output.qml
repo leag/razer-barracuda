@@ -386,26 +386,26 @@ TestCase {
         // The card exists only with a confirmed link and does not say so: the
         // name, then the link in use and any charge state worth a word.
         compare(Output.hero(usb, discharging, false, "en_US"),
-                {title: "Barracuda X", status: "", percent: "80%", line: "Via USB dongle",
+                {title: "Barracuda X", status: "", percent: "80%", line: "Via 2.4 GHz USB dongle",
                  accessible: "Connected, 80% battery, USB dongle"});
         compare(Output.hero(usb, discharging, false, "es_CL"),
-                {title: "Barracuda X", status: "", percent: "80" + nbsp + "%", line: "Por dongle USB",
+                {title: "Barracuda X", status: "", percent: "80" + nbsp + "%", line: "Por dongle USB de 2,4 GHz",
                  accessible: "Conectado, 80" + nbsp + "% de batería, dongle USB"});
         compare(Output.hero({state: "connected", transport: "bluetooth"}, {percent: 65, state: "Charging"}, false, "en_US"),
                 {title: "Barracuda X", status: "", percent: "65%", line: "Via Bluetooth · Charging",
                  accessible: "Connected, 65% battery, Bluetooth, charging"});
         compare(Output.hero({state: "connected", transport: "both"}, {percent: 8, state: "Discharging"}, false, "es_CL"),
-                {title: "Barracuda X", status: "", percent: "8" + nbsp + "%", line: "Por dongle USB y Bluetooth · Batería baja",
+                {title: "Barracuda X", status: "", percent: "8" + nbsp + "%", line: "Por 2,4 GHz y Bluetooth · Batería baja",
                  accessible: "Conectado, 8" + nbsp + "% de batería, dongle USB y Bluetooth, batería baja"});
-        compare(Output.hero(usb, {percent: 8, state: "Discharging"}, false, "en_US").line, "Via USB dongle · Low battery");
-        compare(Output.hero(usb, {percent: 100, state: "FullyCharged"}, false, "en_US").line, "Via USB dongle · Fully charged");
-        compare(Output.hero(usb, {percent: 100, state: "FullyCharged"}, false, "es_CL").line, "Por dongle USB · Carga completa");
-        compare(Output.hero(usb, {percent: 65, state: "Charging"}, false, "es_CL").line, "Por dongle USB · Cargando");
+        compare(Output.hero(usb, {percent: 8, state: "Discharging"}, false, "en_US").line, "Via 2.4 GHz USB dongle · Low battery");
+        compare(Output.hero(usb, {percent: 100, state: "FullyCharged"}, false, "en_US").line, "Via 2.4 GHz USB dongle · Fully charged");
+        compare(Output.hero(usb, {percent: 100, state: "FullyCharged"}, false, "es_CL").line, "Por dongle USB de 2,4 GHz · Carga completa");
+        compare(Output.hero(usb, {percent: 65, state: "Charging"}, false, "es_CL").line, "Por dongle USB de 2,4 GHz · Cargando");
         // Without a reading the line says so and there is no percentage.
         compare(Output.hero(usb, null, false, "en_US"),
-                {title: "Barracuda X", status: "", percent: "", line: "Via USB dongle · Battery unavailable",
+                {title: "Barracuda X", status: "", percent: "", line: "Via 2.4 GHz USB dongle · Battery unavailable",
                  accessible: "Connected, USB dongle, battery unavailable"});
-        compare(Output.hero(usb, null, false, "es_CL").line, "Por dongle USB · Batería no disponible");
+        compare(Output.hero(usb, null, false, "es_CL").line, "Por dongle USB de 2,4 GHz · Batería no disponible");
         // Only a command running on the headset adds a status.
         compare(Output.hero(usb, discharging, true, "en_US").status, "Turning off…");
         compare(Output.hero(usb, discharging, true, "es_CL").status, "Apagando…");

@@ -10,7 +10,7 @@
   (`plasmoid/contents/images/dongle.svg`, a copy of `docs/dongle-2022.svg`)
   instead of Breeze's USB drive, and the README shows the 2021 and 2022
   dongles side by side to tell them apart.
-- The headset card names the link in use in one line (**Via USB dongle**,
+- The headset card names the link in use in one line (**Via 2.4 GHz USB dongle**,
   **Via Bluetooth**), replacing its transport marks and expandable details, so
   the card only reports and no longer takes focus. A link that is down says
   nothing; a dongle that lacks the driver, or more than one, is a message.

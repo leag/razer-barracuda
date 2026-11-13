@@ -375,7 +375,11 @@ function hero(value, battery, turningOff, locale) {
     spoken.push(transportPhrase(value.transport, locale));
     if (note)
         spoken.push(note.toLowerCase());
-    const via = text("Via %1", "Por %1", locale).replace("%1", transportPhrase(value.transport, locale));
+    // The dongle's link by its radio, as Razer names it: 2.4 GHz wireless.
+    const via = value.transport === "bluetooth" ? text("Via Bluetooth", "Por Bluetooth", locale)
+        // Both links: the radios alone, so a charge note still fits.
+        : value.transport === "both" ? text("Via 2.4 GHz and Bluetooth", "Por 2,4 GHz y Bluetooth", locale)
+        : text("Via 2.4 GHz USB dongle", "Por dongle USB de 2,4 GHz", locale);
     return {
         title: "Barracuda X",
         status: turningOff ? state : "",

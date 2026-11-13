@@ -141,7 +141,7 @@ connection and battery. Click it to open the popup:
   ask first in a dialog whose safe default is **Cancel**.
 - With a confirmed link, the popup has three tabs, as KDE's volume applet has
   **Devices** and **Applications**. It always opens on the first:
-  - **Headset**: a card with the headset, the link in use (**Via USB dongle**
+  - **Headset**: a card with the headset, the link in use (**Via 2.4 GHz USB dongle**
     or **Via Bluetooth**) and its battery percentage with a bar; **Modes**,
     with **Do not disturb** and **Bluetooth gaming mode** (low-latency
     Bluetooth audio) switches, where gaming mode is shown only over

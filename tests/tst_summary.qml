@@ -702,7 +702,7 @@ Item {
             compare(title.level, 2)
             verify(!status.visible)
             // The line names the link in use.
-            compare(line.text, "Via USB dongle")
+            compare(line.text, "Via 2.4 GHz USB dongle")
             compare(percent.text, "80%")
             verify(bar.visible)
             compare(bar.value, 80)
@@ -715,26 +715,26 @@ Item {
             verify(!findChild(hero, "artworkEmblem").visible)
             host.localeName = "es_CL"
             compare(title.text, "Barracuda X")
-            compare(line.text, "Por dongle USB")
+            compare(line.text, "Por dongle USB de 2,4 GHz")
             compare(percent.text, "80" + nbsp + "%")
             compare(hero.Accessible.name, "Conectado, 80" + nbsp + "% de batería, dongle USB")
             host.localeName = "en_US"
             // A charge state worth a word follows the link.
             host.battery = {percent: 60, state: "Charging"}
-            compare(line.text, "Via USB dongle · Charging")
+            compare(line.text, "Via 2.4 GHz USB dongle · Charging")
             host.battery = {percent: 100, state: "FullyCharged"}
-            compare(line.text, "Via USB dongle · Fully charged")
+            compare(line.text, "Via 2.4 GHz USB dongle · Fully charged")
             host.battery = {percent: 8, state: "Discharging"}
-            compare(line.text, "Via USB dongle · Low battery")
+            compare(line.text, "Via 2.4 GHz USB dongle · Low battery")
             compare(percent.text, "8%")
             host.localeName = "es_CL"
-            compare(line.text, "Por dongle USB · Batería baja")
+            compare(line.text, "Por dongle USB de 2,4 GHz · Batería baja")
             host.localeName = "en_US"
             // Without a reading there is no percentage or bar, and the line says so.
             host.battery = null
             verify(!percent.visible)
             verify(!bar.visible)
-            compare(line.text, "Via USB dongle · Battery unavailable")
+            compare(line.text, "Via 2.4 GHz USB dongle · Battery unavailable")
             // The card only reports.
             compare(view.bodyControls.indexOf(hero), -1)
             // While the headset turns off, the card says so and waits.
@@ -758,7 +758,7 @@ Item {
             host.battery = {percent: 80, state: "Discharging"}
             // No tab and no row per link: the card names the link in use.
             host.status = linked("connected")
-            compare(line.text, "Via USB dongle")
+            compare(line.text, "Via 2.4 GHz USB dongle")
             verify(findChild(view, "connection-dongle") === null)
             host.status = {ok: true, usb: {adapter: "missing"}, bluetooth: {state: "connected", address: "A1:B2:C3:D4:E5:F6"}}
             compare(line.text, "Via Bluetooth")
@@ -766,7 +766,7 @@ Item {
             compare(line.text, "Por Bluetooth")
             host.localeName = "en_US"
             host.status = linked("connected", {state: "connected", address: "A1:B2:C3:D4:E5:F6"})
-            compare(line.text, "Via USB dongle and Bluetooth")
+            compare(line.text, "Via 2.4 GHz and Bluetooth")
             // A dongle link that is down, unconfirmed or missing says nothing
             // while Bluetooth works.
             for (const usb of [{adapter: "present", driver: true, link: "disconnected"},
