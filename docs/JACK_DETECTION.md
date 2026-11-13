@@ -65,10 +65,18 @@ it overrides the profile set.
 ## When PipeWire handles wireless_status
 
 The DKMS driver sets the standard USB `wireless_status` attribute.
-PipeWire's upstream commit `03f894b` ("alsa-udev: Add wireless device status
-monitoring", March 2026, not in the 1.6 series) hides a USB card while its
-dongle reports `disconnected`. With such a PipeWire, WirePlumber falls back
-and returns without the snd-usb-audio quirk or the profile set.
+PipeWire's upstream commit `03f894bab` ("alsa-udev: Add wireless device status
+monitoring", March 2026) adds this to `spa/plugins/alsa/alsa-udev.c`. When it
+finds a USB sound card, it looks for `wireless_status` on the card's USB
+interface and follows changes to that attribute through udev. While the
+attribute reads `disconnected`, PipeWire removes the whole card rather than
+marking its ports unavailable, and adds the card back on `connected`. With such
+a PipeWire, WirePlumber falls back and returns without the snd-usb-audio quirk
+or the profile set.
+
+As of PipeWire 1.6.11 the commit is only on the `master` branch: no release
+tag contains it, the `1.6` branch has no backport, and there is no 1.7 or 1.8
+release yet. Until a release with it reaches your distribution, keep the quirk.
 The installer detects this capability in PipeWire's ALSA plugin.
 
 Check whether the installed PipeWire supports it:
