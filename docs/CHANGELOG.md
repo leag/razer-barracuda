@@ -10,21 +10,20 @@
   (`plasmoid/contents/images/dongle.svg`, a copy of `docs/dongle-2022.svg`)
   instead of Breeze's USB drive, and the README shows the 2021 and 2022
   dongles side by side to tell them apart.
-- A second tab, **Connections**, has under **Links** one row for the USB
-  dongle, in its drawing, and one for Bluetooth when BlueZ reports the
-  headset, side by side, then the
-  **Bluetooth Devices** moved from the **Headset** tab, with the Quick Connect
-  help in their heading. The rows replace the headset card's transport marks,
-  transport line and expandable details, so the card only reports and no
-  longer takes focus. The tabs are **Headset**, **Connections**, **Sound** and
-  **Power**.
+- The headset card names the link in use in one line (**Via USB dongle**,
+  **Via Bluetooth**), replacing its transport marks and expandable details, so
+  the card only reports and no longer takes focus. A link that is down says
+  nothing; a dongle that lacks the driver, or more than one, is a message.
+- **Bluetooth Devices** is now **Bluetooth**, under **Modes** on the
+  **Headset** tab, with its own Quick Connect help: Headset is the one tab
+  with two. This computer appears as **This computer**, recognised by the
+  adapter addresses that `barracuda-headset`'s link report now carries
+  (`host_addresses`). The tabs are **Headset**, **Sound** and **Power**.
 - The popup is 21 grid units tall instead of 24, as much as the **Sound** tab
   with its ten bands needs; longer device lists scroll.
 - The popup no longer repeats **Connected**: the card, shown only with a
-  confirmed link, is headed **Barracuda X** with the battery bar labelled by
-  its charge state, and a working link's row shows only **2.4 GHz** or the
-  headset's Bluetooth address. Only a problem adds a word, and a link known to
-  be down dims its row; screen readers still hear the state.
+  confirmed link, is headed **Barracuda X**; screen readers still hear the
+  state.
 - `docs/logo.svg` is drawn the same by Qt's SVG renderer as by browsers: the
   cushion mesh is dashed lines instead of a rotated pattern, the clip paths are
   masks and the microphone foam's grain is dashed rows instead of a turbulence

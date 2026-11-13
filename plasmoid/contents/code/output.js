@@ -88,51 +88,28 @@ function voltageText(millivolts, locale) {
     return (/^es([_-]|$)/i.test(locale) ? volts.replace(".", ",") : volts) + " V";
 }
 
-// The Connections section under the headset card, empty until a status has
-// been read: the dongle with its 2.4 GHz link, then Bluetooth when BlueZ
-// reports the headset, drawn with the colour Bluetooth icon KDE's settings
-// use. Each row names its artwork (as artwork() resolves it), title, the
-// line under it and the sentence a screen reader says. A working link does
-// not say "Connected": the dongle's line names its radio and Bluetooth's the
-// headset's address. Only a problem adds a word, and a link known to be down
-// dims the artwork. An unconfirmed link stays distinct from a disconnected
-// one. What the battery reports is on the Power tab (powerRows).
-function connectionRows(status, locale) {
+// This computer's Bluetooth adapter addresses, as the helper reports them
+// with the link, in the form macAddress() gives the headset's device list.
+function hostAddresses(status) {
+    const hosts = status && status.ok && Array.isArray(status.host_addresses) ? status.host_addresses : [];
+    return hosts.map(macAddress);
+}
+
+// With a confirmed link the popup names only the link in use (hero). A
+// dongle that needs the user is the one exception: the headset may work over
+// Bluetooth meanwhile. Unknown and disconnected dongle links are not problems
+// the user can act on, and a missing dongle is not one either.
+function dongleProblem(status, locale) {
     if (!status || !status.ok)
-        return [];
+        return "";
     const usb = status.usb;
-    const connected = text("Connected", "Conectado", locale);
-    const radio = text("2.4 GHz", "2,4 GHz", locale);
-    const problem = word => radio + " · " + word;
-    const dongle = {key: "dongle", artwork: artwork("drive-removable-media-usb"),
-                    title: text("USB dongle", "Dongle USB", locale), dimmed: false};
     if (usb.adapter === "multiple")
-        dongle.state = text("More than one detected", "Más de uno detectado", locale);
-    else if (usb.adapter !== "present") {
-        dongle.state = text("Not detected", "No detectado", locale);
-        dongle.dimmed = true;
-    } else if (!usb.driver)
-        dongle.state = problem(text("Driver required", "Requiere driver", locale));
-    else if (usb.link === "connected")
-        dongle.state = radio;
-    else if (usb.link === "disconnected") {
-        dongle.state = problem(text("Disconnected", "Desconectado", locale));
-        dongle.dimmed = true;
-    } else
-        dongle.state = problem(text("Not confirmed", "No confirmado", locale));
-    dongle.spoken = dongle.title + ", " + (usb.adapter === "present" && usb.driver && usb.link === "connected"
-        ? radio + ", " + connected.toLowerCase() : dongle.state);
-    const rows = [dongle];
-    const bt = status.bluetooth;
-    if (bt) {
-        const state = bt.state === "connected" ? (bt.address || "")
-            : bt.state === "disconnected" ? text("Not connected", "No conectado", locale)
-            : text("Unknown", "Desconocido", locale);
-        rows.push({key: "bluetooth", artwork: "preferences-system-bluetooth", title: "Bluetooth", state: state,
-                   spoken: "Bluetooth, " + (bt.state === "connected" ? connected.toLowerCase() : state),
-                   dimmed: bt.state === "disconnected"});
-    }
-    return rows;
+        return text("More than one USB dongle is plugged in. Leave only one.",
+                    "Hay más de un dongle USB conectado. Deja solo uno.", locale);
+    if (usb.adapter === "present" && !usb.driver)
+        return text("The USB dongle needs the hid-razer-barracuda driver.",
+                    "El dongle USB necesita el driver hid-razer-barracuda.", locale);
+    return "";
 }
 
 // The Battery section of the Power tab, as {key, label, value} rows: the
@@ -387,8 +364,8 @@ function transportPhrase(transport, locale) {
 // The headset card's words for a confirmed link. The card exists only with a
 // confirmed link, so it does not say "Connected": the headline is the
 // headset's name, the status beside it appears only while a command runs on
-// the headset, and the battery bar is labelled with its charge state. The
-// spoken sentence still names the state and the transport.
+// the headset, and the line over the battery bar names the link in use and
+// any charge state worth a word. The spoken sentence still names the state.
 function hero(value, battery, turningOff, locale) {
     const note = chargeNote(battery, locale);
     const state = turningOff ? text("Turning off…", "Apagando…", locale) : text("Connected", "Conectado", locale);
@@ -398,15 +375,12 @@ function hero(value, battery, turningOff, locale) {
     spoken.push(transportPhrase(value.transport, locale));
     if (note)
         spoken.push(note.toLowerCase());
-    const label = text("Battery", "Batería", locale);
+    const via = text("Via %1", "Por %1", locale).replace("%1", transportPhrase(value.transport, locale));
     return {
         title: "Barracuda X",
         status: turningOff ? state : "",
         percent: battery ? percentText(battery.percent, locale) : "",
-        line: !battery ? note
-            : battery.state === "Charging" || battery.state === "FullyCharged" ? label + " · " + note
-            : lowBattery(battery) ? label + " · " + text("Low", "Baja", locale)
-            : label,
+        line: [via].concat(note ? [note] : []).join(" · "),
         accessible: spoken.join(", ")
     };
 }
@@ -527,7 +501,7 @@ function readFailure(features, locale) {
     return text("Couldn't read %1.", spanish, locale).replace("%1", settingName(features[0], locale));
 }
 
-// The one line under the Bluetooth Devices heading, when there is one.
+// The one line under the Bluetooth heading, when there is one.
 // "settable" is false through the USB dongle, where gaming mode has no row:
 // the note then says where it can be turned off.
 function devicesNote(devices, reading, gaming, settable, locale) {

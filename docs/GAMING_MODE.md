@@ -38,7 +38,7 @@ phone app, gaming mode read off through the USB dongle after the headset was
 turned off and on. The plasmoid therefore shows the Bluetooth gaming mode row
 only when the settings are read over Bluetooth, where it can be changed; through
 the dongle the value is still read, because Quick Connect needs it off, and the
-Bluetooth Devices note says where to turn it off.
+**Bluetooth** note says where to turn it off.
 
 The following sections describe the earlier investigation stages.
 

@@ -9,12 +9,11 @@ import "../code/output.js" as Output
 //
 // One 64 px band: the headset logo (its drawing starts on the same column as
 // the device icons below), then a text column with the headset's name as a
-// level-2 heading, the battery bar labelled with its charge state and
-// percentage, as Power and Battery lists a device. The card exists only with
-// a confirmed link and does not repeat it: a status beside the name, and a
-// busy indicator at the trailing edge, appear only while a command runs on
-// the headset. The card shows and does nothing else: the Connections rows
-// under it name each link.
+// level-2 heading, a line naming the link in use (dongle, Bluetooth or both)
+// with any charge state worth a word, the percentage and the battery bar. The
+// card exists only with a confirmed link and does not repeat it: a status
+// beside the name, and a busy indicator at the trailing edge, appear only
+// while a command runs on the headset. The card shows and does nothing else.
 Item {
     id: card
     property var connection: ({state: "connected", transport: "usb"})

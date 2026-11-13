@@ -3,7 +3,7 @@
 The widget's popup has the native EQ (sound profile and custom bands) on its
 **Sound** tab and idle shutdown on its **Power** tab; each change is sent at
 once, with no Apply. Do Not Disturb, Bluetooth gaming mode and Quick Connect
-Bluetooth source switching (**Bluetooth Devices**) are on its **Headset** tab. Software output EQ,
+Bluetooth source switching (**Bluetooth**) are on its **Headset** tab. Software output EQ,
 microphone EQ and sidetone are removed. Native sidetone is not exposed because
 its audible effect and gain semantics remain unresolved.
 

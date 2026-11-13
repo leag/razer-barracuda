@@ -85,8 +85,11 @@ the current output when both readings exist. Charge state remains unknown for
 that Bluetooth sample; the headset card shows its percentage without claiming
 charging or full-charge status. Source removal drops the reading.
 
-With a Bluetooth link the Bluetooth row on the **Connections** tab shows the
-headset's address, and the dongle row its own 2.4 GHz link. The heading's
+With a Bluetooth link the headset card reads **Via Bluetooth** (**Via USB
+dongle and Bluetooth** with both links), and the **Bluetooth** list names this
+computer **This computer** when one of its adapter addresses, which the link
+report carries as `host_addresses`, is among the devices the headset knows;
+the headset stores them in the order BlueZ shows them. The heading's
 **Pair Headset…** (**+**) and **Turn Off Headset…** remain available for a
 Bluetooth output; both always use the dongle transport and are disabled while
 the dongle is missing. These presentation choices do not establish physical

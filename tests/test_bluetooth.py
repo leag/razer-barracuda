@@ -87,7 +87,8 @@ class BluetoothTests(unittest.TestCase):
                                           'Address': {'type': 's', 'data': address},
                                           'Paired': {'type': 'b', 'data': paired},
                                           'Connected': {'type': 'b', 'data': connected}}}
-        objects = {'/org/bluez/hci0': {'org.bluez.Adapter1': {}},
+        objects = {'/org/bluez/hci0': {'org.bluez.Adapter1': {'Address': {'type': 's', 'data': '74:13:ea:00:00:01'}}},
+                   '/org/bluez/hci1': {'org.bluez.Adapter1': {'Address': {'type': 's', 'data': '$(nope)'}}},
                    '/org/bluez/hci0/dev_1': device('Other headset', True),
                    '/org/bluez/hci0/dev_2': device('Razer Barracuda X (BT)', False),
                    '/org/bluez/hci0/dev_3': device('Razer Barracuda X (BT)', True, '44:5e:cd:00:00:03'),
@@ -100,6 +101,14 @@ class BluetoothTests(unittest.TestCase):
             self.assertEqual(bluetooth.headset_presence(),
                              {'state': 'connected', 'address': '44:5E:CD:00:00:03'})
         self.assertEqual(run.call_args.args[0][-1], 'GetManagedObjects')
+        # The same call names this computer's adapters, valid addresses only.
+        with patch.object(bluetooth.subprocess, 'run', return_value=reply(objects)) as run:
+            self.assertEqual(bluetooth.bluez_status(),
+                             ({'state': 'connected', 'address': '44:5E:CD:00:00:03'}, ['74:13:EA:00:00:01']))
+        self.assertEqual(run.call_count, 1)
+        for failure in (FileNotFoundError('busctl'), bluetooth.subprocess.CalledProcessError(1, 'busctl')):
+            with patch.object(bluetooth.subprocess, 'run', side_effect=failure):
+                self.assertEqual(bluetooth.bluez_status()[1], [])
         del objects['/org/bluez/hci0/dev_3']
         with patch.object(bluetooth.subprocess, 'run', return_value=reply(objects)):
             self.assertEqual(bluetooth.headset_presence()['state'], 'disconnected')

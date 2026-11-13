@@ -11,15 +11,15 @@ import "../code/output.js" as Output
 // Representation whose header is the applet's heading and whose body is a
 // ScrollView with one ListView.
 //
-// With a confirmed link the heading has four tabs, as the volume applet has
-// Devices and Applications; the view always opens on the first. Headset and
-// Connections share the ListView. Headset: its header holds the headset
-// (HeroCard), the single feedback slot and the Modes section. Connections:
-// its header holds the feedback slot, one row per link (ConnectionRow) and
-// the Bluetooth Devices section heading, and the list rows are the devices
-// the headset knows. Sound (SoundPage): the sound profile and its custom
-// bands. Power (PowerPage): the battery readings and idle shutdown. One
-// settings read serves every tab, and every change is sent at once. Without a confirmed link, and while
+// With a confirmed link the heading has three tabs, as the volume applet has
+// Devices and Applications; the view always opens on the first. Headset: the
+// ListView's header holds the headset (HeroCard, which names the link in
+// use), the single feedback slot, the Modes section and the Bluetooth section
+// heading, and the list rows are the devices the headset knows over
+// Bluetooth, this computer among them. Sound (SoundPage): the sound profile
+// and its custom bands. Power (PowerPage): the battery readings and idle
+// shutdown. One settings read serves every tab, and every change is sent at
+// once. Without a confirmed link, and while
 // pairing, there are no tabs and one placeholder replaces the body, with the
 // feedback slot under it; it also waits for a power-off started without a
 // confirmed link. The Disconnected placeholder offers the heading's pairing
@@ -44,7 +44,8 @@ import "../code/output.js" as Output
 //   kind of row                        a monochrome symbolic icon in the icon column
 //   outcome or problem                 the one Kirigami.InlineMessage slot
 //   explanation                        one PlasmaExtras.ContextualHelpButton
-//                                     per tab
+//                                     per tab; Headset has one per section,
+//                                     Modes and Bluetooth
 //
 // Columns, shared by every row of every tab (see the geometry block below):
 // the section text starts at the list's edge; device icons, the row icons
@@ -103,14 +104,11 @@ PlasmaExtras.Representation {
     // The default-action button's text ends this far from the row's edge.
     readonly property real trailingInset: Kirigami.Units.smallSpacing + buttonProbe.rightPadding
     readonly property real rowBusySize: buttonProbe.implicitHeight
-    // The narrowest column a link cell keeps beside another one: its artwork
-    // and room for about ten characters of its name.
-    readonly property real linkColumnMinimum: 11 * Kirigami.Units.gridUnit
 
     // --- link -----------------------------------------------------------
     readonly property var connection: Output.connection(linkStatus)
-    // The Connections tab's link rows, with a confirmed link only.
-    readonly property var connectionRows: connected ? Output.connectionRows(linkStatus, localeName) : []
+    // This computer's Bluetooth adapters, to recognise it among the devices.
+    readonly property var hostAddresses: Output.hostAddresses(linkStatus)
     readonly property bool connected: connection.state === "connected"
     readonly property bool adapterMissing: Output.adapterMissing(linkStatus)
     // Pairing and power-off wait only for a confirmed missing dongle or a
@@ -161,7 +159,8 @@ PlasmaExtras.Representation {
     readonly property int currentTab: tabsShown ? header.currentTab : 0
     // The tabs, in the heading's order.
     readonly property bool headsetTab: currentTab === 0
-    readonly property bool connectionsTab: currentTab === 1
+    readonly property bool soundTab: currentTab === 1
+    readonly property bool powerTab: currentTab === 2
     onTabsShownChanged: header.currentTab = 0
     readonly property bool sectionsShown: connected && !readFailed
     // A list that failed to read is left out; the feedback slot says so.
@@ -194,6 +193,10 @@ PlasmaExtras.Representation {
         const failed = ["dnd", "gaming", "devices", "preset", "bands", "standby"].filter(feature => readErrors[feature]);
         if (connected && failed.length > 0)
             return {type: Kirigami.MessageType.Warning, text: Output.readFailure(failed, localeName), retry: "read"};
+        // A dongle that needs the user while the headset works over Bluetooth.
+        const dongle = connected ? Output.dongleProblem(linkStatus, localeName) : "";
+        if (dongle.length > 0)
+            return {type: Kirigami.MessageType.Warning, text: dongle, retry: ""};
         return {type: Kirigami.MessageType.Information, text: "", retry: ""};
     }
     // The text of a notice the user closed; a new attempt shows it again.
@@ -238,13 +241,12 @@ PlasmaExtras.Representation {
     property Item dndControl: null
     property Item gamingControl: null
     property Item placeholderButton: null
-    // The headset card and the link rows only report and take no focus; on
-    // Connections the device rows follow the controls. Tab moves through the
-    // Sound and Power controls; arrows enter and leave them.
+    // The headset card only reports and takes no focus; on Headset the
+    // device rows follow the Modes controls. Tab moves through the Sound and
+    // Power controls; arrows enter and leave them.
     readonly property var bodyControls: (showPlaceholder ? [placeholderButton]
-        : currentTab === 2 ? [soundPage.profileControl]
-        : currentTab === 3 ? [powerPage.standbyControl]
-        : connectionsTab ? []
+        : soundTab ? [soundPage.profileControl]
+        : powerTab ? [powerPage.standbyControl]
         : [dndControl, gamingControl])
         .filter(item => item !== null && item.visible && item.enabled)
     function focusBody(index, reason) {
@@ -254,7 +256,7 @@ PlasmaExtras.Representation {
             controls[index].forceActiveFocus(reason);
             return true;
         }
-        if (index >= controls.length && connectionsTab && list.count > 0) {
+        if (index >= controls.length && headsetTab && list.count > 0) {
             list.currentIndex = 0;
             list.currentItem.forceActiveFocus(reason);
             return true;
@@ -284,8 +286,8 @@ PlasmaExtras.Representation {
         title: view.title
         actions: view.actions
         moreActionsText: view.label("More actions", "Más acciones")
-        tabs: view.tabsShown ? [view.label("Headset", "Auricular"), view.label("Connections", "Conexiones"),
-                                view.label("Sound", "Sonido"), view.label("Power", "Energía")] : []
+        tabs: view.tabsShown ? [view.label("Headset", "Auricular"), view.label("Sound", "Sonido"),
+                                view.label("Power", "Energía")] : []
     }
 
     HeadsetPrompt {
@@ -365,14 +367,14 @@ PlasmaExtras.Representation {
     SoundPage {
         id: soundPage
         anchors.fill: parent
-        visible: view.currentTab === 2
+        visible: view.soundTab
         view: view
         feedback: feedbackComponent
     }
     PowerPage {
         id: powerPage
         anchors.fill: parent
-        visible: view.currentTab === 3
+        visible: view.powerTab
         view: view
         feedback: feedbackComponent
     }
@@ -381,7 +383,7 @@ PlasmaExtras.Representation {
         id: scroll
         objectName: "bodyScroll"
         anchors.fill: parent
-        visible: view.headsetTab || view.connectionsTab
+        visible: view.headsetTab
         PC3.ScrollBar.horizontal.policy: PC3.ScrollBar.AlwaysOff
         contentWidth: availableWidth - contentItem.leftMargin - contentItem.rightMargin
 
@@ -401,7 +403,7 @@ PlasmaExtras.Representation {
             highlightMoveDuration: Kirigami.Units.shortDuration
             highlightResizeDuration: Kirigami.Units.shortDuration
             interactive: !view.showPlaceholder
-            model: !view.connectionsTab || !view.devicesShown || view.devices === null ? [] : view.devices
+            model: !view.headsetTab || !view.devicesShown || view.devices === null ? [] : view.devices
             // A new reading replaces the model; no row is current until hovered.
             onModelChanged: currentIndex = -1
             Keys.onUpPressed: event => {
@@ -449,10 +451,9 @@ PlasmaExtras.Representation {
                 }
                 Loader {
                     Layout.fillWidth: true
-                    // Under the card, or at the top of Connections.
-                    Layout.topMargin: view.headsetTab ? Kirigami.Units.smallSpacing : 0
-                    Layout.bottomMargin: view.connectionsTab ? Kirigami.Units.smallSpacing : 0
-                    active: view.noticeShown && !view.showPlaceholder && (view.headsetTab || view.connectionsTab)
+                    // Under the card.
+                    Layout.topMargin: Kirigami.Units.smallSpacing
+                    active: view.noticeShown && !view.showPlaceholder && view.headsetTab
                     visible: active
                     sourceComponent: feedbackComponent
                 }
@@ -463,7 +464,7 @@ PlasmaExtras.Representation {
                     Layout.fillWidth: true
                     visible: view.sectionsShown && view.headsetTab
                     text: view.label("Modes", "Modos")
-                    // This tab's only help.
+                    // One of the Headset tab's two helps (see devicesHelp).
                     PlasmaExtras.ContextualHelpButton {
                         objectName: "modesHelp"
                         // Its default caps it at the header row's text height.
@@ -514,56 +515,16 @@ PlasmaExtras.Representation {
                     Keys.onUpPressed: event => view.stepFocus(control, -1, event)
                 }
 
-                // Connections: one cell per link, the dongle with its 2.4 GHz
-                // link, then Bluetooth when BlueZ reports the headset, under
-                // their own heading as the devices are under theirs. The two
-                // links share one row in two equal columns, the dongle first;
-                // a single link, or a view too narrow for two readable
-                // columns, takes the full width.
-                PlasmaExtras.ListSectionHeader {
-                    objectName: "linksHeader"
-                    Layout.fillWidth: true
-                    visible: links.visible
-                    text: view.label("Links", "Enlaces")
-                }
-                GridLayout {
-                    id: links
-                    objectName: "links"
-                    Layout.fillWidth: true
-                    visible: view.connectionsTab && view.connectionRows.length > 0
-                    // From the list's width, not the grid's own, so that the
-                    // column count never feeds back into the layout.
-                    readonly property bool sideBySide: view.connectionRows.length > 1
-                        && list.rowWidth >= 2 * view.linkColumnMinimum
-                    columns: sideBySide ? 2 : 1
-                    columnSpacing: 0
-                    rowSpacing: 0
-                    uniformCellWidths: true
-                    Repeater {
-                        model: view.connectionsTab ? view.connectionRows : []
-                        ConnectionRow {
-                            required property var modelData
-                            objectName: "connection-" + modelData.key
-                            Layout.fillWidth: true
-                            Layout.preferredWidth: 1
-                            Layout.alignment: Qt.AlignTop
-                            artwork: modelData.artwork
-                            title: modelData.title
-                            subtitle: modelData.state
-                            spoken: modelData.spoken
-                            dimmed: modelData.dimmed
-                            iconX: view.iconColumn
-                        }
-                    }
-                }
                 PlasmaExtras.ListSectionHeader {
                     id: devicesHeader
                     objectName: "devicesHeader"
                     Layout.fillWidth: true
                     Layout.topMargin: Kirigami.Units.smallSpacing
-                    visible: view.devicesShown && view.connectionsTab
-                    text: view.label("Bluetooth Devices", "Dispositivos Bluetooth")
-                    // This tab's only help.
+                    // The devices the headset knows, after its modes.
+                    visible: view.devicesShown && view.headsetTab
+                    text: "Bluetooth"
+                    // The Headset tab's second help, the one exception to one
+                    // per tab: its two sections explain unrelated things.
                     PlasmaExtras.ContextualHelpButton {
                         objectName: "devicesHelp"
                         Layout.maximumHeight: -1
@@ -579,7 +540,7 @@ PlasmaExtras.Representation {
                     Layout.leftMargin: view.titleColumn
                     Layout.rightMargin: view.trailingInset
                     Layout.bottomMargin: Kirigami.Units.smallSpacing
-                    visible: view.devicesShown && view.connectionsTab && text.length > 0
+                    visible: view.devicesShown && view.headsetTab && text.length > 0
                     wrapMode: Text.Wrap
                     textFormat: Text.PlainText
                     text: Output.devicesNote(view.devices, view.reading, view.gamingState, view.gamingSettable,
@@ -595,14 +556,17 @@ PlasmaExtras.Representation {
                 required index
                 required property var modelData
                 readonly property bool active: modelData.active === true
+                readonly property bool thisComputer: view.hostAddresses.includes(Output.macAddress(modelData.address))
                 readonly property bool switching: view.pendingFeature === "devices"
                     && view.pendingAddress === modelData.address
                 objectName: "deviceRow"
                 width: list.rowWidth
                 // The helper reports no device class, so every row shows the
-                // same monochrome Bluetooth icon, like the Modes rows' icons.
-                icon: "preferences-system-bluetooth-symbolic"
-                title: modelData.name || Output.macAddress(modelData.address)
+                // same monochrome Bluetooth icon, like the Modes rows' icons,
+                // except this computer, recognised by its adapter address.
+                icon: thisComputer ? "computer-symbolic" : "preferences-system-bluetooth-symbolic"
+                title: thisComputer ? view.label("This computer", "Este equipo")
+                    : modelData.name || Output.macAddress(modelData.address)
                 subtitle: active ? view.label("Connected", "Conectado")
                     : switching ? view.label("Connecting…", "Conectando…") : ""
                 isDefault: active

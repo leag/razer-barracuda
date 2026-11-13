@@ -8,7 +8,7 @@ import secrets
 import sys
 
 from .control import adapters, control_lock, power_attribute
-from .bluetooth import BluetoothSession, headset_presence
+from .bluetooth import BluetoothSession, bluez_status
 
 FEATURES = {'preset': 0x13, 'gaming': 0x14, 'bands': 0x15,
             'dnd': 0x27, 'standby': 0x2c, 'devices': 0x2d}
@@ -205,7 +205,10 @@ def usb_link(sysfs=Path('/sys/bus/hid/devices')):
 
 
 def link_status():
-    return {'ok': True, 'usb': usb_link(), 'bluetooth': headset_presence()}
+    # host_addresses: this computer's Bluetooth adapters, which the widget
+    # recognises among the devices the headset knows.
+    presence, hosts = bluez_status()
+    return {'ok': True, 'usb': usb_link(), 'bluetooth': presence, 'host_addresses': hosts}
 
 
 def dispatch(request):

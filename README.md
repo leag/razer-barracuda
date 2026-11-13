@@ -139,18 +139,16 @@ connection and battery. Click it to open the popup:
   (**Pair Headset…**) and **More actions** (☰) with **Turn Off Headset…** and
   **Configure Audio Devices…** (KDE's audio settings). Pairing and turning off
   ask first in a dialog whose safe default is **Cancel**.
-- With a confirmed link, the popup has four tabs, as KDE's volume applet has
+- With a confirmed link, the popup has three tabs, as KDE's volume applet has
   **Devices** and **Applications**. It always opens on the first:
-  - **Headset**: a card with the headset and its battery percentage with a
-    bar, and **Modes**, with **Do not disturb** and **Bluetooth gaming mode**
-    (low-latency Bluetooth audio) switches, where gaming mode is shown only
-    over Bluetooth, the one place it can be changed, and turns off with the
-    headset.
-  - **Connections**: **Links**, the USB dongle and Bluetooth side by side,
-    which say something only when a link has a problem, and
-    **Bluetooth Devices**,
-    the sources the headset knows (Razer Quick Connect), with **Connect** for
-    each inactive one.
+  - **Headset**: a card with the headset, the link in use (**Via USB dongle**
+    or **Via Bluetooth**) and its battery percentage with a bar; **Modes**,
+    with **Do not disturb** and **Bluetooth gaming mode** (low-latency
+    Bluetooth audio) switches, where gaming mode is shown only over
+    Bluetooth, the one place it can be changed, and turns off with the
+    headset; and **Bluetooth**, the sources the headset knows (Razer Quick
+    Connect), this computer among them, with **Connect** for each inactive
+    one.
   - **Sound**: the sound profile and, with **Custom**, its ten bands.
   - **Power**: the battery charge, charging cable and voltage, and when the
     headset turns itself off.

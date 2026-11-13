@@ -101,41 +101,54 @@ def spp_channel(address):
     return channels.pop()
 
 
-def headset_presence():
-    """Paired headset as BlueZ reports it; opens no channel to the headset.
+def bluez_status():
+    """The paired headset and this computer's adapter addresses, from one BlueZ call.
 
-    Returns None when no Barracuda is paired or BlueZ is not running, and an
-    unknown state when its answer cannot be read: an unreadable answer is not a
-    disconnected headset.
+    Opens no channel to the headset. The presence is None when no Barracuda is
+    paired or BlueZ is not running, and an unknown state when its answer cannot
+    be read: an unreadable answer is not a disconnected headset. The adapter
+    addresses let a caller recognise this computer among the devices the
+    headset knows; they are empty when BlueZ cannot say.
     """
     try:
         reply = subprocess.run(['busctl', '--system', '--json=short', 'call', 'org.bluez', '/',
                                 'org.freedesktop.DBus.ObjectManager', 'GetManagedObjects'],
                                capture_output=True, text=True, timeout=3, check=True)
     except subprocess.CalledProcessError:
-        return None
+        return None, []
     except (OSError, subprocess.SubprocessError):
-        return {'state': 'unknown'}
+        return {'state': 'unknown'}, []
     try:
         objects = json.loads(reply.stdout)['data'][0]
         devices = [interfaces.get('org.bluez.Device1') for interfaces in objects.values()]
+        adapters = [interfaces.get('org.bluez.Adapter1') for interfaces in objects.values()]
     except (ValueError, KeyError, IndexError, TypeError, AttributeError):
-        return {'state': 'unknown'}
+        return {'state': 'unknown'}, []
+
+    def value(entry, name):
+        field = entry.get(name)
+        return field.get('data') if isinstance(field, dict) else None
+
     found = []
     for device in devices:
         if not isinstance(device, dict):
             continue
-        def value(name):
-            entry = device.get(name)
-            return entry.get('data') if isinstance(entry, dict) else None
-        address = value('Address')
-        if value('Name') not in NAMES or value('Paired') is not True \
+        address = value(device, 'Address')
+        if value(device, 'Name') not in NAMES or value(device, 'Paired') is not True \
                 or not isinstance(address, str) or not ADDRESS.fullmatch(address):
             continue
-        found.append({'state': 'connected' if value('Connected') is True else 'disconnected',
+        found.append({'state': 'connected' if value(device, 'Connected') is True else 'disconnected',
                       'address': address.upper()})
     found.sort(key=lambda device: device['state'] != 'connected')
-    return found[0] if found else None
+    hosts = sorted({address.upper() for address in
+                    (value(adapter, 'Address') for adapter in adapters if isinstance(adapter, dict))
+                    if isinstance(address, str) and ADDRESS.fullmatch(address)})
+    return (found[0] if found else None), hosts
+
+
+def headset_presence():
+    """Paired headset as BlueZ reports it (bluez_status)."""
+    return bluez_status()[0]
 
 
 def paired_headset(address):

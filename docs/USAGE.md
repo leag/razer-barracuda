@@ -47,8 +47,8 @@ Click opens the popup, 24 grid units wide and 21 tall, as tall as the **Sound**
 tab with its ten bands needs; in the tray, the tray sets the size of every
 applet's popup. Every
 function has one place and one visual form, taken from Plasma's own applets:
-the commands in the heading, and the headset, how it sounds, its battery and its
-links on four tabs under it. No colour is added; states are told apart by their words,
+the commands in the heading, and the headset, how it sounds and its battery on
+three tabs under it. No colour is added; states are told apart by their words,
 artwork, opacity and emblems.
 
 ### Heading and commands
@@ -62,9 +62,9 @@ settings. The right-click menu shows the same commands together with Plasma's
 own. There is no configuration window: everything the headset stores is in the
 popup.
 
-With a confirmed link, four tabs sit under that row, as **Devices** and
-**Applications** do in KDE's volume applet: **Headset**, **Connections**,
-**Sound** and **Power**. The popup always opens on **Headset**. Without a confirmed link, and
+With a confirmed link, three tabs sit under that row, as **Devices** and
+**Applications** do in KDE's volume applet: **Headset**, **Sound** and
+**Power**. The popup always opens on **Headset**. Without a confirmed link, and
 while pairing, there are no tabs and one message fills the popup.
 
 **Pair Headset…** and **Turn Off Headset…** each ask first in a dialog over the
@@ -78,25 +78,22 @@ heading and the popup's controls.
 
 ### With a confirmed link
 
-- The **headset card**: the project's headset logo, **Barracuda X**, and the
-  battery bar labelled **Battery** with the charge state when it adds
-  something (**Charging**, **Fully charged**, **Low**) and the percentage. The
-  card appears only with a confirmed link, so it does not say **Connected**;
-  while the headset turns off it reads **Turning off…** beside the name. The
-  battery readings are on the **Power** tab.
+- The **headset card**: the project's headset logo, **Barracuda X**, a line
+  naming the link in use (**Via USB dongle**, **Via Bluetooth**, or **Via USB
+  dongle and Bluetooth**) with the charge state when it adds something
+  (**Charging**, **Fully charged**, **Low battery**), the percentage and the
+  battery bar. The card appears only with a confirmed link, so it does not say
+  **Connected**; while the headset turns off it reads **Turning off…** beside
+  the name. The battery readings are on the **Power** tab.
 - **Modes**: the **Do not disturb** and **Bluetooth gaming mode** switches (see
   [below](#modes-and-bluetooth-devices)).
+- **Bluetooth**: the Bluetooth sources the headset knows (see
+  [below](#modes-and-bluetooth-devices)).
 
-The **Connections** tab has, under **Links**, one row for the **USB dongle**,
-drawn as the 2022 dongle, and one for **Bluetooth** when BlueZ reports the
-headset. A working
-link shows only **2.4 GHz** for the dongle and the headset's address for
-Bluetooth; a problem adds its word (**Disconnected**, **Not confirmed**,
-**Driver required**, **Not detected**, **Not connected**), and a link known to
-be down dims its row. The two links sit side by side, the dongle
-first; a single link, or a popup too narrow for two columns, takes the full
-width, and a problem's words wrap to a second line. Under them, **Bluetooth Devices** lists the Bluetooth
-sources the headset knows (see [below](#modes-and-bluetooth-devices)).
+The headset usually uses one link at a time, so the popup names only the link
+in use; a link that is down says nothing. A USB dongle that needs you while the
+headset works over Bluetooth, because it lacks the driver or more than one is
+plugged in, is a message in the slot below the card.
 
 One message slot under the card holds the outcome or problem of the last
 command or reading, in plain words, with **Try Again** where it helps; it can be
@@ -189,17 +186,16 @@ This is a separate audio-policy preference for all outputs in your WirePlumber
 session, not a widget option.
 
 Help follows KDE's standard pattern: an **ⓘ** button explains on hover or
-click, with at most one per tab. On **Headset** it sits in the **Modes** heading
-and covers Do not disturb and Bluetooth gaming mode; on **Connections** it sits
-in the **Bluetooth Devices** heading and explains Quick Connect; on **Sound** it
+click, with at most one per tab except **Headset**, which has one per section:
+in the **Modes** heading it covers Do not disturb and Bluetooth gaming mode, and
+in the **Bluetooth** heading it explains Quick Connect. On **Sound** it
 sits in the **Equalizer** heading and explains the profiles and
 bands. The text follows the desktop language (English or Spanish). Opening Help
 does not query or change headset settings.
 
 ## Modes and Bluetooth devices
 
-The modes are on the **Headset** tab and the devices on the **Connections**
-tab. Each time the popup is shown with a confirmed
+The modes and the devices are on the **Headset** tab. Each time the popup is shown with a confirmed
 link, including the desktop's inline view, it reads the headset settings once;
 the same status read also returns the Bluetooth devices and what the **Sound**
 and **Power** tabs show, so no extra query is made. It reads them again if
@@ -221,7 +217,7 @@ only while the settings are read over Bluetooth; through the USB dongle
 **Modes** holds **Do not disturb** alone. With both links confirmed, the
 settings follow the default output, so the row can be hidden while Bluetooth is
 connected too. Through the dongle the value is still read: when it is on,
-**Connect** stays disabled and the note under **Bluetooth Devices** says to turn
+**Connect** stays disabled and the note under **Bluetooth** says to turn
 it off from a device connected over Bluetooth.
 
 When the headset certainly did not apply a change, for example a rejected
@@ -232,8 +228,10 @@ the message says the headset could not be read, and **Try Again** reads it. A se
 **Try Again**; when nothing could be read, the sections are hidden and the
 message says so. There is no success notice.
 
-**Bluetooth Devices** (Razer Quick Connect) moves the headset's Bluetooth
-connection to a device it already knows, which may interrupt audio. The active
+**Bluetooth** (Razer Quick Connect) moves the headset's Bluetooth
+connection to a device it already knows, which may interrupt audio. This
+computer is named **This computer** whatever the headset calls it, recognised
+by its Bluetooth adapter's address. The active
 device is shown in bold as **Connected**; every other device has **Connect**,
 and shows **Connecting…** while its request runs. Switching needs Bluetooth
 gaming mode known to be off: while it is on or unknown, **Connect** is disabled

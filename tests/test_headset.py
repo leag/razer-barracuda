@@ -180,9 +180,10 @@ class HeadsetTests(unittest.TestCase):
         with patch.object(headset, 'control_lock', side_effect=AssertionError('locked')), \
                 patch.object(headset, 'exchange', side_effect=AssertionError('query')), \
                 patch.object(headset, 'usb_link', return_value={'adapter': 'missing'}), \
-                patch.object(headset, 'headset_presence', return_value=None):
+                patch.object(headset, 'bluez_status', return_value=(None, ['74:13:EA:00:00:01'])):
             self.assertEqual(headset.dispatch({'op': 'link'}),
-                             {'ok': True, 'usb': {'adapter': 'missing'}, 'bluetooth': None})
+                             {'ok': True, 'usb': {'adapter': 'missing'}, 'bluetooth': None,
+                              'host_addresses': ['74:13:EA:00:00:01']})
 
 
 if __name__ == '__main__':

@@ -31,14 +31,13 @@
   a `Kirigami.PromptDialog` (`HeadsetPrompt`) in the popup and run the
   existing CLI with `--yes` only after that confirmation; **Configure Audio
   Devices…** opens KDE's audio settings directly. The popup (`HeadsetView`, a
-  `PlasmaExtras.Representation`) has, with a confirmed link, four tabs in its
+  `PlasmaExtras.Representation`) has, with a confirmed link, three tabs in its
   heading's `TabBar`, which in the tray is all the view's own heading holds:
-  **Headset** and **Connections**, which share one `ListView`: on Headset its
-  header holds the headset card (`HeroCard`) and the Modes switch rows
-  (`ModeSwitch`); on Connections it holds the Links heading, one `ConnectionRow`
-  per link (two columns in a `GridLayout` when both links are shown and the
-  view is wide enough) and the Bluetooth Devices heading, and the list rows are the devices as
-  `ExpandableListItem` rows; **Sound** (`SoundPage`), the sound profile
+  **Headset**, one `ListView` whose header holds the headset card (`HeroCard`,
+  which names the link in use), the Modes switch rows (`ModeSwitch`) and the
+  Bluetooth heading, and whose rows are the devices as `ExpandableListItem`
+  rows, this computer recognised by the adapter addresses that
+  `barracuda-headset`'s link report carries (`host_addresses`); **Sound** (`SoundPage`), the sound profile
   (`ChoiceRow`) and the custom bands; and **Power** (`PowerPage`), the
   battery readings (`ValueRow`) and idle shutdown. One `barracuda-headset`
   status read each time the full view is shown with a confirmed link feeds every
@@ -46,8 +45,10 @@
   pointer to let go and for any running request, latest levels only. Every
   other state, pairing and a power-off without a confirmed link show one
   `StatePlaceholder` and no tabs; its Disconnected state offers the pairing
-  action. One `Kirigami.InlineMessage` holds outcomes and problems. Help is one
-  contextual help button per tab at most. The powermanagement data engine supplies the
+  action. One `Kirigami.InlineMessage` holds outcomes and problems, including
+  a dongle that needs the user while Bluetooth works. Help is one contextual
+  help button per tab at most, except Headset, with one each in Modes and
+  Bluetooth. The powermanagement data engine supplies the
   Barracuda battery published by the driver through UPower/Solid, without HID
   reads. The popup draws the headset as the project's logo
   (`contents/images/logo.svg`) through `Kirigami.Icon`; panel and system tray
